@@ -20,7 +20,8 @@ from dotenv import load_dotenv,find_dotenv
 
 
 load_dotenv(find_dotenv())
-es = Elasticsearch([os.environ.get("ES_URL")])
+#es = Elasticsearch([os.environ.get("ES_URL")])
+es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
 
 def write_pickle(file,filename):
     with open(filename, 'wb') as handle:
