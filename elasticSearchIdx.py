@@ -53,6 +53,10 @@ import base64
 import json
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk, parallel_bulk
+from dotenv import load_dotenv,find_dotenv
+
+
+load_dotenv(find_dotenv())
 
 
 class NpEncoder(json.JSONEncoder):
@@ -170,7 +174,7 @@ def index_es_data_agg(df,key_name,index_name):
 ELASTIC_PASSWORD = "ELASTIC_PW"
 
 # ================== Create the client instance
-client = Elasticsearch(['http://127.0.0.1:9200'])
+es = Elasticsearch([os.environ.get("ES_URL")])
 
 # client = Elasticsearch(
 #     "https://localhost:9200",
