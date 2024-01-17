@@ -1,1 +1,1 @@
-web: gunicorn app:server
+web: gunicorn app:server -p ${PORT:-5001}
