@@ -1,0 +1,142 @@
+/*
+ORIGINAL CSS FILE FOR SLATE: https://cdn.jsdelivr.net/npm/bootswatch@5.2.3/dist/slate/bootstrap.min.css
+
+COLOUR LIST
+darkAccent1 = '#2C2C2C' # dark gray, bgc (bar plot background)
+darkAccent2 = '#5b5959' # pale gray
+darkAccent3 = '#CFCFCF' # almost white
+lightAccent1 = '#ECAB4C' # ocre
+highlight1 = 'lightsteelblue'
+highlight2 = 'cornflowerblue'
+
+### TO-DO: incorporate dcc.Loading
+*[data-dash-is-loading="true"]{
+  visibility: hidden;
+}
+*[data-dash-is-loading="true"]::before{
+  content: "Loading...";
+  display: inline-block;
+  color: #ECAB4C;
+  visibility: visible;
+
+/* ====== Custom tabs ====== 
+.custom-tabs2 .nav-link {
+  height: 95px;
+  white-space: normal;
+} */
+.custom-label{
+  background-color:#2C2C2C;
+  border: 3px solid #CFCFCF;
+}
+.custom-tabs .nav-link {
+  white-space: normal; /* allow the text to wrap */
+  text-align: center;
+}
+.custom-tabs .nav-link span {
+  display: inline-block; /* make sure the text doesn't overflow the tab */
+}
+.tab-content {
+  border-radius: 8 px;
+  border: 2px solid #ECAB4C;
+}
+
+/* ====== Dropdown ====== */
+.Select-control{
+  background-color: #CFCFCF;
+  border-radius: 4px;
+  border: 2px solid #ECAB4C;
+  color: #2C2C2C;
+  display: table;
+  border-spacing: 0;
+  border-collapse: separate;
+  height: 36px;
+  overflow: hidden;
+  text-align: center;
+}
+
+.is-open>.Select-control{
+  background: #CFCFCF;
+  border: 1px solid #ECAB4C;
+}
+
+.Select-menu-outer{
+  background-color: #CFCFCF;
+  color: #2C2C2C;
+  border: 2px solid #ECAB4C;
+  text-align: left;
+}
+
+.Select-value-label{
+  color: #2C2C2C;
+}
+
+.Select--multi .Select-value {
+  background-color: #CFCFCF;
+  border-radius: 2px;
+  border: 1px solid #2C2C2C;
+  color: #ECAB4C;
+  display: inline-block;
+  font-size: .9em;
+  line-height: 1.4;
+  margin-left: 5px;
+  margin-top: 5px;
+  vertical-align: top;
+}
+
+.has-value.Select--single>.Select-control .Select-value .Select-value-label{
+color: #2C2C2C;
+}
+
+/* ====== Headers ====== */
+.header2 {
+  background-color:#2C2C2C;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.header-title2 {
+  color: #ECAB4C;
+  font-size: 30px;
+  font-weight: bold;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.header-logo {
+    margin: 0 auto;
+    text-align: center;
+    max-width: 40px;
+}
+
+.header-title {
+    color: #ECAB4C;
+    font-size: 48px;
+    font-weight: bold;
+    text-align: center;
+    margin: 0 auto;
+}
+
+.header-description {
+    color: #CFCFCF;
+    margin: 4px auto;
+    text-align: center;
+    max-width: 600px;
+}
+
+/* ====== Radio groups ====== */
+.radio-group .form-check {
+    padding-left: 0;
+}
+  
+.radio-group .btn-group > .form-check:not(:last-child) > .btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+  
+.radio-group .btn-group > .form-check:not(:first-child) > .btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: -1px;
+}
