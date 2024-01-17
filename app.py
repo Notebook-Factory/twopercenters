@@ -11,6 +11,7 @@ from elasticsearch.exceptions import ElasticsearchWarning
 warnings.simplefilter('ignore', ElasticsearchWarning)
 
 app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE], suppress_callback_exceptions=True)
+server = app.server
 app.title = "Citations database"
 app.layout = html.Div([
     # html.Div(
