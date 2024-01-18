@@ -132,7 +132,7 @@ def group_vs_group_layout():
     def update_group_1_dropdown_values(career, yr, group, group_name):
         if career == None or yr == None or group == None: raise PreventUpdate
         else:
-            if career:
+            if not career:
                 yr_convention_r = {"0":"2017","1":"2019","2":"2020","3":"2021"}
             else:
                 yr_convention_r = {"0":"2017","1":"2018","2":"2019","3":"2020","4":"2021"}
@@ -194,7 +194,7 @@ def group_vs_group_layout():
         else:
             # if career == True: dfs = dfs_career.copy()
             # else: dfs = dfs_singleyr.copy()
-            if career:
+            if not career:
                 yr_convention_r = {"0":"2017","1":"2019","2":"2020","3":"2021"}
             else:
                 yr_convention_r = {"0":"2017","1":"2018","2":"2019","3":"2020","4":"2021"}
@@ -205,7 +205,7 @@ def group_vs_group_layout():
             
             if group == 'all': 
                 card1 = dbc.Card(html.Center('Group 2: All', style = {'color':darkAccent1, 'font-size':18}), color = highlight2)
-                card2 = dbc.Card(html.Center('All authors' + ' (' + str(int(round(dfs[yr]['self%'].mean(), 2)*100)) + ' % mean self-citation)', style = {'color':darkAccent1, 'font-size':14}), color = highlight2)
+                #card2 = dbc.Card(html.Center('All authors' + ' (' + str(int(round(dfs[yr]['self%'].mean(), 2)*100)) + ' % mean self-citation)', style = {'color':darkAccent1, 'font-size':14}), color = highlight2)
             elif group_name == None: raise PreventUpdate
             else: 
                 if group == 'cntry': 
@@ -273,7 +273,7 @@ def group_vs_group_layout():
         else:
             
             prefix = 'career' if career else 'singleyr'
-            if career:
+            if not career:
                 yr_convention_r = {"0":"2017","1":"2019","2":"2020","3":"2021"}
             else:
                 yr_convention_r = {"0":"2017","1":"2018","2":"2019","3":"2020","4":"2021"}
@@ -403,55 +403,53 @@ def group_vs_group_layout():
             new_y_values_2 = [0]*7
             new_y_values_2_log = [0]*7
 
-        def make_bar_traces(fig, y_in, y_in_log, colors, metric, name, logTransf = False, group_num = 1):
-            if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
-            else: fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in_log], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
-            fig.update_traces(texttemplate = '%{text:.5s}', textposition = 'outside')
-            return(fig)
+        # def make_bar_traces(fig, y_in, y_in_log, colors, metric, name, logTransf = False, group_num = 1):
+        #     if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
+        #     else: fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in_log], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
+        #     fig.update_traces(texttemplate = '%{text:.5s}', textposition = 'outside')
+        #     return(fig)
         
-        def make_hist_traces(fig, df, df_log, colors, metric, name, logTransf = False, group_num = 1):
-            hovertemp = 'mean: '+str(round(df[metric].mean(),0))+'<br>'+'std: '+str(round(df[metric].std(),0))+'<br>y: %{x}<br>count: %{y}<extra></extra>'
-            if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Histogram(name = name,y = df_log[metric],marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
-            else: fig.add_trace(go.Histogram(name = name,y = df[metric],marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
-            fig.update_xaxes(row=1, col = 1, autorange="reversed") if group_num == 1 else fig.update_xaxes(row = 1, col =2, autorange=True)
-            fig.update_traces(row=1, col = group_num, hovertemplate = hovertemp)
-            return(fig)
+        # def make_hist_traces(fig, df, df_log, colors, metric, name, logTransf = False, group_num = 1):
+        #     hovertemp = 'mean: '+str(round(df[metric].mean(),0))+'<br>'+'std: '+str(round(df[metric].std(),0))+'<br>y: %{x}<br>count: %{y}<extra></extra>'
+        #     if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Histogram(name = name,y = df_log[metric],marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
+        #     else: fig.add_trace(go.Histogram(name = name,y = df[metric],marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
+        #     fig.update_xaxes(row=1, col = 1, autorange="reversed") if group_num == 1 else fig.update_xaxes(row = 1, col =2, autorange=True)
+        #     fig.update_traces(row=1, col = group_num, hovertemplate = hovertemp)
+        #     return(fig)
         
         def make_box_traces2(fig, df, df_log, df2, df2_log, color1, color2, metric, name, logTransf = False, group_num = 1):
             if logTransf and metric != 'c' and metric != 'c (ns)':
-                fig.add_trace(go.Box(name=name,marker_color=color1[0]),row = 1, col = group_num)
-                fig.update_traces(name=name,q1= [df_log[metric][1]], median= [df_log[metric][2]],
-                            q3= [df_log[metric][3]], lowerfence= [df_log[metric][0]],
-                            upperfence=[df_log[metric][4]], hoverinfo="y")
-                fig.add_trace(go.Box(name=name,marker_color=color1[0]),row = 1, col = group_num)
-                fig.update_traces(name=name,q1= [df2_log[metric][1]], median= [df2_log[metric][2]],
+                fig.add_trace(go.Box(y=[],name = "t1",marker_color=color2[0], boxpoints=False,),row = 1, col = group_num)
+                fig.update_traces(q1= [df2_log[metric][1]], median= [df2_log[metric][2]],
                             q3= [df2_log[metric][3]], lowerfence= [df2_log[metric][0]],
-                            upperfence=[df2_log[metric][4]], hoverinfo="y")
-                #fig.add_trace(go.Histogram(name = name,y = df_log[metric],marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
+                            upperfence=[df2_log[metric][4]],hoverinfo="y",selector = ({'name':'t1'}))
+                fig.add_trace(go.Box(y=[],name = "t2",marker_color=color1[0], boxpoints=False,),row = 1, col = group_num)
+                fig.update_traces(q1= [df_log[metric][1]], median= [df_log[metric][2]],
+                            q3= [df_log[metric][3]], lowerfence= [df_log[metric][0]],
+                            upperfence=[df_log[metric][4]],hoverinfo="y",selector = ({'name':'t2'}))
             else: 
-                fig.add_trace(go.Box(y=np.round(df2[metric][0:5],2),name = ".",marker_color=color2[0], boxpoints=False,),row = 1, col = group_num)
-                fig.add_trace(go.Box(y=np.round(df[metric][0:5],2),name = ".",marker_color=color1[0], boxpoints=False,),row = 1, col = group_num)
-                # fig.update_traces(q1= [df[metric][1]], median= [df[metric][2]],
-                #             q3= [df[metric][3]], lowerfence= [df[metric][0]],
-                #             upperfence=[df[metric][4]],hoverinfo="y")
-                
-                # fig.update_traces(q1= [df2[metric][1]], median= [df2[metric][2]],
-                #             q3= [df2[metric][3]], lowerfence= [df2[metric][0]],
-                #             upperfence=[df2[metric][4]],hoverinfo="y")
-                #fig.add_trace(go.Histogram(name = name,y = df[metric],marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
+                fig.add_trace(go.Box(y=[],name = "t1",marker_color=color2[0], boxpoints=False,),row = 1, col = group_num)
+                fig.update_traces(q1= [df2[metric][1]], median= [df2[metric][2]],
+                            q3= [df2[metric][3]], lowerfence= [df2[metric][0]],
+                            upperfence=[df2[metric][4]],hoverinfo="y",selector = ({'name':'t1'}))
+                fig.add_trace(go.Box(y=[],name = "t2",marker_color=color1[0], boxpoints=False,),row = 1, col = group_num)
+                fig.update_traces(q1= [df[metric][1]], median= [df[metric][2]],
+                            q3= [df[metric][3]], lowerfence= [df[metric][0]],
+                            upperfence=[df[metric][4]],hoverinfo="y",selector = ({'name':'t2'}))
+
             fig.update_xaxes(row=1, col = 1, autorange="reversed") if group_num == 1 else fig.update_xaxes(row = 1, col =2, autorange=True)
             fig.update_xaxes(showgrid=False,zeroline = False)
             fig.update_yaxes(showgrid=False,zeroline = False)
             fig.update_layout(boxmode='group', boxgroupgap=0.1, boxgap = 0, hovermode='x unified')
             return(fig)
         
-        def make_violin_traces(fig, df, df_log, df2, df2_log, color1, color2, metric, name, logTransf = False, group_num = 1):
-            if logTransf:
-                fig = get_violin_compare(fig,df_log[metric],df2_log[metric],color1,color2,name, group_num)
-            else:
-                fig = get_violin_compare(fig,df[metric],df2[metric],color1,color2,name, group_num)
-            fig.update_xaxes(row=1, col = 1, autorange="reversed") if group_num == 1 else fig.update_xaxes(row = 1, col =2, autorange=True)
-            return fig
+        # def make_violin_traces(fig, df, df_log, df2, df2_log, color1, color2, metric, name, logTransf = False, group_num = 1):
+        #     if logTransf:
+        #         fig = get_violin_compare(fig,df_log[metric],df2_log[metric],color1,color2,name, group_num)
+        #     else:
+        #         fig = get_violin_compare(fig,df[metric],df2[metric],color1,color2,name, group_num)
+        #     fig.update_xaxes(row=1, col = 1, autorange="reversed") if group_num == 1 else fig.update_xaxes(row = 1, col =2, autorange=True)
+        #     return fig
         # metric titles
         subplot_titles = ['Number of citations<br>(NC)', 'H-index<br>(H)', 'Hm-index<br>(Hm)', 'Number of citations to<br>single authored papers<br>(NCS)', 
             'Number of citations to<br>single and first<br>authored papers<br>(NCSF)', 'Number of citations to<br>single, first and<br>last authored papers<br>(NCSFL)', 'Composite score (C)']
