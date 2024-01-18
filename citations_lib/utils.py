@@ -15,15 +15,14 @@ import base64
 import zlib
 import math 
 
-from elasticsearch import Elasticsearch, helpers, exceptions
+from elasticsearch import Elasticsearch
 
 from dotenv import load_dotenv
 
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path)
-
-es = Elasticsearch([os.getenv('ES_URL')])
-#es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
+# dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+# load_dotenv(dotenv_path)
+# es = Elasticsearch([os.getenv('ES_URL')])
+es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
 
 def write_pickle(file,filename):
     with open(filename, 'wb') as handle:
