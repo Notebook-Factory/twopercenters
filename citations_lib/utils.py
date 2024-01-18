@@ -17,11 +17,12 @@ import math
 
 from elasticsearch import Elasticsearch, helpers, exceptions
 
-from dotenv import load_dotenv,find_dotenv
-load_dotenv(find_dotenv())
-print(os.environ.get("ES_URL"))
-print(list(os.environ.get("ES_URL")))
-es = Elasticsearch(list(os.environ.get("ES_URL")))
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path)
+
+es = Elasticsearch([os.getenv('ES_URL')])
 #es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
 
 def write_pickle(file,filename):
