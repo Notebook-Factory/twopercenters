@@ -1,1 +1,1 @@
-web: gunicorn app:server -p ${PORT:-5001}
+web: gunicorn app:server --preload --workers 2

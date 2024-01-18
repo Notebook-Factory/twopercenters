@@ -12,7 +12,7 @@ warnings.simplefilter('ignore', ElasticsearchWarning)
 
 app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE], suppress_callback_exceptions=True)
 server = app.server
-app.title = "Citations database"
+app.title = "2%ers"
 app.layout = html.Div([
     # html.Div(
     #     children = [
@@ -49,7 +49,7 @@ app.layout = html.Div([
 ])
 
 if __name__ == '__main__':
-	app.run_server(debug=True)
+	app.run_server(debug=False)
 
 # app = dash.Dash(__name__, external_stylesheets=[dbc.themes.SLATE],
 #                 meta_tags=[

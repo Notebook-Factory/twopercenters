@@ -174,8 +174,8 @@ def index_es_data_agg(df,key_name,index_name):
 ELASTIC_PASSWORD = "ELASTIC_PW"
 
 # ================== Create the client instance
-#es = Elasticsearch([os.environ.get("ES_URL")])
-es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
+es = Elasticsearch([os.environ.get("ES_URL")])
+#es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
 
 
 # client = Elasticsearch(

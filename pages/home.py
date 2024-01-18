@@ -27,7 +27,7 @@ from citations_lib.single_author_layout import *
 from citations_lib.author_vs_group_layout import *
 from citations_lib.group_vs_group_layout import *
 from citations_lib.author_vs_author_layout import *
-from citations_lib.metric_tab_layout import *
+#from citations_lib.metric_tab_layout import *
 
 # =============== Register page
 dash.register_page(__name__, path = '/')
