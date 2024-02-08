@@ -178,8 +178,8 @@ def index_es_data_agg(df,key_name,index_name):
 ELASTIC_PASSWORD = "ELASTIC_PW"
 
 # ================== Create the client instance
-client = Elasticsearch([os.environ.get("ES_URL")])
-#es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
+#client = Elasticsearch([os.environ.get("ES_URL")])
+client = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
 
 
 # client = Elasticsearch(
@@ -194,9 +194,9 @@ client = Elasticsearch([os.environ.get("ES_URL")])
 # client.options(ignore_status=[400,404]).indices.delete(index='citationsobj3')
 # client.options(ignore_status=[400,404]).indices.delete(index='citationsobj2')
 
-# client.options(ignore_status=[400,404]).indices.delete(index='career')
-# df = pickle.load(open("data/composite_career.p", "rb"))
-# index_es_data(df,"career")
+client.options(ignore_status=[400,404]).indices.delete(index='career')
+df = pickle.load(open("data/composite_career.p", "rb"))
+index_es_data(df,"career")
 
 client.options(ignore_status=[400,404]).indices.delete(index='singleyr')
 df = pickle.load(open("data/composite_singleyr.p", "rb"))
