@@ -178,8 +178,13 @@ def index_es_data_agg(df,key_name,index_name):
 ELASTIC_PASSWORD = "ELASTIC_PW"
 
 # ================== Create the client instance
-#client = Elasticsearch([os.environ.get("ES_URL")])
-client = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
+if os.getenv('ELASTICSEARCH_URL'):
+    # This one's exposed by dokku
+    client = Elasticsearch([os.getenv('ELASTICSEARCH_URL')])
+    datdir = '/mnt/ES_IDX/ES_TO_SERVER'
+else:
+    # If local
+    client = Elasticsearch([os.getenv('ES_URL')])
 
 
 # client = Elasticsearch(
@@ -195,36 +200,36 @@ client = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
 # client.options(ignore_status=[400,404]).indices.delete(index='citationsobj2')
 
 client.options(ignore_status=[400,404]).indices.delete(index='career')
-df = pickle.load(open("/mnt/ES_IDX/ES_TO_SERVER/composite_career.p", "rb"))
+df = pickle.load(open(f"{datdir}/composite_career.p", "rb"))
 index_es_data(df,"career")
 
 client.options(ignore_status=[400,404]).indices.delete(index='singleyr')
-df = pickle.load(open("/mnt/ES_IDX/ES_TO_SERVER/composite_singleyr.p", "rb"))
+df = pickle.load(open(f"{datdir}/composite_singleyr.p", "rb"))
 index_es_data(df,"singleyr")
 
-# df = pickle.load(open("composite_singleyr.p", "rb"))
+# df = pickle.load(open(f"{datdir}/composite_singleyr.p", "rb"))
 # index_es_data(df,"singleyr")
 
 # client.options(ignore_status=[400,404]).indices.delete(index='career_cntry')
-# df = pickle.load(open("career_aggregate_cntry.p", "rb"))
+# df = pickle.load(open(f"{datdir}/career_aggregate_cntry.p", "rb"))
 # index_es_data_agg(df,'cntry',"career_cntry")
 
 # client.options(ignore_status=[400,404]).indices.delete(index='career_field')
-# df = pickle.load(open("career_aggregate_field.p", "rb"))
+# df = pickle.load(open(f"{datdir}/career_aggregate_field.p", "rb"))
 # index_es_data_agg(df,'sm-field',"career_field")
 
 # client.options(ignore_status=[400,404]).indices.delete(index='career_inst')
-# df = pickle.load(open("career_aggregate_inst.p", "rb"))
+# df = pickle.load(open(f"{datdir}/career_aggregate_inst.p", "rb"))
 # index_es_data_agg(df,'inst_name',"career_inst")
 
 # client.options(ignore_status=[400,404]).indices.delete(index='singleyr_inst')
-# df = pickle.load(open("singleyr_aggregate_inst.p", "rb"))
+# df = pickle.load(open(f"{datdir}/singleyr_aggregate_inst.p", "rb"))
 # index_es_data_agg(df,'inst_name',"singleyr_inst")
 
 # client.options(ignore_status=[400,404]).indices.delete(index='singleyr_cntry')
-# df = pickle.load(open("singleyr_aggregate_cntry.p", "rb"))
+# df = pickle.load(open(f"{datdir}/singleyr_aggregate_cntry.p", "rb"))
 # index_es_data_agg(df,'cntry',"singleyr_cntry")
 
 # client.options(ignore_status=[400,404]).indices.delete(index='singleyr_field')
-# df = pickle.load(open("singleyr_aggregate_field.p", "rb"))
+# df = pickle.load(open(f"{datdir}/singleyr_aggregate_field.p", "rb"))
 # index_es_data_agg(df,'sm-field',"singleyr_field")
