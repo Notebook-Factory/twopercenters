@@ -78,6 +78,35 @@ def get_initial_metrics_list(df_in, author, ns = True):
             float(df_in[df_in['authfull'] == author][key].values)
     return(metrics_dict)
 
+def get_es_geo(aa,yr,metric,st_idx,log,geo_world):
+    df = pd.DataFrame(columns=['CODE', 'COUNTRY', metric,'GEOMETRY'])
+    for idx, cntry in enumerate(aa):
+        if cntry['ct'] != 'csk' and cntry['ct'] != 'nan':
+            if cntry['ct'] == 'sux':
+                cur_name = "Russia"
+            elif cntry['ct'] == 'ant': 
+                cur_name = "Netherlands"
+            elif cntry['ct'] == 'scg': 
+                cur_name = 'Czech Republic'
+            else: 
+                cur_name = coco.convert(cntry['ct'], to = 'name_short')
+            try:
+                df.loc[idx] = [cntry['ct']] + [cur_name] + [cntry['dat'][f'career_{yr}{log}'][metric][st_idx]] + ['']
+            except:
+                df.loc[idx] = [cntry['ct']] + [cur_name] + [0]+ ['']
+    
+    df.index = df['CODE']
+    countries_geo = []
+    for cntry in geo_world['features']:
+        cntry_name = cntry['properties']['iso_a3'].lower()
+        if cntry_name in df.index:
+            geometry = cntry['geometry']
+            countries_geo.append({'type': 'Feature', 'geometry': geometry, 'id':cntry_name})
+    geo_world_ok = {'type': 'FeatureCollection', 'features': countries_geo}
+    
+    fig = px.choropleth(df, geojson = geo_world_ok, locations = 'CODE', color = metric ,hover_data = ['COUNTRY'])
+    return fig
+
 def create_geo_json(df_in, df_in_log,career, yr, metric, color_by = 'count',logTransf = False, empty = False):
     '''
     Heavily inspired by Thibaud Lamothe tutorial here: https://towardsdatascience.com/how-to-create-outstanding-custom-choropleth-maps-with-plotly-and-dash-49ac918a5f05
@@ -91,6 +120,7 @@ def create_geo_json(df_in, df_in_log,career, yr, metric, color_by = 'count',logT
     # === Creating country df ===
     cc = coco.CountryConverter()
     country_df = df_in.groupby('cntry')[metric].describe()
+    #print(country_df.head())
     country_df_log = df_in_log.groupby('cntry')[metric].describe()
     country_df_log.columns = [item + '_log' for item in country_df_log.columns]
     country_df = country_df.join(country_df_log)
@@ -102,7 +132,7 @@ def create_geo_json(df_in, df_in_log,career, yr, metric, color_by = 'count',logT
         if str(cntry) == 'sux': names.append('Russia')
         elif str(cntry) == 'ant': names.append('Netherlands')
         elif str(cntry) == 'scg': names.append('Czech Republic')
-        else: names.append(cc.convert(cntry, to = 'name_short'))
+        else: names.append(coco.convert(cntry, to = 'name_short'))
     country_df['COUNTRY'] = names
     country_df['GEOMETRY'] = ['']*len(country_df)
 

@@ -11,3 +11,4 @@ plotly==5.13.0
 python-dotenv
 gunicorn
 elasticsearch
+dash-loading-spinners

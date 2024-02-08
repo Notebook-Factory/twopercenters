@@ -27,7 +27,7 @@ import dash_daq as daq
 from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
 from citations_lib.callback_templates import *
-
+import dash_loading_spinners as dls
 
 # BEGIN: RUN ONLY ON DATA CHANGE ------------------------------------------------
 """
@@ -39,7 +39,7 @@ indexes instead of pd dataframes to export author list, c-scores list and
 the number of records etc. 
 """
 # query = { "query": { "match_all": {} }, "_source": ['authfull'] }
-# page_size = 8000
+page_size = 8000
 
 # info_all  = {}
 # all_auth_career = []
@@ -90,6 +90,27 @@ the number of records etc.
 
 # for total_pages, page_counter, page_items, page_data in es_scroll('singleyr', query, page_size=page_size):
 #      singleyr_data.append(page_data['hits']['hits'])
+
+
+# COUNTRY DATA AGG
+
+# query = { "query": { "match_all": {} }, "_source": ['cntry','data'] }
+
+# career_data = []
+# for total_pages, page_counter, page_items, page_data in es_scroll('career_cntry', query, page_size=page_size):
+#      career_data.append(page_data['hits']['hits'])
+# career_all_c = [{'ct': d['_source']['cntry'],'dat': base64_decode_and_decompress(d['_source']['data'],False)}
+#                     for tmp in career_data
+#                     for d in tmp]
+# write_pickle(career_all_c,'cntry_career.pkl')
+
+# singleyr_data = []
+# for total_pages, page_counter, page_items, page_data in es_scroll('singleyr_cntry', query, page_size=page_size):
+#      singleyr_data.append(page_data['hits']['hits'])
+# singleyr_all_c = [{'ct': d['_source']['cntry'],'dat': base64_decode_and_decompress(d['_source']['data'],False)}
+#                     for tmp in singleyr_data
+#                     for d in tmp]
+# write_pickle(singleyr_all_c,'cntry_singleyr.pkl')
 
 
 # END: RUN ONLY ON DATA CHANGE ------------------------------------------------
@@ -228,7 +249,7 @@ def author_vs_author_layout():
 
     row1 = dbc.Row([dbc.Col(html.Center(selectStep1), width = {'offset':1,'size':3}), 
             dbc.Col(html.Center(careerORSingleYr), width = 2), 
-            dbc.Col(html.Center(selectYr), width = 4)])
+            dbc.Col(html.Center(selectYr), width = 5)])
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -255,7 +276,8 @@ def author_vs_author_layout():
    
     row2 = dbc.Container([
         dbc.Row([
-            dbc.Col([html.Center(author1Options), dbc.Row([dbc.Col([careerORSingleA1]),dbc.Col([selectYrA1])]) ], width = {'size':6}), dbc.Col([html.Center(author2Options), dbc.Row([dbc.Col([careerORSingleA2]),dbc.Col([selectYrA2])]) ], width = {'size':6}), 
+            dbc.Col([author1Options, dbc.Row([ dbc.Col([careerORSingleA1],width=4),dbc.Col([selectYrA1],width=8)],justify='around') ], width = {'size':6}), 
+            dbc.Col([author2Options, dbc.Row([dbc.Col([careerORSingleA2],width=4),dbc.Col([selectYrA2],width=8)],justify='around') ], width = {'size':6}), 
         ]), dbc.Row([
             dbc.Col(html.Center(id = 'InfoAuthor1' + SUFFIX), width = {'size':6}), dbc.Col(html.Center(id = 'InfoAuthor2' + SUFFIX), width = {'size':6})
         ]), dbc.Row([
@@ -282,12 +304,11 @@ def author_vs_author_layout():
     # =============== Toggle: % self-citations
     selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
     # =============== Figure title
-    figTitle = html.Div(' ', id = 'figTitleCard' + SUFFIX, style = {'color':lightAccent1, 'font-size':25})
+    #figTitle = html.Div(' ', id = 'figTitleCard' + SUFFIX, style = {'color':lightAccent1, 'font-size':25})
     # =============== C score figure
     metricsFigAuthor_c = dbc.Row([dbc.Col([html.Center(dcc.Graph(id = 'metricsFigGraphAuthor_c' + SUFFIX, figure = empty_fig, config = {'displayModeBar': False}))], width = {'offset':1, 'size':2}), dbc.Col(id = 'c_score_formula' + SUFFIX, width = 7)])
     # =============== Figure callbacks
     @callback(
-        Output('figTitleCard' + SUFFIX, 'children'), 
         Output('2author_figs' + SUFFIX, 'children'), 
         Output('metricsFigGraphAuthor_c' + SUFFIX, 'figure'), 
         Output('c_score_formula' + SUFFIX, 'children'),
@@ -345,8 +366,8 @@ def author_vs_author_layout():
                 #author1_metrics = {'nc': nc1, 'h': h1, 'hm': hm1, 'ncs': ncs1, 'ncsf': ncsf1, 'ncsfl': ncsfl1}, 
                 author1_metrics = {},
                 author2_metrics = {})
-            for i in range(6): fig_list[i].update_layout(height = 400)
-            fig_list[6].update_layout(height = 300, margin = {'t':40})
+            for i in range(6): fig_list[i].update_layout(height = 200,width=200)
+            fig_list[6].update_layout(height = 230, margin = {'t':20})
 
             # Title
             title = 'Ranking based on composite score C and bar plots of metrics used to compute C'
@@ -368,8 +389,8 @@ def author_vs_author_layout():
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[0]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[1]))], width = 2),
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[2]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[3]))], width = 2),
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[4]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[5]))], width = 2)]),
-            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1), dbc.Col(rankAuthor2)]), dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row(html.Center('Composite score C formula:')), dbc.Row(html.Br()), dbc.Row(html.Img(src = 'assets/c_formula.png', style = {'width':1000}))])
-            return(title, figures, fig_list[6], c_img)
+            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1), dbc.Col(rankAuthor2)]), dbc.Row(html.Br()), dbc.Row(html.Img(src = 'assets/c_formula.png', style = {'width':1000}))])
+            return(figures, fig_list[6], c_img)
 
     def main_2_author_figs(df_in, df_in_log, df2_in, df2_in_log, group1_name, group2_name, ns, logTransf, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue'], author1_metrics = {}, author2_metrics = {}, weights = [1, 1, 1, 1, 1, 1]):
         metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
@@ -464,13 +485,48 @@ def author_vs_author_layout():
             fig_list.append(fig)
         return(fig_list, new_rank_1, new_rank_2)
 
+    offcanvas2 = html.Div(
+        [
+            dbc.Offcanvas(
+                dcc.Markdown(
+                    '''
+                * **User interactions**
+                    * `Toggle 1`: Compare metrics using a logarithmic scale.
+                    * `Toggle 2`: Choose to exclude or include author self-citations.
+                    * Data type and year selection options will be enabled based on the selected researcher.
+                    * Users can compare different years and dataset types between two researchers.
+                * **Notes**
+                    * Rankings are determined by the composite score C, alongside bar plots illustrating the metrics utilized to calculate C. Scores are retrieved from the Elsevier database corresponding to the chosen year/dataset type.
+                    * Researcher metrics can span their entire career (career) or be specific to a single year of interest (single year).
+                    * Single-year data is unavailable for 2018 for all researchers.
+                * **Other**
+                    * The np (number of papers) appears to be inconsistent with the selected data type.
+                    '''
+                ),
+                id="offcanvas2",
+                title="Compare top 2% researchers",
+                is_open=False,
+            ),
+        ]
+    )
+
+    @callback(
+        Output("offcanvas2", "is_open"),
+        Input("open-offcanvas2", "n_clicks"),
+        [State("offcanvas2", "is_open")],
+    )
+    def toggle_offcanvas(n1, is_open):
+        if n1:
+            return not is_open
+        return is_open
+
     row3 = html.Div([
-        dbc.Row(dbc.Col(html.Center(figTitle))), 
         dbc.Row(html.Br()), 
-        dbc.Row([dbc.Col(logTransf, width = {'offset':4, 'size':2}), dbc.Col(selfC, width = {'size':2})]), 
+        dbc.Row([dbc.Col(logTransf, width = {'offset':4, 'size':2}), dbc.Col(selfC, width = {'size':2}),dbc.Col(dbc.Button("ℹ️ More info", id="open-offcanvas2", n_clicks=0),width = {'size':2})]), 
         dbc.Row(html.Br()), 
-        metricsFigAuthor_c, 
+        metricsFigAuthor_c,
         dbc.Row(html.Br()), 
+        offcanvas2,
         dbc.Row(dbc.Col(dbc.Container(id = '2author_figs' + SUFFIX), width = {'offset':1,'size':10}))])
 
     # ========================================================================================== 
@@ -632,12 +688,10 @@ def author_vs_author_layout():
     # ========================================================================================== 
     return(html.Div([
         dbc.Container(fluid = True, children = [
-            html.Br(), 
             #row1, 
             html.Hr(), 
             row2, 
             html.Hr(), 
-            row3, 
-            html.Hr(), 
+            dls.GridFade(row3,color="#ECAB4C"), 
         ], style = {'backgroundColor':darkAccent1}), 
     ]))

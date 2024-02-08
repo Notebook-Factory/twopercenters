@@ -24,6 +24,7 @@ highlight2 = 'cornflowerblue'
   height: 95px;
   white-space: normal;
 } */
+
 .custom-label{
   background-color:#2C2C2C;
   border: 3px solid #CFCFCF;
@@ -68,6 +69,10 @@ highlight2 = 'cornflowerblue'
 
 .Select-value-label{
   color: #2C2C2C;
+}
+
+.Select-placeholder{
+  color: black;
 }
 
 .Select--multi .Select-value {
@@ -129,7 +134,11 @@ color: #2C2C2C;
 .radio-group .form-check {
     padding-left: 0;
 }
-  
+
+.btn-group .btn.active {
+  background-color: #ECAB4C;
+}
+
 .radio-group .btn-group > .form-check:not(:last-child) > .btn {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
@@ -139,4 +148,83 @@ color: #2C2C2C;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   margin-left: -1px;
+}
+
+.danger {
+  background-color: #ebd4b0;
+  color: black;
+  border-left: 6px solid #ECAB4C;
+  border-right: 6px solid #ECAB4C;
+  border-radius: 5px;
+  padding-left: 5px;
+}
+
+.nav-tabs .nav-link.active {
+  background-color: #ECAB4C!important;
+  color : #ECAB4C;
+  font-weight: bold;
+}
+
+.accordion-button {
+  background-color: #ECAB4C;
+  color: white;
+  font-size: xx-large;
+  
+}
+
+.accordion-button:not(.collapsed) {
+  font-size: xx-large;
+}
+
+.navbar .container{
+  margin-left: 5px;
+  margin-right: 40%;
+}
+
+.navbar-brand{
+  margin-right: 50px;
+  border-right: 0px;
+}
+
+.accordion-item:last-of-type .accordion-button.collapsed {
+  font-size: xx-large;
+}
+
+.danger2 {
+  background-color: rgb(157, 246, 173);
+  color: black;
+  border-left: 6px solid rgb(8, 111, 27);
+  border-radius: 5px;
+  padding-left: 5px;
+}
+
+.lel p{
+  margin-bottom: 0;
+}
+
+.lel a{
+  color: black;
+}
+
+.lel2{
+  background-color: indianred;
+  background-image: none;
+  border-radius: 20px;
+  padding-bottom: 1px;
+  padding-top: 1px;
+
+}
+
+
+code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  color: #ECAB4C;
+  padding: 2px 4px;
+}
+
+/* Styling for inline code */
+p code,
+li code {
+  padding: 2px 3px;
 }

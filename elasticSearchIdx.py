@@ -117,6 +117,7 @@ def index_es_data(df,index_name):
     mappings['properties']['cntry'] = {'type':'text'}
     mappings['properties']['inst_name'] = {'type':'text'}
     mappings['properties']['sm-field'] = {'type':'text'}
+    mappings['properties']['years'] = {'type':'text'}
     mappings['properties']['data'] = {'type':'binary'}
 
     client.indices.create(index=index_name, mappings = mappings)
@@ -129,9 +130,12 @@ def index_es_data(df,index_name):
                     "_type": "_doc",
                     "_id" : index,
                     "_source": {"authfull":document,
+                                # Search IDX for cntry, field, inst names will be from the latest year.
                                 "cntry": list(set(get_all_values_by_key(df[document], "cntry")))[-1],
                                 "inst_name": list(set(get_all_values_by_key(df[document], "inst_name")))[-1],
                                 "sm-field": list(set(get_all_values_by_key(df[document], "sm-field")))[-1],
+                                # Add info about which years are incd.
+                                "years": list(set([cr.split('_')[1] for cr in list(df[document].keys())])),
                                 "data":compress_and_base64_encode(df[document])}
                 }
             
@@ -174,7 +178,7 @@ def index_es_data_agg(df,key_name,index_name):
 ELASTIC_PASSWORD = "ELASTIC_PW"
 
 # ================== Create the client instance
-es = Elasticsearch([os.environ.get("ES_URL")])
+client = Elasticsearch([os.environ.get("ES_URL")])
 #es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
 
 
@@ -190,9 +194,13 @@ es = Elasticsearch([os.environ.get("ES_URL")])
 # client.options(ignore_status=[400,404]).indices.delete(index='citationsobj3')
 # client.options(ignore_status=[400,404]).indices.delete(index='citationsobj2')
 
-
-# df = pickle.load(open("composite_career.p", "rb"))
+# client.options(ignore_status=[400,404]).indices.delete(index='career')
+# df = pickle.load(open("data/composite_career.p", "rb"))
 # index_es_data(df,"career")
+
+client.options(ignore_status=[400,404]).indices.delete(index='singleyr')
+df = pickle.load(open("data/composite_singleyr.p", "rb"))
+index_es_data(df,"singleyr")
 
 # df = pickle.load(open("composite_singleyr.p", "rb"))
 # index_es_data(df,"singleyr")

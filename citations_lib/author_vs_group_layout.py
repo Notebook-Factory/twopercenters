@@ -22,6 +22,7 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import dash_daq as daq
+import dash_loading_spinners as dls
 
 # =============== Custom lib
 from citations_lib.create_fig_helper_functions import *
@@ -263,7 +264,7 @@ def author_vs_group_layout():
     row2 = dbc.Container([
         dbc.Row([
             #dbc.Col([html.Center(group1List),html.Center(group1ListOptions)], width = {'size':6}), 
-            dbc.Col([html.Center(group1List), dbc.Row([dbc.Col([careerORSingleA1]),dbc.Col([selectYrA1])]) ], width = {'size':6}), 
+            dbc.Col([html.Center(group1List), dbc.Row([dbc.Col([careerORSingleA1],width=4),dbc.Col([selectYrA1],width=8)],justify='around') ], width = {'size':6}), 
             dbc.Col([html.Center(group2List),html.Center(group2ListOptions)], width = {'size':6}), 
         ]), dbc.Row([
             dbc.Col(html.Center(id = 'InfoAuthor1' + SUFFIX), width = {'size':6}), 
@@ -294,12 +295,11 @@ def author_vs_group_layout():
     # =============== Toggle: % self-citations
     selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
     # =============== Figure title
-    figTitle = html.Div(' ', id = 'figTitleCard' + SUFFIX, style = {'color':lightAccent1, 'font-size':25})
+    #figTitle = html.Div(' ', id = 'figTitleCard' + SUFFIX, style = {'color':lightAccent1, 'font-size':25})
     # =============== C score figure
     metricsFig_c = dbc.Row([dbc.Col([html.Center(dcc.Graph(id = 'metricsFigGraphAuthor_c' + SUFFIX, figure = empty_fig, config = {'displayModeBar': False}))], width = {'offset':1, 'size':2}), dbc.Col(id = 'c_score_formula' + SUFFIX, width = 7)])
     # =============== Figure callbacks
     @callback(
-        Output('figTitleCard' + SUFFIX, 'children'), 
         Output('2group_figs' + SUFFIX, 'children'), 
         Output('metricsFigGraphAuthor_c' + SUFFIX, 'figure'), 
         Output('c_score_formula' + SUFFIX, 'children'), 
@@ -354,8 +354,8 @@ def author_vs_group_layout():
             if group2 == 'all': group2_name = 'Dataset'
 
             fig_list, n1, n2 = main_author_group_figs(data1, data1_log, data2, data2_log, group1_name, group2, group2_name, ns, logTransf, g1c = g1c, g2c = g2c)
-            for i in range(6): fig_list[i].update_layout(height = 400)
-            fig_list[6].update_layout(height = 300, margin = {'t':40})
+            for i in range(6): fig_list[i].update_layout(height = 230)
+            fig_list[6].update_layout(height = 250, margin = {'t':40})
 
             # Title
             title = 'Ranking based on composite score C and bar plots of metrics used to compute C'
@@ -374,7 +374,7 @@ def author_vs_group_layout():
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[2]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[3]))], width = 2),
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[4]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[5]))], width = 2)]),
             c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(authorRank), dbc.Col(nAuthors2)]), dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row(html.Center('Composite score C formula:')), dbc.Row(html.Br()), dbc.Row(html.Img(src = 'assets/c_formula.png', style = {'width':1000}))])
-            return(title, figures, fig_list[6], c_img)
+            return(figures, fig_list[6], c_img)
 
     def main_author_group_figs(df1_in, df1_in_log, df2_in, df2_in_log, group1_name, group2, group2_name, ns, logTransf, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue']):
         '''
@@ -509,7 +509,7 @@ def author_vs_group_layout():
         return(fig_list, n1, n2)
 
     row3 = html.Div([
-        dbc.Row(dbc.Col(html.Center(figTitle))), dbc.Row(html.Br()), 
+        dbc.Row(html.Br()), 
         dbc.Row([dbc.Col(logTransf, width = {'offset':4, 'size':2}), dbc.Col(selfC, width = {'size':2})]), 
         dbc.Row(html.Br()), metricsFig_c, dbc.Row(html.Br()), 
         dbc.Row(dbc.Col(dbc.Container(id = '2group_figs' + SUFFIX), width = {'offset':1,'size':10})), dbc.Row(html.Br())])
@@ -525,6 +525,6 @@ def author_vs_group_layout():
             html.Hr(), 
             row2, 
             html.Hr(), 
-            row3, 
+            dls.GridFade(row3,color="#ECAB4C"), 
             html.Br(), 
         ], style = {'backgroundColor':darkAccent1})]))

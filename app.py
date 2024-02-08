@@ -1,55 +1,33 @@
 import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
-from flask_caching import Cache
 import os
 
-from dash import Dash, html, dcc
-
+from dash import Dash, html, dcc, callback
+from dash.dependencies import Input, Output, State
 import warnings
+
 from elasticsearch.exceptions import ElasticsearchWarning
 warnings.simplefilter('ignore', ElasticsearchWarning)
 
-app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE], suppress_callback_exceptions=True)
+
+app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
+           suppress_callback_exceptions=True)
 server = app.server
 app.title = "2%ers"
 app.layout = html.Div([
-    # html.Div(
-    #     children = [
-    #         html.Img(src='assets/neurolibre_logo.png', className="header-logo"),
-    #         html.H1(
-    #             children="Citations Database", className="header-title"
-    #         ),
-    #         html.P(
-    #             children="John P.A. Ioannidis",
-    #             className="header-description",
-    #         ),
-    #         html.P(
-    #             children="3 articles (2016, 2019, 2020)",
-    #             className="header-description",
-    #         ),
-    #         html.P(
-    #             children="5 dataset versions (2017, 2019, 2020, 2021, 2021)",
-    #             className="header-description",
-    #         ),
-    #     ],
-    #     className="header",
-    # ),
-    # html.Div(
-    #     [
-    #         html.Div(
-    #             dcc.Link(
-    #                 f"{page['name']} - {page['path']}", href=page["relative_path"]
-    #             )
-    #         )
-    #         for page in dash.page_registry.values()
-    #     ]
-    # ),
+        html.Div([dcc.Store(id="df-store", storage_type='local'),
+            dcc.Interval(
+            id="load_interval", 
+            n_intervals=0, 
+            max_intervals=0,
+            interval=1)]),
 	dash.page_container
 ])
 
+
 if __name__ == '__main__':
-	app.run_server(debug=False)
+	app.run_server(debug=True)
 
 # app = dash.Dash(__name__, external_stylesheets=[dbc.themes.SLATE],
 #                 meta_tags=[

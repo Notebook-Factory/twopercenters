@@ -51,12 +51,16 @@ def create_author_figures(author_df, author_yrs, metrics_list, author_type, auth
                                  ), row=i + 1, col=1)
         fig.update_traces(row=i + 1, col=1, hovertemplate='metric in %{x}:<br>%{y}<extra></extra>')
 
+    if author_type == 'singleyr':
+        disp_type = 'Single-year'
+    else: 
+        disp_type = 'Career-long'
     fig.update_xaxes(tickvals=author_yrs, ticktext=author_yrs, gridcolor=darkAccent2, linecolor=darkAccent2, zeroline=False)
     fig.update_yaxes(gridcolor=darkAccent2, linecolor=darkAccent2, zeroline=False)
     fig.update_layout(
         plot_bgcolor=bgc, paper_bgcolor=bgc, font=dict(color=lightAccent1),
         height=2000, showlegend=False,
-        title={'text': f"{author_type.capitalize()} data: {author_name}", 'font': {'size': 20}}, title_x=0.5
+        title={'text': f"{disp_type} data: {author_name}", 'font': {'size': 20}}, title_x=0.5
     )
 
     return fig
@@ -104,7 +108,7 @@ def single_author_layout():
     # # =============== Author Callback
     @callback(
     Output('authorOptionsDropdown' + SUFFIX, 'options'),
-    [Input('authorOptionsDropdown' + SUFFIX, 'search_value')],
+    [Input('authorOptionsDropdown' + SUFFIX, 'search_value')]
     )
     def update_output(input1):
         result = get_es_results(input1,['career','singleyr'],'authfull')
@@ -113,8 +117,9 @@ def single_author_layout():
     @callback(
         Output('careerFig' + SUFFIX, 'figure'),
         Output('singleYrFig' + SUFFIX, 'figure'),
-        Output('instLabel', 'children'),
-        Output('fieldLabel', 'children'),
+        Output('instLabel' + SUFFIX, 'children'),
+        Output('fieldLabel' + SUFFIX, 'children'),
+        Output('authorOptionsDropdown' + SUFFIX, 'placeholder'),
         Input('authorOptionsDropdown' + SUFFIX, 'value'),
         Input('selfCToggle' + SUFFIX, 'on'))
     def update_Author1(author, ns):
@@ -160,7 +165,7 @@ def single_author_layout():
             
             
 
-            return(fig_career, fig_singleyr, inst_name, field_name)
+            return(fig_career, fig_singleyr, inst_name, field_name, "Start typing for new search | Displaying: " + author.split(",")[0])
 
     # =============== Row 1: Author select
     row1 = dbc.Row([dbc.Col(html.Center(authorOptions), width = {'offset':3,'size':4}),
@@ -168,15 +173,18 @@ def single_author_layout():
 
     # =============== Row 2: Figures
     row2 = dbc.Row([
-        dbc.Col([html.Code(html.Label(id='instLabel',children=""))], width = {'offset':0, 'size':1}),
+        dbc.Col([html.Code(html.Label(id='instLabel' + SUFFIX,children=""))], width = {'offset':0, 'size':1}),
         dbc.Col([html.Center(dcc.Graph(id = 'careerFig' + SUFFIX, figure = empty_fig, config = {'displayModeBar': False}))], width = {'offset':0, 'size':5}),
         dbc.Col([html.Center(dcc.Graph(id = 'singleYrFig' + SUFFIX, figure = empty_fig, config = {'displayModeBar': False}))], width = {'size':5}),
-        dbc.Col([html.Code(html.Label(id='fieldLabel',children=""))], width = {'offset':0, 'size':1})
+        dbc.Col([html.Code(html.Label(id='fieldLabel' + SUFFIX,children=""))], width = {'offset':0, 'size':1})
     ])
+
+
 
     return(html.Div([
         dbc.Container(fluid = True, children = [
             html.Br(),
+            html.Label(id='tmpLabel',children=""),
             row1, html.Hr(), 
             row2, html.Br(), 
         ], style = {'backgroundColor':darkAccent1}), 

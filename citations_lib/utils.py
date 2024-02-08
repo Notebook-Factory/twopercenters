@@ -17,14 +17,17 @@ import math
 
 from elasticsearch import Elasticsearch
 
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 
-# dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-# load_dotenv(dotenv_path)
-# es = Elasticsearch([os.getenv('ES_URL')])
-print('See')
-print(os.getenv('ELASTICSEARCH_URL'))
-es = Elasticsearch(["http://dokku-elasticsearch-citedb:9200"])
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path)
+
+if os.getenv('ELASTICSEARCH_URL'):
+    # This one's exposed by dokku
+    es = Elasticsearch([os.getenv('ELASTICSEARCH_URL')])
+else:
+    # If local
+    es = Elasticsearch([os.getenv('ES_URL')])
 
 def write_pickle(file,filename):
     with open(filename, 'wb') as handle:
@@ -340,11 +343,19 @@ def get_metric_summary(data, prefix, year, metric, stat):
 
 def update_yr_options(career):
     if career == False:
-        return [{"label": "2017", "value": 0, 'disabled': False}, {"label": "2018", 'disabled': True}, {"label": "2019", "value": 1, 'disabled': False}, 
+        return [{"label": "IN 2017", "value": 0, 'disabled': False}, {"label": "2018", 'disabled': True}, {"label": "2019", "value": 1, 'disabled': False}, 
         {"label": "2020", "value": 2, 'disabled': False}, {"label": "2021", "value": 3, 'disabled': False}, ]
     else: # career == True or None
-        return [{"label": "2017", "value": 0, 'disabled': False}, {"label": "2018", "value": 1, 'disabled': False}, {"label": "2019", "value": 2, 'disabled': False}, 
+        return [{"label": "TO 2017", "value": 0, 'disabled': False}, {"label": "2018", "value": 1, 'disabled': False}, {"label": "2019", "value": 2, 'disabled': False}, 
         {"label": "2020", "value": 3, 'disabled': False}, {"label": "2021", "value": 4, 'disabled': False}]
+
+def update_yr_options2(career):
+    if career: 
+        return([{"label": "TO 2017", "value": '2017', 'disabled': False}, {"label": "2018", "value": '2018', 'disabled': False}, 
+            {"label": "2019", "value": '2019', 'disabled': False}, {"label": "2020", "value": '2020', 'disabled': False}, {"label": "2021", "value": '2021', 'disabled': False}],'2021')
+    else:
+        return([{"label": "IN 2017", "value": '2017', 'disabled': False}, {"label": "2018", "value": '2018', 'disabled': True}, 
+            {"label": "2019", "value": '2019', 'disabled': False}, {"label": "2020", "value": '2020', 'disabled': False}, {"label": "2021", "value": '2021', 'disabled': False}],'2021')
 def update_cr_options(avail):
     if avail == 'both':
         return [{"label": "Career", "value": True}, {"label": "Single year", "value": False}]
@@ -353,11 +364,20 @@ def update_cr_options(avail):
     elif avail == 'singleyr':
         return [{"label": "Career", "value": False,'disabled': True}, {"label": "Single year", "value": True, 'disabled': True}]
 
-def update_auth_yrs(keys):
+def update_auth_yrs(keys,prefix):
+    if prefix == 'career':
+        aptx = 'TO '
+    else:
+        aptx = 'IN '
     opts = []
+    it = 1
     for key in keys:
         if key.split('_')[-1] != "log":
-            opts.append({"label": key.split('_')[-1], "value": key.split('_')[-1]})
+            if it == 1:
+                opts.append({"label": aptx + key.split('_')[-1], "value": key.split('_')[-1]})
+            else:
+                opts.append({"label": key.split('_')[-1], "value": key.split('_')[-1]})
+            it = it + 1
     return opts
     
 def load_standardized_data(root_data = 'data/'):
@@ -550,3 +570,44 @@ def get_violin_compare(fig, in1,in2,color1,color2,name,group_num):
     
     # Show the plot
     return fig
+
+def get_world_df(year,sts,prefix):
+    #print(prefix)
+    if sts == 'median':
+        st_idx = 2
+    elif sts == 'min':
+        st_idx = 0
+    elif sts == 'max':
+        st_idx = 4
+    elif sts == '25':
+        st_idx = 1
+    elif sts == '75':
+        st_idx = 3
+    cc = coco.CountryConverter()
+    if prefix == 'career':
+        aa = pd.read_pickle('aggregate/cntry_career.pkl')
+    else:
+        aa = pd.read_pickle('aggregate/cntry_singleyr.pkl')
+    yr = year
+    #st_idx = 3
+    metrics = ['h', 'nc', 'np', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c']
+    metrics_name = ['H-index', '# citations', '# papers', 'Hm-index',  '# citations to single auth papers', '# citations to single/first auth papers', '# citations to single/first/last auth papers', 'Composite (c) score']
+    df = pd.DataFrame(columns=['code', 'country', sts, 'geometry', 'metric', 'metric_name'])
+    kk = 0
+    for idxx, metric in enumerate(metrics):
+        for idx, cntry in enumerate(aa):
+            if cntry['ct'] != 'csk' and cntry['ct'] != 'nan':
+                if cntry['ct'] == 'sux':
+                    cur_name = "Russia"
+                elif cntry['ct'] == 'ant': 
+                    cur_name = "Netherlands"
+                elif cntry['ct'] == 'scg': 
+                    cur_name = 'Czech Republic'
+                else: 
+                    cur_name = cc.convert(cntry['ct'], to = 'name_short')
+                try:
+                    df.loc[kk] = ([cntry['ct'].upper()]) + [cur_name] + [cntry['dat'][f'{prefix}_{yr}'][metric][st_idx]]  + [''] + [str(metric)] + [str(metrics_name[idxx])]
+                except Exception as e:
+                    df.loc[kk] = ([cntry['ct'].upper()]) + [cur_name] + [0] + [''] + [str(metric)] + ['lel']
+                kk = kk +1
+    return df

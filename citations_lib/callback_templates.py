@@ -5,6 +5,7 @@ import dash_bootstrap_components as dbc
 import dash_daq as daq
 from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
+import urllib
 
 def generate_es_dropdown_callback(element_id):
     """
@@ -76,14 +77,14 @@ def generate_update_years_callback(input_id, output_id, auth_dropdown_id):
             prefix = 'career' if val else 'singleyr'
             results = get_es_results(authname, prefix, 'authfull')
             data = es_result_pick(results, 'data', None)
-            yrs = update_auth_yrs(data.keys())
+            yrs = update_auth_yrs(data.keys(),prefix)
             return yrs, yrs[0]['value']
-
     return update_years
 
 def generate_update_cards_callback(input_id, output_ids, auth_dropdown_id, career_singleyr_id,color1, color2):
     @callback(
         [Output(output_id, 'children') for output_id in output_ids],
+        Output(auth_dropdown_id, 'placeholder'),
         Input(input_id, 'value'),
         State(auth_dropdown_id, 'value'),
         State(career_singleyr_id, 'value'),
@@ -93,22 +94,23 @@ def generate_update_cards_callback(input_id, output_ids, auth_dropdown_id, caree
             raise PreventUpdate
         else:
             prefix = 'career' if is_career else 'singleyr'
+            when = 'career-long up to ' if is_career else 'in year '
             results = get_es_results(authname, prefix, 'authfull')
             if results is not None:
                 data = es_result_pick(results, 'data', None)
                 names = get_inst_field_cntry(data, prefix, year)
-                #print(names)
-                stat = get_metric_summary(data, prefix, year, 'self%', 'median')
-                #print(stat)
+                txt1 = dcc.Markdown(f"Found in **{int(data[f'{prefix}_{year}']['np'])} papers**. Received **{int(data[f'{prefix}_{year}']['nc'])} citations** {when}{year}.",className = "lel")
+                txt2 = dcc.Markdown(f"| **{int(data[f'{prefix}_{year}']['self%']*100)}% self citation** |  **{int(data[f'{prefix}_{year}']['h'])} [H-index](https://en.wikipedia.org/wiki/H-index)** | **{int(data[f'{prefix}_{year}']['hm'])} [Hm-index](https://arxiv.org/abs/0805.2000)** |",className = "lel")
+                lnk = urllib.parse.quote(str(authname))
                 cntry_full = coco.convert(names=names['cntry'], to='name_short')
-                card1 = dbc.Card(html.Center(authname + ' (' + stat['own'] + ' % self-citation)'),
+                card1 = dbc.Card([dbc.CardLink(authname, href=f'https://scholar.google.ca/scholar?hl=en&as_sdt=0%2C5&q={lnk}&btnG=',target='_blank',style={"color":"black"})],
                                 style={'color': color1, 'font-size': 18}, color=color2)
-                card2 = dbc.Card(html.Center(names['field'] + ' (' + stat['field'] + ' % median self-citation)'),
+                card2 = dbc.Card(html.Center(names['inst'] + ', ' + names['field'] +  ', ' + cntry_full),
                                 style={'color': color1, 'font-size': 14}, color=color2)
-                card3 = dbc.Card(html.Center(cntry_full + ' (' + stat['cntry'] + ' % median self-citation)'),
+                card3 = dbc.Card([html.Center(txt1)],
                                 style={'color': color1, 'font-size': 14}, color=color2)
-                card4 = dbc.Card(html.Center(names['inst'] + ' (' + stat['inst'] + ' % median self-citation)'),
+                card4 = dbc.Card(html.Center(html.Center(txt2)),
                                 style={'color': color1, 'font-size': 14}, color=color2)
-                return card1, card2, card3, card4
+                return card1, card2, card3, card4, "Start typing for new search | Displaying: " + authname.split(",")[0]
 
     return update_cards
