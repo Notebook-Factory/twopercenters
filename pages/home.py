@@ -472,7 +472,9 @@ footer = html.Footer(id='footer',
 layout = dbc.Container(fluid = True, children = [
         offcanvas,
         dede,
-        html.Div(navigation_row, style={"height":"100vh"}),
+        html.Div(navigation_row),
+        html.Br(),
+        html.Hr(),
         dbc.Row(accordion),
         footer
         ], style = {'backgroundColor':darkAccent1})
