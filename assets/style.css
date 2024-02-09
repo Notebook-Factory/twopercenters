@@ -72,7 +72,7 @@ highlight2 = 'cornflowerblue'
 }
 
 .Select-placeholder{
-  color: black;
+  color: black!important;
 }
 
 .Select--multi .Select-value {

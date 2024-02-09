@@ -91,13 +91,13 @@ tbl  = dash_table.DataTable(
 
 compare_row = html.Div([
     dbc.Row([
-        dbc.Col([html.Center(dbc.Button("Compare author to author", className="me-2", id = "collapse_btn_author_vs_author",
+        dbc.Col([html.Center(dbc.Button("🔸 Compare author to author", className="me-2", id = "collapse_btn_author_vs_author",
             style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
             n_clicks = 0, color = darkAccent1))], width = 3),
-        dbc.Col([html.Center(dbc.Button("Compare group to group", className="me-2", id = "collapse_btn_group_vs_group",
+        dbc.Col([html.Center(dbc.Button("🔸 Compare group to group", className="me-2", id = "collapse_btn_group_vs_group",
             style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
             n_clicks = 0, color = darkAccent1))], width = 3),
-        dbc.Col([html.Center(dbc.Button("Compare author to group", className="me-2", id = "collapse_btn_author_vs_group",
+        dbc.Col([html.Center(dbc.Button("🔸 Compare author to group", className="me-2", id = "collapse_btn_author_vs_group",
             style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
             n_clicks = 0, color = darkAccent1))], width = 3),
     ], justify="center"),
@@ -266,17 +266,17 @@ zort = html.Div([dbc.RadioItems(id='selectYrRadio' + SUFFIX,
             {"label": "2019", "value": '2019', 'disabled': False}, {"label": "2020", "value": '2020', 'disabled': False}, {"label": "2021", "value": '2021', 'disabled': False}],value='2021')], className = "radio-group")
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
 explain  =  '''
-                    <h2 style='color:#ECAB4C;'> 🟠 Zoom out and explore </h2>
+                    <h2 style='color:#ECAB4C;'> 🟠 Bird's eye view of the top 2% </h2>
 
                     ---
 
-                    This dashboard section provides a bird's-eye view of the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
+                    This dashboard section provides a zommed-out look at the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
                     You can explore the researchers and institutions that made the cut in each country.
 
                     #### Global distribution of performance metrics
 
                     👈 Currently, the world map on the left illustrates the distribution of `median` `H-Index` across countries, derived from the academic performance of the top 2% 
-                    researchers throughout their careers (referred to as `Career` data') up to the year `2021`.
+                    researchers throughout their career span (referred to as `Career` data) up to the year `2021`.
                     
                     <div class="danger">
                     <details>
@@ -411,9 +411,9 @@ navigation_row =  dbc.Row([
 tabs = [
     dbc.Tabs(
         [
-            dbc.Tab(label="Compare author to author", tab_id="tab-1"),
-            dbc.Tab(label="Compare author to group", tab_id="tab-2"),
-            dbc.Tab(label="Compare group group", tab_id="tab-3"),
+            dbc.Tab(label="🔸 Compare author to author", tab_id="tab-1"),
+            dbc.Tab(label="🔸 Compare author to group", tab_id="tab-2"),
+            dbc.Tab(label="🔸 Compare group group", tab_id="tab-3"),
         ],
         id="tabs",
         active_tab="tab-1",
@@ -439,13 +439,13 @@ accordion = html.Div(
                 [
                     html.Div(tabs),
                 ],
-                title = "🟠 Zoom in and compare (toggle)",
+                title = "🟠 Taking a closer look: Comparing researchers, fields, and countries (toggle)",
             ),
             dbc.AccordionItem(
                 [
                     single_author_layout(),
                 ],
-                title="🟠 Researcher trends (toggle)",
+                title="🟠 Researcher trends: How metrics change for a researcher over the years (toggle)",
             )
         ],
         flush = False,
