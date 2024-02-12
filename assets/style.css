@@ -75,6 +75,11 @@ highlight2 = 'cornflowerblue'
   color: black!important;
 }
 
+.is-focused .Select-input > input {
+  cursor: text;
+  color: #ECAB4C!important;
+}
+
 .Select--multi .Select-value {
   background-color: #CFCFCF;
   border-radius: 2px;

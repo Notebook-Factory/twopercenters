@@ -81,23 +81,73 @@ tbl  = dash_table.DataTable(
 )
 
 
-# @callback(
-#     Output('worldtitle', 'children',allow_duplicate=True),
-#     Input('instnametable', 'active_cell'),
-#     prevent_initial_call='initial_duplicate')
-# def update_graphs(val):
-#     print(val)
-#     return val
+@callback(
+    Output('worldtitle', 'children',allow_duplicate=True),
+    [Input('instnametable', 'active_cell')],
+    [State('selectYrRadio' + SUFFIX, 'value'),
+     State("careerORSingleYrRadio" + SUFFIX, 'value'),
+     State("stats2", 'value'),
+     State('instnametable', 'data')],
+    prevent_initial_call='initial_duplicate')
+def update_graphs(val,yr, iscar, sts,dt):
+    if val is None:
+        raise PreventUpdate
+    else:
+        if sts == 'median':
+            st_idx = 2
+        elif sts == 'min':
+            st_idx = 0
+        elif sts == 'max':
+            st_idx = 4
+        elif sts == '25':
+            st_idx = 1
+        elif sts == '75':
+            st_idx = 3
+        if iscar:
+            prefix = 'career'
+            txt = 'career-long up to'
+        else:
+            prefix = 'singleyr'
+            txt = 'single-year in '
+        
+        sel_type = val['column_id']
+        selection = dt[val['row']][sel_type]
+        
+        if sel_type == 'RESEARCHER':
+            results = get_es_results(selection,prefix,'authfull')
+            if results is not None:
+                data = es_result_pick(results, 'data', None)
+                data  = data[f'{prefix}_{yr}']
+                self_cit = f'''
+                ---
+                ##### 🔸 Summary for **{selection.split(',')[0]}** {txt} {yr}
+                - `Number of articles published:` **{int(data['np'])}**
+                - `Number of citations:` **{int(data['nc'])}**
+                - `H-index:` **{int(data['h'])}**
+                - `Self citation ratio:` **{np.round(data['self%']*100,2)}%**
+                '''
+        elif sel_type == 'INSTITUTE':
+            data = get_es_aggregate('inst_name',selection,prefix)
+            data = data[f'{prefix}_{yr}']
+            self_cit = f'''
+                ---
+                ##### 🔸 Summary ({sts}) for **{selection}** {txt} {yr}
+                - `Number of articles published:` **{int(data['np'][st_idx])}**
+                - `Number of citations:` **{int(data['nc'][st_idx])}**
+                - `H-index:` **{int(data['h'][st_idx])}**
+                - `Self citation ratio:` **{np.round(data['self%'][st_idx]*100,2)}%**
+                '''
+        return self_cit
 
 compare_row = html.Div([
     dbc.Row([
-        dbc.Col([html.Center(dbc.Button("🔸 Compare author to author", className="me-2", id = "collapse_btn_author_vs_author",
+        dbc.Col([html.Center(dbc.Button("🔸 Author 🆚 author", className="me-2", id = "collapse_btn_author_vs_author",
             style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
             n_clicks = 0, color = darkAccent1))], width = 3),
-        dbc.Col([html.Center(dbc.Button("🔸 Compare group to group", className="me-2", id = "collapse_btn_group_vs_group",
+        dbc.Col([html.Center(dbc.Button("🔸 Group 🆚 group", className="me-2", id = "collapse_btn_group_vs_group",
             style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
             n_clicks = 0, color = darkAccent1))], width = 3),
-        dbc.Col([html.Center(dbc.Button("🔸 Compare author to group", className="me-2", id = "collapse_btn_author_vs_group",
+        dbc.Col([html.Center(dbc.Button("🔸 Author 🆚 group", className="me-2", id = "collapse_btn_author_vs_group",
             style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
             n_clicks = 0, color = darkAccent1))], width = 3),
     ], justify="center"),
@@ -159,6 +209,8 @@ World map interactions
     Output('instnametable','data'),
     Output('cntrylabel','children'),
     Output('instnametable','style_table'),
+    Output("instnametable", "selected_cells"),
+    Output("instnametable", "active_cell"),
     Input('nav', 'clickData'),
     Input("careerORSingleYrRadio" + SUFFIX, 'value'),
     Input("selectYrRadio" + SUFFIX, 'value'),
@@ -186,7 +238,8 @@ def click_on_map_update(val,is_career,yr,sts):
     cntry = val['points'][0]['location'].lower()
     data = get_es_aggregate('cntry',cntry,cr)
     self_cit = f'''
-                ##### Summary statistics ({sts}) for {cntry.upper()}
+                ---
+                ##### 🔸 Summary statistics ({sts}) for **{cntry.upper()}**
                 - `Number of articles published:` **{int(data[f'{cr}_{yr}']['np'][st_idx])}**
                 - `Number of citations:` **{int(data[f'{cr}_{yr}']['nc'][st_idx])}**
                 - `H-index:` **{int(data[f'{cr}_{yr}']['h'][st_idx])}**
@@ -208,8 +261,8 @@ def click_on_map_update(val,is_career,yr,sts):
                         for d in tmp
                         if yr in d['_source']['years']]
     #print(career_all_c)
-    msg = f'<div class="danger"><center><strong>{txt}</strong><br/>{len(career_all_c)} researchers from {len(set(get_all_values_by_key(career_all_c,"INSTITUTE")))} institutions in {cntry.upper()}</center></div>'
-    return(self_cit,career_all_c, msg, {'height': '400px', 'overflowY': 'auto','display':'block'})
+    msg = f'<div class="danger"><center><strong>{txt}</strong><br/><strong>{len(career_all_c)}</strong> researchers from <strong>{len(set(get_all_values_by_key(career_all_c,"INSTITUTE")))}</strong> institutions in <strong>{cntry.upper()}</strong><br/> <u>Click on a cell to display respective summaries</u></center></div>'
+    return(self_cit,career_all_c, msg, {'height': '400px', 'overflowY': 'auto','display':'block'},[],None)
 
 df =  get_world_df('2021','median','career') 
 fig = px.choropleth(data_frame=df,
@@ -322,7 +375,7 @@ explain  =  '''
                     for a chosen data type and year within that country.
                     </div>
                     '''
-zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel',children="`No country selected`",dangerously_allow_html = True),
+zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel',children="`No country selected, displaying instructions.`",dangerously_allow_html = True),
                     tbl,dcc.Markdown(id='worldtitle',
                     dangerously_allow_html = True,
                     highlight_config  = dict(theme='dark'),
@@ -411,9 +464,9 @@ navigation_row =  dbc.Row([
 tabs = [
     dbc.Tabs(
         [
-            dbc.Tab(label="🔸 Compare author to author", tab_id="tab-1"),
-            dbc.Tab(label="🔸 Compare author to group", tab_id="tab-2"),
-            dbc.Tab(label="🔸 Compare group group", tab_id="tab-3"),
+            dbc.Tab(label="🔸 Author vs author comparison", tab_id="tab-1"),
+            dbc.Tab(label="🔸 Author vs group comparison", tab_id="tab-2"),
+            dbc.Tab(label="🔸 Group vs group comparison", tab_id="tab-3"),
         ],
         id="tabs",
         active_tab="tab-1",
