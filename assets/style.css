@@ -214,13 +214,15 @@ color: #2C2C2C;
 .lel2{
   background-color: indianred;
   background-image: none;
-  border-radius: 20px;
+  border-radius: 5px;
   padding-bottom: 1px;
   padding-top: 1px;
 
 }
 
-
+.offcanvas-header .btn-close {
+  background-color: #ECAB4C;
+}
 code {
   font-family: 'Courier New', Courier, monospace;
   font-size: 14px;

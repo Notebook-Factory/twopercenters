@@ -99,7 +99,7 @@ def generate_update_cards_callback(input_id, output_ids, auth_dropdown_id, caree
             if results is not None:
                 data = es_result_pick(results, 'data', None)
                 names = get_inst_field_cntry(data, prefix, year)
-                txt1 = dcc.Markdown(f"Found in **{int(data[f'{prefix}_{year}']['np'])} papers**. Received **{int(data[f'{prefix}_{year}']['nc'])} citations** {when}{year}.",className = "lel")
+                txt1 = dcc.Markdown(f"Received **{int(data[f'{prefix}_{year}']['nc'])} citations** {when}{year}.",className = "lel")
                 txt2 = dcc.Markdown(f"| **{int(data[f'{prefix}_{year}']['self%']*100)}% self citation** |  **{int(data[f'{prefix}_{year}']['h'])} [H-index](https://en.wikipedia.org/wiki/H-index)** | **{int(data[f'{prefix}_{year}']['hm'])} [Hm-index](https://arxiv.org/abs/0805.2000)** |",className = "lel")
                 lnk = urllib.parse.quote(str(authname))
                 cntry_full = coco.convert(names=names['cntry'], to='name_short')

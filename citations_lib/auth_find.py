@@ -116,7 +116,7 @@ page_size = 8000
 # END: RUN ONLY ON DATA CHANGE ------------------------------------------------
 
 
-def author_vs_author_layout():
+def author_find_layout():
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -149,7 +149,7 @@ def author_vs_author_layout():
     g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
     g2c = [highlight2, darkAccent3] # bar plot bar 3
     bgc = darkAccent1 # bar plot background
-    SUFFIX = '_author_vs_author'
+    SUFFIX = '_author_find_'
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -177,19 +177,6 @@ def author_vs_author_layout():
     careerORSingleA1 = html.Div([
         dbc.RadioItems(
             id = "careerORSingleYrA1" + SUFFIX, 
-            className = "btn-group", 
-            inputClassName = "btn-check", 
-            labelClassName = "btn btn-outline-primary", 
-            labelCheckedClassName = "active", 
-            value = True,
-            options = [
-                {"label": "Career", "value": True}, 
-                {"label": "Single year", "value": False}, 
-        ])], className = "radio-group")
-    
-    careerORSingleA2 = html.Div([
-        dbc.RadioItems(
-            id = "careerORSingleYrA2" + SUFFIX, 
             className = "btn-group", 
             inputClassName = "btn-check", 
             labelClassName = "btn btn-outline-primary", 
@@ -228,18 +215,6 @@ def author_vs_author_layout():
         )
     ], className = "radio-group")
 
-    selectYrA2 = html.Div(
-        [dbc.RadioItems(
-            id = "selectYrRadioA2" + SUFFIX, 
-            className = "btn-group", 
-            inputClassName = "btn-check", 
-            labelClassName = "btn btn-outline-primary", 
-            labelCheckedClassName = "active", 
-            style = {'size':'sm'}, 
-            value = '2017',
-            options = [{"label": "2017", "value": "2017", 'disabled': False}]
-        )
-    ], className = "radio-group")
 
     @callback(
         Output('selectYrRadio' + SUFFIX, 'options'), 
@@ -265,28 +240,23 @@ def author_vs_author_layout():
     output_ids = ['InfoAuthor1' + SUFFIX, 'FieldAuthor1' + SUFFIX, 'CountryAuthor1' + SUFFIX, 'InstitutionAuthor1' + SUFFIX]
     generate_update_cards_callback('selectYrRadioA1' + SUFFIX, output_ids, 'author1OptionsDropdown' + SUFFIX, 'careerORSingleYrA1' + SUFFIX,darkAccent1, highlight1)
 
-    # =============== Author 2 Callbacks
-    author2Options = dcc.Dropdown(options = [], placeholder = 'Author 2: Start typing name and surname', multi = False, id = "author2OptionsDropdown" + SUFFIX, 
-    value = 'Bengio, Yoshua', searchable = True)
-    generate_es_dropdown_callback("author2OptionsDropdown" + SUFFIX)
-    generate_update_carsing_callback('author2OptionsDropdown' + SUFFIX, 'careerORSingleYrA2' + SUFFIX)
-    generate_update_years_callback('careerORSingleYrA2' + SUFFIX, 'selectYrRadioA2' + SUFFIX, 'author2OptionsDropdown' + SUFFIX)
-    output_ids = ['InfoAuthor2' + SUFFIX, 'FieldAuthor2' + SUFFIX, 'CountryAuthor2' + SUFFIX, 'InstitutionAuthor2' + SUFFIX]
-    generate_update_cards_callback('selectYrRadioA2' + SUFFIX, output_ids, 'author2OptionsDropdown' + SUFFIX, 'careerORSingleYrA2' + SUFFIX, darkAccent1, highlight2)
+    upper = dcc.Dropdown(options = ['Max and median (red) by country','Max and median (red) by field','Max and median (red) by institute'], multi = False, id = "upper" + SUFFIX, 
+        value = 'Max and median (red) by country', placeholder="Set upper limits by...",searchable = False)
+ 
    
     row2 = dbc.Container([
         dbc.Row([
-            dbc.Col([author1Options, dbc.Row([ dbc.Col([careerORSingleA1],width=4),dbc.Col([selectYrA1],width=8)],justify='around') ], width = {'size':6}), 
-            dbc.Col([author2Options, dbc.Row([dbc.Col([careerORSingleA2],width=4),dbc.Col([selectYrA2],width=8)],justify='around') ], width = {'size':6}), 
-        ]), dbc.Row([
-            dbc.Col(html.Center(id = 'InfoAuthor1' + SUFFIX), width = {'size':6}), dbc.Col(html.Center(id = 'InfoAuthor2' + SUFFIX), width = {'size':6})
-        ]), dbc.Row([
-            dbc.Col(html.Center(id = 'FieldAuthor1' + SUFFIX), width = {'size':6}), dbc.Col(html.Center(id = 'FieldAuthor2' + SUFFIX), width = {'size':6})
-        ]), dbc.Row([
-            dbc.Col(html.Center(id = 'CountryAuthor1' + SUFFIX), width = {'size':6}), dbc.Col(html.Center(id = 'CountryAuthor2' + SUFFIX), width = {'size':6})
-        ]), dbc.Row([
-            dbc.Col(html.Center(id = 'InstitutionAuthor1' + SUFFIX), width = {'size':6}), dbc.Col(html.Center(id = 'InstitutionAuthor2' + SUFFIX), width = {'size':6})
-        ])
+            dbc.Col([author1Options, dbc.Row([ dbc.Col([careerORSingleA1],width=4),dbc.Col([selectYrA1],width=8)],justify='end') ], width = {'size':8}),
+            #dbc.Col([author2Options, dbc.Row([dbc.Col([careerORSingleA2],width=4),dbc.Col([selectYrA2],width=8)],justify='around') ], width = {'size':6}), 
+        ], justify ='center'), dbc.Row([
+            dbc.Col(html.Center(id = 'InfoAuthor1' + SUFFIX), width = {'size':8}, style={'visibility':'hidden','height':'0px'})
+        ], justify ='center'), dbc.Row([
+            dbc.Col(html.Center(id = 'FieldAuthor1' + SUFFIX), width = {'size':8}, style={'visibility':'hidden','height':'0px'})
+        ], justify ='center'), dbc.Row([
+            dbc.Col(html.Center(id = 'CountryAuthor1' + SUFFIX), width = {'size':8}, style={'visibility':'hidden','height':'0px'})
+        ], justify ='center'), dbc.Row([
+            dbc.Col(html.Center(id = 'InstitutionAuthor1' + SUFFIX), width = {'size':8}, style={'visibility':'hidden','height':'0px'})
+        ], justify ='center')
     ])
 
     # ========================================================================================== 
@@ -306,20 +276,20 @@ def author_vs_author_layout():
     # =============== Figure title
     #figTitle = html.Div(' ', id = 'figTitleCard' + SUFFIX, style = {'color':lightAccent1, 'font-size':25})
     # =============== C score figure
-    metricsFigAuthor_c = dbc.Row([dbc.Col([html.Center(dcc.Graph(id = 'metricsFigGraphAuthor_c' + SUFFIX, figure = empty_fig, config = {'displayModeBar': False}))], width = {'offset':1, 'size':2}), dbc.Col(id = 'c_score_formula' + SUFFIX, width = 7)])
+    metricsFigAuthor_c = dbc.Row([dbc.Col([html.Center(dcc.Graph(id = 'metricsFigGraphAuthor_c' + SUFFIX, figure = empty_fig, config = {'displayModeBar': False}))], width = {'offset':1, 'size':2}), dbc.Col(id = 'c_score_formula' + SUFFIX, width = 6)])
     # =============== Figure callbacks
+
+
     @callback(
         Output('2author_figs' + SUFFIX, 'children'), 
         Output('metricsFigGraphAuthor_c' + SUFFIX, 'figure'), 
         Output('c_score_formula' + SUFFIX, 'children'),
-        Input('careerORSingleYrA1' + SUFFIX, 'value'),
+        [Input('careerORSingleYrA1' + SUFFIX, 'value'),
         Input('selectYrRadioA1' + SUFFIX,'value'),
-        Input('careerORSingleYrA2' + SUFFIX, 'value'),
-        Input('selectYrRadioA2' + SUFFIX,'value'),
         Input('selfCToggle' + SUFFIX, 'on'), 
-        Input('logTransfToggleMain' + SUFFIX, 'on'),
-        State('author1OptionsDropdown' + SUFFIX, 'value'), 
-        State('author2OptionsDropdown' + SUFFIX, 'value'), 
+        #Input('logTransfToggleMain' + SUFFIX, 'on'),
+        Input('author1OptionsDropdown' + SUFFIX, 'value'), 
+        Input("upper" + SUFFIX,'value')], 
         # Input('ncSlider1' + SUFFIX, 'value'), Input('hSlider1' + SUFFIX, 'value'), Input('hmSlider1' + SUFFIX, 'value'), 
         # Input('ncsSlider1' + SUFFIX, 'value'), Input('ncsfSlider1' + SUFFIX, 'value'), Input('ncsflSlider1' + SUFFIX, 'value'), 
         # Input('ncSlider2' + SUFFIX, 'value'), Input('hSlider2' + SUFFIX, 'value'), Input('hmSlider2' + SUFFIX, 'value'), 
@@ -328,33 +298,41 @@ def author_vs_author_layout():
         #Input('ncsWDD' + SUFFIX, 'value'), Input('ncsfWDD' + SUFFIX, 'value'), Input('ncsflWDD' + SUFFIX, 'value')
         )
     # nc1, h1, hm1, ncs1, ncsf1, ncsfl1, nc2, h2, hm2, ncs2, ncsf2, ncsfl2
-    def update_author_figs_and_rank(career1, yr1, career2, yr2, ns, logTransf,group1_name, group2_name): # weights: ncW, hW, hmW, ncsW, ncsfW, ncsflW):
+    def update_author_figso_and_rank(career1, yr1, ns, group1_name,uplim): # weights: ncW, hW, hmW, ncsW, ncsfW, ncsflW):
         '''
         group1_name: author name
         group2_name: author name
         '''
-        if career1 == None or yr1 == None or career2 == None or yr2 == None: raise PreventUpdate
-        elif group1_name == None and group2_name == None: return ["No dataset selected"] + [''] + [empty_fig] + ['']
+        if career1 == None or yr1 == None: raise PreventUpdate
+        elif group1_name == None: return ["No dataset selected"] + [''] + [empty_fig] 
         else:
-
+            metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
             prefix1 = 'career' if career1 else 'singleyr'
             results = get_es_results(group1_name, prefix1, 'authfull')
             data1 = {}
             data1_log = {}
             if results is not None:
-                data1 = es_result_pick(results, 'data', None)
-                data1_log  = data1[f'{prefix1}_{yr1}_log']
-                data1 =  data1[f'{prefix1}_{yr1}']
+                data = es_result_pick(results, 'data', None)
+                data1_log  = data[f'{prefix1}_{yr1}_log']
+                data1 =  data[f'{prefix1}_{yr1}']
+            logTransf = False
+            
 
-            prefix2 = 'career' if career2 else 'singleyr'
-            results = get_es_results(group2_name, prefix2, 'authfull')
-            data2 = {}
-            data2_log = {}
-            if results is not None:
-                data2 = es_result_pick(results, 'data', None)
-                data2_log  = data2[f'{prefix2}_{yr2}_log']
-                data2 =  data2[f'{prefix2}_{yr2}']
+            names = get_inst_field_cntry(data, prefix1, yr1)
+            auth_info = f'''
+                        * **Country:** {names['cntry']}
+                        * **Field:** {names['field']}
+                        * **Institute:** {names['inst']}
+                        * **Self citation (%):** {round(data1['self%']*100,2)}
+                        '''
+            if uplim == 'Max and median (red) by country':
+                kek = get_es_aggregate('cntry',names['cntry'],prefix1)
+            elif uplim == 'Max and median (red) by field':
+                kek = get_es_aggregate('sm-field',names['field'],prefix1)
+            elif uplim == 'Max and median (red) by institute':
+                kek = get_es_aggregate('inst_name',names['inst'],prefix1)
 
+            max_metrics = {mt:[kek[f'{prefix1}_{yr1}'][mt][2],kek[f'{prefix1}_{yr1}'][mt][4]] for mt in metrics_list}
         # if career2 == True:
         #     dfs = dfs_career.copy()
         #     dfs_log = dfs_career_log.copy()
@@ -362,37 +340,38 @@ def author_vs_author_layout():
         #     dfs = dfs_singleyr.copy()
         #     dfs_log = dfs_singleyr_log.copy()
 
-            fig_list, new_rank_1, new_rank_2 = main_2_author_figs(data1, data1_log, data2, data2_log, group1_name, group2_name, ns, logTransf, g1c = g1c, g2c = g2c, 
+            fig_list, new_rank_1 = main_1_author_figs(data1, data1_log, group1_name, ns, logTransf, max_metrics, g1c = g1c, g2c = g2c, 
                 #author1_metrics = {'nc': nc1, 'h': h1, 'hm': hm1, 'ncs': ncs1, 'ncsf': ncsf1, 'ncsfl': ncsfl1}, 
                 author1_metrics = {},
                 author2_metrics = {})
-            for i in range(6): fig_list[i].update_layout(height = 200,width=200)
-            fig_list[6].update_layout(height = 230, margin = {'t':20})
+            for i in range(6): fig_list[i].update_layout(height = 200)
+            fig_list[6].update_layout(height = 200)
 
             # Title
             title = 'Ranking based on composite score C and bar plots of metrics used to compute C'
 
             # =============== Author 1 LEDD Display
             rankAuthor1_label = 'Rank of ' + group1_name if group1_name != None else 'No author selected'
-            rankAuthor1 = daq.LEDDisplay(label = {"label":rankAuthor1_label, "style":{"color":highlight1, "font-size":"16px"}}, value = new_rank_1, backgroundColor = darkAccent1, color = highlight1, size = 70)
+            rankAuthor1 = daq.LEDDisplay(label = {"label":rankAuthor1_label, "style":{"color":'lightseagreen', "font-size":"16px"}}, value = new_rank_1, backgroundColor = darkAccent1, color = 'lightseagreen', size = 60)
             
             # =============== Author 2 LEDD Display
-            rankAuthor2_label = 'Rank of ' + group2_name if group2_name != None else 'No author selected'
-            rankAuthor2 = daq.LEDDisplay(label = {"label":rankAuthor2_label, "style":{"color":highlight2, "font-size":"16px"}}, value = new_rank_2, backgroundColor = darkAccent1, color = highlight2, size = 70)
-
             # =============== N authors display
             # Not needed, complicated.
             #info  = pd.read_json('cumulative_summary.json')
             #N_authors = daq.LEDDisplay(label = {"label":'Number of authors', "style":{"color":darkAccent2, "font-size":"16px"}}, value = int(info['total']), backgroundColor = darkAccent1, color = darkAccent2, size = 40)
 
-            figures = dbc.Row([
-                dbc.Col([html.Center(dcc.Graph(figure = fig_list[0]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[1]))], width = 2),
-                dbc.Col([html.Center(dcc.Graph(figure = fig_list[2]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[3]))], width = 2),
-                dbc.Col([html.Center(dcc.Graph(figure = fig_list[4]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[5]))], width = 2)]),
-            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1), dbc.Col(rankAuthor2)]), dbc.Row(html.Br()), dbc.Row(html.Img(src = 'assets/c_formula.png', style = {'width':1000}))])
+            figures = html.Div([dbc.Row([
+                dbc.Col([html.Center(dcc.Graph(figure = fig_list[0]))], width = 4), dbc.Col([html.Center(dcc.Graph(figure = fig_list[1]))], width = 4),
+                dbc.Col([html.Center(dcc.Graph(figure = fig_list[2]))], width = 4)],justify='around'),
+                html.Hr(),
+                dbc.Row([
+                dbc.Col([html.Center(dcc.Graph(figure = fig_list[3]))], width = 4), dbc.Col([html.Center(dcc.Graph(figure = fig_list[4]))], width = 4),
+                dbc.Col([html.Center(dcc.Graph(figure = fig_list[5]))], width = 4)],justify='around')
+                ])
+            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1),dbc.Col(html.Div([dcc.Markdown(auth_info)],style={'text-align':'left','color':'lightseagreen'}))]), dbc.Row(html.Br()), dbc.Row(html.Img(src = 'assets/c_formula.png', style = {'width':1000}))])
             return(figures, fig_list[6], c_img)
 
-    def main_2_author_figs(df_in, df_in_log, df2_in, df2_in_log, group1_name, group2_name, ns, logTransf, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue'], author1_metrics = {}, author2_metrics = {}, weights = [1, 1, 1, 1, 1, 1]):
+    def main_1_author_figs(df_in, df_in_log, group1_name, ns, logTransf, max_metrics, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue'], author1_metrics = {}, author2_metrics = {}, weights = [1, 1, 1, 1, 1, 1]):
         metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
         
         if ns:
@@ -402,6 +381,7 @@ def author_vs_author_layout():
             cname  = 'c'
             rname  = 'rank'
         
+        logTransf = False
         # Get author 1 metrics to plot
         if group1_name != None:
             metrics_dict = get_initial_metrics_list(df_in, group1_name, ns)
@@ -421,56 +401,48 @@ def author_vs_author_layout():
             new_rank_1 = 0
             new_y_values_1 = [0]*7
             new_y_values_1_log = [0]*7
+        
+        def sizeof_number(number):
+            """
+            format values per thousands : K-thousands, M-millions, B-billions. 
+            
+            parameters:
+            -----------
+            number is the number you want to format
+            currency is the prefix that is displayed if provided (€, $, £...)
+            
+            """
+            if number >= 1000:
+                return f"{int(number/1000)}k"
+            else:
+                return f"{int(number)}"
 
-        # Get author 2 metrics to plot
-        if group2_name != None:
-            metrics_dict = get_initial_metrics_list(df2_in, group2_name, ns)
-            metrics_dict_log = get_initial_metrics_list(df2_in_log, group2_name, ns)
-            for key, value in author2_metrics.items():
-                if ns: key += ' (ns)'
-                metrics_dict[key] = value
-            new_rank_2 = df2_in[rname]
 
-            new_y_values_2 = list(metrics_dict.values())
-            new_y_values_2.append(df2_in[cname])
-            new_y_values_2_log = list(metrics_dict_log.values())
-            new_y_values_2_log.append(df2_in_log[cname])
-
-            # new_y_values_2 = list(metrics_dict.values()).append(df2_in['c'])
-            # new_y_values_2_log = list(metrics_dict_log.values()).append(df2_in_log['c'])
-            # _, new_rank_2, new_y_values_2, _ = update_c_and_rank(df2_in, author = group2_name, metrics_dict = metrics_dict, ns = ns, logTransf = False, weights = weights)
-            # _, _, new_y_values_2_log, _ = update_c_and_rank(df2_in, author = group2_name, metrics_dict = metrics_dict, ns = ns, logTransf = True, weights = weights)
-        else:
-            new_rank_2 = 0
-            new_y_values_2 = [0]*7
-            new_y_values_2_log = [0]*7
-
-        def make_bar_traces(fig, y_in, y_in_log, colors, metric, name, logTransf = False, group_num = 1):
-            if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in_log], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
-            else: fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
-            hovertemp = 'count: %{text:.4s}<extra></extra> '
-            fig.update_traces(texttemplate = '%{text:.2s}', hovertemplate = hovertemp)
-            fig.update_layout(showlegend=False)
+        def make_bar_traces(fig, y_in, y_in_log, colors, metric, max_metric, name, logTransf = False, group_num = 1):
+            logTransf = False
+            
+            #if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in_log], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
+            if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Indicator(mode = "gauge+number+delta",title = {'text' : metric, 'font':{'color':'#aaa'}}, value = y_in, delta = {'reference': max_metric[0], 'increasing': {'color': "limegreen"},'decreasing': {'color': "indianred"}},gauge = {'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': max_metric[0]}, 'axis': {'tickmode':'auto','range': [None, max_metric[1]],'tickwidth': 2, 'tickcolor': "#aaa"},'bar': {'color': 'lightseagreen'}}), row = 1, col = group_num)
+            else: fig.add_trace(go.Indicator(mode = "gauge+number+delta", value = y_in, delta = {'reference': max_metric[0], 'increasing': {'color': "limegreen"},'decreasing': {'color': "indianred"}}, gauge = {'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': max_metric[0]},'axis': {'tickmode':'auto', 'range': [None, max_metric[1]],'tickwidth': 2, 'tickcolor': "#aaa"},'bar': {'color': 'lightseagreen'}},title = {'text' : metric, 'font':{'color':'#aaa'}}), row = 1, col = group_num)
+            #hovertemp = 'count: %{text:.4s}<extra></extra> '
+            #fig.update_traces(texttemplate = '%{text:.2s}', hovertemplate = hovertemp)
+            #fig.update_layout(showlegend=False)
+            #fig.update_layout(yaxis_range=[0,max_metric])
             return(fig)
         
         # metric titles
-        subplot_titles = ['Number of citations<br>(NC)', 'H-index<br>(H)', 'Hm-index<br>(Hm)', 'Number of citations to<br>single authored papers<br>(NCS)', 
-            'Number of citations to<br>single and first<br>authored papers<br>(NCSF)', 'Number of citations to<br>single, first and<br>last authored papers<br>(NCSFL)', 'Composite score (C)']
+        subplot_titles = ['Number of citations', 'H-index', 'Hm-index', 'Number of citations to single<br> authored papers', 
+            'Number of citations to single<br> and first authored papers', 'Number of citations to single,<br> first and last authored papers', 'Composite score']
         fig_list = []
         for i, m in enumerate(metrics_list):
             # subplot_title = get_metric_long_name(career, yr, m) --> problem: gets out of margin
-            if group1_name != None and group2_name == None: # If Author 1 only
-                fig = make_subplots(rows = 1, cols = 1)
-                fig = make_bar_traces(fig, y_in = new_y_values_1[i], y_in_log = new_y_values_1_log[i], colors = g1c, metric = m, name = group1_name, logTransf = logTransf, group_num = 1)
-            if group1_name == None and group2_name != None: # If Author 2 only
-                fig = make_subplots(rows = 1, cols = 1)
-                fig = make_bar_traces(fig, y_in = new_y_values_2[i], y_in_log = new_y_values_2_log[i], colors = g2c, metric = m, name = group2_name, logTransf = logTransf, group_num = 1)
-            else: # If Author 1 and Author 2 exist
-                fig = make_subplots(rows = 1, cols = 2, column_widths = [0.5, 0.5], shared_yaxes = True, horizontal_spacing = 0)
-                fig = make_bar_traces(fig, y_in = new_y_values_1[i], y_in_log = new_y_values_1_log[i], colors = g1c, metric = m, name = group1_name, logTransf = logTransf, group_num = 1) 
-                fig = make_bar_traces(fig, y_in = new_y_values_2[i], y_in_log = new_y_values_2_log[i], colors = g2c, metric = m, name = group2_name, logTransf = logTransf, group_num = 2)
-            fig.update_layout(height = 500, title_x = 0.5, title_y = 0.95, title = {'text':subplot_titles[i], 'font':{'size':14}}, font = {'size':12, 'color':lightAccent1},
-                plot_bgcolor = bgc, paper_bgcolor = bgc, margin = {'l':10, 'r':5, 'b':0, 't':100})
+            if group1_name != None: # If Author 1 only
+                fig = make_subplots(rows = 1, cols = 1,specs=[[{'type' : 'indicator'}]])
+                #fig = go.Figure()
+                fig = make_bar_traces(fig, y_in = new_y_values_1[i], y_in_log = new_y_values_1_log[i], colors = g1c, metric = m, max_metric=max_metrics[m], name = group1_name, logTransf = logTransf, group_num = 1)
+                #fig = make_bar_traces(fig, y_in = new_y_values_2[i], y_in_log = new_y_values_2_log[i], colors = g2c, metric = m, name = group2_name, logTransf = logTransf, group_num = 2)
+            fig.update_layout(height = 200, title_x = 0.5, title_y = 0.85, title = {'text':subplot_titles[i], 'font':{'size':14,'color':'#aaa'}}, font = {'size':12, 'color': 'lightseagreen'},
+                plot_bgcolor = bgc, paper_bgcolor = bgc, margin = {'l':10, 'r':5, 'b':10, 't':100})
             # if logTransf and m != 'c' and m != 'c (ns)':
             #     max_m_log = max([df_in_log[m].max(), new_y_values_1_log[i], new_y_values_2_log[i]])
             #     max_m = max([df_in[m].max(), new_y_values_1[i], new_y_values_2[i]])
@@ -483,7 +455,7 @@ def author_vs_author_layout():
             fig.update_xaxes(automargin = True, showgrid = True, gridcolor = darkAccent2, linecolor = darkAccent2, tickmode = "array", tickvals = [])
             fig.update_layout(showlegend=False)
             fig_list.append(fig)
-        return(fig_list, new_rank_1, new_rank_2)
+        return(fig_list, new_rank_1)
 
     offcanvas2 = html.Div(
         [
@@ -491,27 +463,31 @@ def author_vs_author_layout():
                 dcc.Markdown(
                     '''
                 * **User interactions**
-                    * `Toggle 1`: Compare metrics using a logarithmic scale.
-                    * `Toggle 2`: Choose to exclude or include author self-citations.
-                    * Data type and year selection options will be enabled based on the selected researcher.
-                    * Users can compare different years and dataset types between two researchers.
-                * **Notes**
-                    * Rankings are determined by the composite score C, alongside bar plots illustrating the metrics utilized to calculate C. Scores are retrieved from the Elsevier database corresponding to the chosen year/dataset type.
-                    * Researcher metrics can span their entire career (career) or be specific to a single year of interest (single year).
-                    * Single-year data is unavailable for 2018 for all researchers.
+                    * `Toggle`: Choose to exclude or include author self-citations
+                    * `Dropdown`: Select a grouping by which the gauge limits will be set
+                        * Country 
+                        * Field 
+                        * Institute
+                * **Gauge indicators**
+                    * Each indicator shows author's score for the respective metric (teal)
+                    * The upper limits are determined by the MAXIMUM score of the selected group
+                    * The red line shows the MEDIAN score of the selected group
+                    * Delta under the current score indicates:
+                        * Green (up): Author's score is higher than the group MEDIAN by ##
+                        * Red (down): Author's score is lower than the group MEDIAN by ##
                     '''
                 ),
-                id="offcanvas2",
-                title="Compare top 2% researchers",
+                id="offcanvas22",
+                title="Author metrics",
                 is_open=False,
             ),
         ]
     )
 
     @callback(
-        Output("offcanvas2", "is_open"),
-        Input("open-offcanvas2", "n_clicks"),
-        [State("offcanvas2", "is_open")],
+        Output("offcanvas22", "is_open"),
+        Input("open-offcanvas22", "n_clicks"),
+        [State("offcanvas22", "is_open")],
     )
     def toggle_offcanvas(n1, is_open):
         if n1:
@@ -520,7 +496,7 @@ def author_vs_author_layout():
 
     row3 = html.Div([
         dbc.Row(html.Br()), 
-        dbc.Row([dbc.Col(logTransf, width = {'offset':4, 'size':2}), dbc.Col(selfC, width = {'size':2}),dbc.Col(dbc.Button("ℹ️ More info", id="open-offcanvas2", n_clicks=0),width = {'size':2})]), 
+        dbc.Row([dbc.Col(selfC, width = {'size':2}),dbc.Col(upper,width={'size':4}),dbc.Col(dbc.Button("ℹ️ More info", id="open-offcanvas22", n_clicks=0),width = {'size':2})],justify='around'), 
         dbc.Row(html.Br()), 
         metricsFigAuthor_c,
         dbc.Row(html.Br()), 
@@ -687,9 +663,8 @@ def author_vs_author_layout():
     return(html.Div([
         dbc.Container(fluid = True, children = [
             #row1, 
-            html.Hr(), 
+            html.Br(),
             row2, 
-            html.Hr(), 
             dls.GridFade(row3,color="#ECAB4C"), 
         ], style = {'backgroundColor':darkAccent1}), 
     ]))

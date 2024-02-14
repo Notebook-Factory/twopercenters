@@ -362,7 +362,7 @@ def update_cr_options(avail):
     elif avail == 'career':
         return [{"label": "Career", "value": True, 'disabled': True}, {"label": "Single year", "value": False, 'disabled': True}]
     elif avail == 'singleyr':
-        return [{"label": "Career", "value": False,'disabled': True}, {"label": "Single year", "value": True, 'disabled': True}]
+        return [{"label": "Career", "value": True,'disabled': True}, {"label": "Single year", "value": False, 'disabled': True}]
 
 def update_auth_yrs(keys,prefix):
     if prefix == 'career':
@@ -590,8 +590,8 @@ def get_world_df(year,sts,prefix):
         aa = pd.read_pickle('aggregate/cntry_singleyr.pkl')
     yr = year
     #st_idx = 3
-    metrics = ['h', 'nc', 'np', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c']
-    metrics_name = ['H-index', '# citations', '# papers', 'Hm-index',  '# citations to single auth papers', '# citations to single/first auth papers', '# citations to single/first/last auth papers', 'Composite (c) score']
+    metrics = ['h', 'nc', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c']
+    metrics_name = ['H-index', '# citations', 'Hm-index',  '# citations to single auth papers', '# citations to single/first auth papers', '# citations to single/first/last auth papers', 'Composite (c) score']
     df = pd.DataFrame(columns=['code', 'country', sts, 'geometry', 'metric', 'metric_name'])
     kk = 0
     for idxx, metric in enumerate(metrics):

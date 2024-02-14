@@ -28,6 +28,7 @@ from citations_lib.single_author_layout import *
 from citations_lib.author_vs_group_layout import *
 from citations_lib.group_vs_group_layout import *
 from citations_lib.author_vs_author_layout import *
+from citations_lib.auth_find import *
 
 
 # =============== Register page
@@ -120,10 +121,10 @@ def update_graphs(val,yr, iscar, sts,dt):
                 data  = data[f'{prefix}_{yr}']
                 self_cit = f'''
                 ---
-                ##### 🔸 Summary for **{selection.split(',')[0]}** {txt} {yr}
-                - `Number of articles published:` **{int(data['np'])}**
+                ##### Summary for **{selection.split(',')[0]}** {txt} {yr}
                 - `Number of citations:` **{int(data['nc'])}**
                 - `H-index:` **{int(data['h'])}**
+                - `Hm-index:` **{int(data['hm'])}**
                 - `Self citation ratio:` **{np.round(data['self%']*100,2)}%**
                 '''
         elif sel_type == 'INSTITUTE':
@@ -131,10 +132,10 @@ def update_graphs(val,yr, iscar, sts,dt):
             data = data[f'{prefix}_{yr}']
             self_cit = f'''
                 ---
-                ##### 🔸 Summary ({sts}) for **{selection}** {txt} {yr}
-                - `Number of articles published:` **{int(data['np'][st_idx])}**
+                ##### Summary ({sts}) for **{selection}** {txt} {yr}
                 - `Number of citations:` **{int(data['nc'][st_idx])}**
                 - `H-index:` **{int(data['h'][st_idx])}**
+                - `Hm-index:` **{int(data['hm'][st_idx])}**
                 - `Self citation ratio:` **{np.round(data['self%'][st_idx]*100,2)}%**
                 '''
         return self_cit
@@ -155,7 +156,7 @@ compare_row = html.Div([
         id = "collapse_author_vs_author", is_open = False))], className="mt-3"),
     dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [author_vs_group_layout()], style = {'backgroundColor':darkAccent1}), 
          id = "collapse_author_vs_group", is_open = False))], className="mt-3"),
-    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [group_vs_group_layout()], style = {'backgroundColor':darkAccent1}), 
+    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [group_vs_group_layout(),author_find_layout()], style = {'backgroundColor':darkAccent1}), 
         id = "collapse_group_vs_group", is_open = False))], className="mt-3")
     ])
 
@@ -170,7 +171,6 @@ def update_world(yr,sts,career):
     if yr is None or sts is None or career is None:
         raise PreventUpdate
     else:
-        print('Loading...')
         if career:
             prefix = 'career'
         else:
@@ -239,10 +239,10 @@ def click_on_map_update(val,is_career,yr,sts):
     data = get_es_aggregate('cntry',cntry,cr)
     self_cit = f'''
                 ---
-                ##### 🔸 Summary statistics ({sts}) for **{cntry.upper()}**
-                - `Number of articles published:` **{int(data[f'{cr}_{yr}']['np'][st_idx])}**
+                ##### Summary statistics ({sts}) for **{cntry.upper()}**
                 - `Number of citations:` **{int(data[f'{cr}_{yr}']['nc'][st_idx])}**
                 - `H-index:` **{int(data[f'{cr}_{yr}']['h'][st_idx])}**
+                - `Hm-index:` **{int(data[f'{cr}_{yr}']['hm'][st_idx])}**
                 - `Self citation ratio:` **{np.round(data[f'{cr}_{yr}']['self%'][st_idx]*100,2)}%**
                '''
     query = { "query": { "term": {"cntry":cntry} }, "_source": ['authfull','inst_name','years'] }
@@ -285,7 +285,8 @@ fig.update_layout(#width=900,
 fig.update_layout(sliders=[ dict(font = {'color':'white'},bgcolor = '#ECAB4C',
                                  steps = [{'label':'H-index'}, {'label':'#cites'}, {'label':'#pprs'}, {'label':'Hm-index'}, {'label':'#pprs-s'}, {'label':'#pprs-sf'},{'label':'#pprs-sfl'},{'label':'C'}],
                                  )
-                            ])
+                            ],
+                updatemenus = [dict(bgcolor = '#ECAB4C')])
 fig.update_layout(geo_bgcolor=darkAccent1,margin={'l':0, 'r':0,'b':0,'t':0})
 fig.update_geos(projection=dict(scale = 1), center=dict(lat=30),showframe=False)
 
@@ -319,7 +320,7 @@ zort = html.Div([dbc.RadioItems(id='selectYrRadio' + SUFFIX,
             {"label": "2019", "value": '2019', 'disabled': False}, {"label": "2020", "value": '2020', 'disabled': False}, {"label": "2021", "value": '2021', 'disabled': False}],value='2021')], className = "radio-group")
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
 explain  =  '''
-                    <h2 style='color:#ECAB4C;'> 🟠 Bird's eye view of the top 2% </h2>
+                    <h3 style='color:#ECAB4C;'> Bird's eye view of the top 2% </h3>
 
                     ---
 
@@ -328,7 +329,7 @@ explain  =  '''
 
                     #### Global distribution of performance metrics
 
-                    👈 Currently, the world map on the left illustrates the distribution of `median` `H-Index` across countries, derived from the academic performance of the top 2% 
+                    Currently, the world map on the left illustrates the distribution of `median` `H-Index` across countries, derived from the academic performance of the top 2% 
                     researchers throughout their career span (referred to as `Career` data) up to the year `2021`.
                     
                     <div class="danger">
@@ -357,7 +358,6 @@ explain  =  '''
                     <ul>
                     <li><b>h:</b> <a href='https://en.wikipedia.org/wiki/H-index' target='_blank' style='color:blue;'>H-index</a></li>
                     <li><b>nc:</b> Number of citations (#cites)</li>
-                    <li><b>np:</b> Number of papers published (#pprs)</li>
                     <li><b>hm:</b> <a href='https://ideas.repec.org/a/eee/infome/v2y2008i3p211-216.html' target='_blank' style='color:blue;'>Hm-index</a></li>
                     <li><b>ncs:</b> Number of citations received on single-authored papers (#pprs-s)</li>
                     <li><b>ncsf:</b> Number of citations received on single OR first authored papers (#pprs-sf)</li>
@@ -375,7 +375,7 @@ explain  =  '''
                     for a chosen data type and year within that country.
                     </div>
                     '''
-zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel',children="`No country selected, displaying instructions.`",dangerously_allow_html = True),
+zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel',children="No country selected. Click on a country.",dangerously_allow_html = True),
                     tbl,dcc.Markdown(id='worldtitle',
                     dangerously_allow_html = True,
                     highlight_config  = dict(theme='dark'),
@@ -394,12 +394,13 @@ offcanvas = html.Div(
                 '''
                 #### `Nadia Blostein, Agah Karakuzu, John P. Ioannidis, and Nikola Stikov`
                 ---
-                
+
                 This dashboard provides an intuitive interface to explore top 2% researchers database [(Ioannidis et al. 2019)](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&), 
                 a standardized information on citations, h-index, co-authorship-adjusted hm-index, citations to papers in various authorship positions, and a composite indicator.
 
                 Citation and publication data of the top-ranking authors (based on their respective composite scores) are openly available on the [Elsevier Data Repository](https://elsevier.digitalcommonsdata.com/datasets/btchxktzyw/5).
-
+                
+                ---
                 This dashboard and the database is generously hosted by [NeuroLibre](https://neurolibre.org). 
                 
                 Contact us at `info@neurolibre.org` if you are interested in sharing a data application to supplement your research articles. 
@@ -411,7 +412,7 @@ offcanvas = html.Div(
             ),
             id="offcanvas",
             title="Twopercenters dashboard",
-            is_open=False,
+            is_open=True,
         ),
     ]
 )
@@ -446,7 +447,7 @@ dede = dbc.Navbar(
     color="gainsboro"
 )
 
-info_button = dbc.Button("About the dataset (Ioannidis et al. 2019) and dashboard", id='off',  n_clicks=0,
+info_button = dbc.Button("ℹ️ MORE INFO", id='off',  n_clicks=0,
                     className='lel2')
 
 row1 = dbc.Row([
@@ -463,13 +464,14 @@ navigation_row =  dbc.Row([
 
 tabs = [
     dbc.Tabs(
-        [
-            dbc.Tab(label="🔸 Author vs author comparison", tab_id="tab-1"),
-            dbc.Tab(label="🔸 Author vs group comparison", tab_id="tab-2"),
-            dbc.Tab(label="🔸 Group vs group comparison", tab_id="tab-3"),
+        [   
+            dbc.Tab(label="Find an author", tab_id="tab-0"),
+            dbc.Tab(label="Author vs author comparison", tab_id="tab-1"),
+            dbc.Tab(label="Author vs group comparison", tab_id="tab-2"),
+            dbc.Tab(label="Group vs group comparison", tab_id="tab-3"),
         ],
         id="tabs",
-        active_tab="tab-1",
+        active_tab="tab-0",
     ),
     html.Div(id="content"),
 ]
@@ -479,9 +481,11 @@ def switch_tab(at):
     if at == "tab-1":
         return html.Center(author_vs_author_layout())
     elif at == "tab-2":
-        return author_vs_group_layout()
+        return html.Center(author_vs_group_layout())
     elif at == "tab-3":
-        return group_vs_group_layout()
+        return html.Center(group_vs_group_layout())
+    elif at == 'tab-0':
+        return html.Center(author_find_layout())
     return html.P("This shouldn't ever be displayed...")
 
 
@@ -492,13 +496,13 @@ accordion = html.Div(
                 [
                     html.Div(tabs),
                 ],
-                title = "🟠 Taking a closer look: Comparing researchers, fields, and countries (toggle)",
+                title = "Taking a closer look: Comparing researchers, fields, and countries (toggle)",
             ),
             dbc.AccordionItem(
                 [
                     single_author_layout(),
                 ],
-                title="🟠 Researcher trends: How metrics change for a researcher over the years (toggle)",
+                title="Researcher trends: How metrics change for a researcher over the years (toggle)",
             )
         ],
         flush = False,
@@ -520,7 +524,6 @@ footer = html.Footer(id='footer',
                          html.Br(),
                          html.Center(ttt)
                      ])
-
 
 layout = dbc.Container(fluid = True, children = [
         offcanvas,
