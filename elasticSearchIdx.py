@@ -184,7 +184,8 @@ if os.getenv('ELASTICSEARCH_URL'):
     datdir = '/mnt/ES_IDX/ES_TO_SERVER'
 else:
     # If local
-    client = Elasticsearch([os.getenv('ES_URL')])
+    client = Elasticsearch([os.getenv('ES_URL_LOCAL')])
+    datdir = '/mnt/ES_IDX/ES_TO_SERVER'
 
 
 # client = Elasticsearch(

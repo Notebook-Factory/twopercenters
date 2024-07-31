@@ -27,7 +27,7 @@ if os.getenv('ELASTICSEARCH_URL'):
     es = Elasticsearch([os.getenv('ELASTICSEARCH_URL')])
 else:
     # If local
-    es = Elasticsearch([os.getenv('ES_URL')])
+    es = Elasticsearch([os.getenv('ES_URL_LOCAL')])
 
 def write_pickle(file,filename):
     with open(filename, 'wb') as handle:
