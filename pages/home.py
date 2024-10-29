@@ -393,6 +393,7 @@ offcanvas = html.Div(
             dcc.Markdown(
                 '''
                 #### Top 2% researchers
+                #### `Nadia Blostein, Agah Karakuzu, and Nikola Stikov`
                 ---
 
                 This dashboard provides an intuitive interface to explore top 2% researchers database [(Ioannidis et al. 2019)](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&), 

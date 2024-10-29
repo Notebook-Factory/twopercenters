@@ -185,7 +185,8 @@ if os.getenv('ELASTICSEARCH_URL'):
 else:
     # If local
     client = Elasticsearch([os.getenv('ES_URL_LOCAL')])
-    datdir = '/mnt/ES_IDX/ES_TO_SERVER'
+    # datdir = '/mnt/ES_IDX/ES_TO_SERVER'
+    datdir = '/Users/agah/Desktop/neuropoly/no_cite-isfaction'
 
 
 # client = Elasticsearch(
@@ -195,16 +196,12 @@ else:
 # )
 # print(client.ping()) # should output True!
 
-# To remove stuff before indexing
-# client.options(ignore_status=[400,404]).indices.delete(index='citations')
-# client.options(ignore_status=[400,404]).indices.delete(index='citationsobj3')
-# client.options(ignore_status=[400,404]).indices.delete(index='citationsobj2')
 
-#client.options(ignore_status=[400,404]).indices.delete(index='career')
+client.options(ignore_status=[400,404]).indices.delete(index='career')
 df = pickle.load(open(f"{datdir}/composite_career.p", "rb"))
 index_es_data(df,"career")
 
-#client.options(ignore_status=[400,404]).indices.delete(index='singleyr')
+client.options(ignore_status=[400,404]).indices.delete(index='singleyr')
 df = pickle.load(open(f"{datdir}/composite_singleyr.p", "rb"))
 index_es_data(df,"singleyr")
 
