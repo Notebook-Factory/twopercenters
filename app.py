@@ -15,6 +15,10 @@ app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
            suppress_callback_exceptions=True)
 server = app.server
 app.title = "2%ers"
+
+# Register API routes for public read-only Elasticsearch access
+from api_routes import register_api_routes
+register_api_routes(server)
 app.layout = html.Div([
         html.Div([dcc.Store(id="df-store", storage_type='local'),
             dcc.Interval(
