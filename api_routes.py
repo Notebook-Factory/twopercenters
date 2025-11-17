@@ -24,6 +24,7 @@ from flask_limiter.util import get_remote_address
 
 # Import existing utility functions
 from citations_lib.utils import (
+    es,  # Import the global ES client
     es_scroll,
     get_es_results,
     get_es_aggregate,
@@ -40,14 +41,6 @@ api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 # Initialize rate limiter
 # Will be configured with Flask app in register_api_routes()
 limiter = None
-
-# Initialize Elasticsearch client
-def get_es_client() -> Elasticsearch:
-    """Get Elasticsearch client instance."""
-    es_url = os.getenv('ELASTICSEARCH_URL') or os.getenv('ES_URL_LOCAL')
-    if not es_url:
-        raise ValueError("Elasticsearch URL not configured")
-    return Elasticsearch([es_url])
 
 
 # ============================================================================
@@ -179,8 +172,7 @@ def health_check():
         JSON response with health status
     """
     try:
-        client = get_es_client()
-        es_health = client.cluster.health()
+        es_health = es.cluster.health()
 
         return jsonify({
             "status": "healthy",
@@ -289,30 +281,41 @@ def search_authors():
             year = validate_year(data['year'])
 
         # Execute search using existing utility function
-        client = get_es_client()
-        results = get_es_results(
-            client=client,
-            idx=index,
-            search_col=field,
+        # get_es_results returns a pandas DataFrame or None
+        results_df = get_es_results(
             search_term=query,
-            and_operator=False,
-            exact_match=False
+            idx_name=index,
+            search_fields=field,
+            exact=False
         )
 
-        # Limit results
-        if results and len(results) > limit:
-            results = results[:limit]
-
-        # Decompress author data if present
+        # Convert DataFrame to list of dicts if results exist
         processed_results = []
-        for result in results:
-            if 'Author_Data' in result:
-                try:
-                    result['Author_Data'] = base64_decode_and_decompress(result['Author_Data'])
-                except Exception as e:
-                    logger.warning(f"Failed to decompress author data: {str(e)}")
-                    result['Author_Data'] = None
-            processed_results.append(result)
+        if results_df is not None and not results_df.empty:
+            # Convert to list of dicts and limit results
+            results_list = results_df.to_dict('records')[:limit]
+
+            # Process each result
+            for result in results_list:
+                # Decompress author data if present
+                if '_source.Author_Data' in result:
+                    try:
+                        result['Author_Data'] = base64_decode_and_decompress(result['_source.Author_Data'])
+                        # Remove the original encoded field
+                        del result['_source.Author_Data']
+                    except Exception as e:
+                        logger.warning(f"Failed to decompress author data: {str(e)}")
+                        result['Author_Data'] = None
+
+                # Flatten _source fields for cleaner response
+                flattened = {}
+                for key, value in result.items():
+                    if key.startswith('_source.'):
+                        flattened[key.replace('_source.', '')] = value
+                    else:
+                        flattened[key] = value
+
+                processed_results.append(flattened)
 
         return jsonify({
             "query": query,
@@ -382,25 +385,42 @@ def get_aggregation(aggregation_type: str):
         if index not in request.allowed_indices:
             return jsonify({"error": f"Index {index} not allowed"}), 403
 
-        # Execute aggregation query using existing utility function
-        client = get_es_client()
-        results = get_es_aggregate(
-            client=client,
-            idx=index,
-            agg_type=aggregation_type
-        )
+        # Query the aggregation index directly to get all documents
+        try:
+            response = es.search(
+                index=index,
+                size=limit,
+                body={
+                    "query": {"match_all": {}},
+                    "sort": [{"_score": {"order": "desc"}}]
+                }
+            )
 
-        # Limit results
-        if results and len(results) > limit:
-            results = results[:limit]
+            # Extract results from response
+            results = []
+            if 'hits' in response and 'hits' in response['hits']:
+                for hit in response['hits']['hits']:
+                    result = hit['_source']
+                    # Decompress Author_Data if present
+                    if 'Author_Data' in result:
+                        try:
+                            result['Author_Data'] = base64_decode_and_decompress(result['Author_Data'])
+                        except Exception as e:
+                            logger.warning(f"Failed to decompress data: {str(e)}")
+                            result['Author_Data'] = None
+                    results.append(result)
 
-        return jsonify({
-            "aggregation_type": aggregation_type,
-            "index": index,
-            "year": year_param,
-            "count": len(results) if results else 0,
-            "results": results or []
-        }), 200
+            return jsonify({
+                "aggregation_type": aggregation_type,
+                "index": index,
+                "year": year_param,
+                "count": len(results),
+                "results": results
+            }), 200
+
+        except Exception as es_error:
+            logger.error(f"ES query failed: {str(es_error)}")
+            raise
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -434,15 +454,12 @@ def get_index_stats(index_name: str):
                 "error": f"Invalid index. Allowed: {request.allowed_indices}"
             }), 400
 
-        # Get index stats
-        client = get_es_client()
-
         # Get document count
-        count_result = client.count(index=index_name)
+        count_result = es.count(index=index_name)
         doc_count = count_result.get('count', 0)
 
         # Get index stats
-        stats = client.indices.stats(index=index_name)
+        stats = es.indices.stats(index=index_name)
         index_stats = stats['indices'].get(index_name, {})
 
         total_size_bytes = index_stats.get('total', {}).get('store', {}).get('size_in_bytes', 0)
