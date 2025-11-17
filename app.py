@@ -7,8 +7,8 @@ from dash import Dash, html, dcc, callback
 from dash.dependencies import Input, Output, State
 import warnings
 
-# from elasticsearch.exceptions import ElasticsearchWarning
-# warnings.simplefilter('ignore', ElasticsearchWarning)
+from elasticsearch.exceptions import ElasticsearchWarning
+warnings.simplefilter('ignore', ElasticsearchWarning)
 
 
 app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],

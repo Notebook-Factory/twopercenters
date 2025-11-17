@@ -11,5 +11,5 @@ pandas==1.5.2
 plotly==5.13.0
 python-dotenv
 gunicorn
-elasticsearch
+elasticsearch==7.17.12
 dash-loading-spinners
