@@ -16,8 +16,8 @@ import os
 import logging
 from typing import Dict, Any, Optional, List
 from flask import Blueprint, jsonify, request, Response
-from elasticsearch import Elasticsearch
-from elasticsearch.exceptions import ElasticsearchException
+from elasticsearch import Elasticsearch, ElasticsearchException
+#from elasticsearch.exceptions import ElasticsearchException
 from functools import wraps
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
