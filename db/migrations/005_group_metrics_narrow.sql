@@ -1,13 +1,13 @@
 -- Task 7 (narrowed): RULING R21.
 --
--- 004_group_metrics.sql materialised all three groupings (country, field,
--- institution) and measured out to 7,412,496 rows / 1,651 MB, of which
--- institution accounted for 7,344,948 rows (99.1 percent) and essentially all
--- the disk space. A `refresh materialized view` of that shape ran for 45
--- minutes holding an ACCESS EXCLUSIVE lock. On a box that also hosts five
--- other dashboards, a lock of that duration blocks every reader for the
--- whole refresh, which is not an acceptable trade for a grouping that a
--- single indexed lookup already answers in milliseconds
+-- 004_group_metrics.sql originally materialised all three groupings
+-- (country, field, institution) and measured out to 7,412,496 rows / 1,651
+-- MB, of which institution accounted for 7,344,948 rows (99.1 percent) and
+-- essentially all the disk space. A `refresh materialized view` of that
+-- shape ran for 45 minutes holding an ACCESS EXCLUSIVE lock. On a box that
+-- also hosts five other dashboards, a lock of that duration blocks every
+-- reader for the whole refresh, which is not an acceptable trade for a
+-- grouping that a single indexed lookup already answers in milliseconds
 -- (career_metrics_cntry_idx / singleyr_metrics_cntry_idx on
 -- (institution_id, edition_id); EXPLAIN ANALYZE for one institution touched
 -- about 7,000 rows, not 2.7 million).
@@ -22,12 +22,22 @@
 -- inst_name}, reachable for both 'career' and 'singleyr' via editions.kind)
 -- is unchanged; only where the 'inst_name' rows come from has changed.
 --
--- This is a replacement migration, not an edit to 004: 004 is already in
--- schema_migrations on this database, and RULING R19 established that
--- migrations apply in sorted filename order, so a from-scratch dokku run
--- must see 004 (creating the wide view) and then 005 (narrowing it) in that
--- order to end up in the same state as this machine.
-drop materialized view group_metrics;
+-- RULING R22: 004 now builds this same narrow view directly, so that a
+-- fresh database (a from-scratch `dokku run twopercenters python
+-- db/migrate.py`, for instance) never has to build and discard the old
+-- 1.65 GB wide view first. This migration is kept in place, unchanged in
+-- shape, so that a database which already applied the original wide 004
+-- (every database that predates this ruling, including the one this code
+-- runs against today) still converges on the same narrow view: 004 is
+-- already recorded in schema_migrations on those databases and will not be
+-- re-run, so something still has to drop the wide view and rebuild it
+-- narrow. The drop is guarded with `if exists` so that on a fresh database,
+-- where 004 already created this exact narrow view, this migration is a
+-- harmless no-op drop-and-rebuild (a few seconds) rather than an error.
+-- Editing an already-applied migration (004) is normally to be avoided;
+-- it is acceptable here precisely because this migration normalises both
+-- paths to the same end state.
+drop materialized view if exists group_metrics;
 
 create materialized view group_metrics as
 with career_wide_cntry as (
