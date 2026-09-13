@@ -80,8 +80,11 @@ def generate_update_years_callback(input_id, output_id, auth_dropdown_id):
             # exact=True: `authname` came from the author dropdown.
             results = get_es_results(authname, prefix, 'authfull', exact=True)
             data = es_result_pick(results, 'data', None)
-            yrs = update_auth_yrs(data.keys(),prefix)
-            return yrs, yrs[0]['value']
+            yrs = update_auth_yrs(data.keys(), prefix)
+            # The first option is the oldest edition, which most authors have
+            # no data in; the first *enabled* one is the earliest year this
+            # author actually appears in.
+            return yrs, first_available_year(yrs)
     return update_years
 
 def generate_update_cards_callback(input_id, output_ids, auth_dropdown_id, career_singleyr_id,color1, color2):

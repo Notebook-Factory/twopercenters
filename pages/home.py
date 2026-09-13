@@ -432,6 +432,61 @@ zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel', children="", dangerously_
                     ]),color="#ECAB4C",width=270)
 
 
+# ============================================================================
+# One current author across the whole dashboard
+# ----------------------------------------------------------------------------
+# Picking someone in any panel should carry to the others: it is the same
+# question asked four ways, and retyping the name in each was busywork.
+#
+# The selection lives in a store rather than being written from one dropdown
+# into another. Panels are built on demand, so a callback writing into a
+# dropdown that is not mounted yet would fail; seeding the layout at build
+# time cannot. The one panel that is always mounted, the trends section, is
+# kept in step by the callback below.
+# ============================================================================
+
+AUTHOR_PICKERS = [
+    "authorOptionsDropdown_single_author",
+    "author1OptionsDropdown_author_find_",
+    "author1OptionsDropdown_author_vs_author",
+    "group1ListDropdown_author_vs_group",
+]
+
+
+@callback(
+    Output("spotlight-selection", "data", allow_duplicate=True),
+    [Input(picker, "value") for picker in AUTHOR_PICKERS],
+    prevent_initial_call=True,
+)
+def remember_author(*values):
+    """Record whichever picker was just changed as the current author."""
+    triggered = callback_context.triggered_id
+    if triggered not in AUTHOR_PICKERS:
+        raise PreventUpdate
+    chosen = values[AUTHOR_PICKERS.index(triggered)]
+    if not chosen:
+        raise PreventUpdate
+    return chosen
+
+
+@callback(
+    Output("authorOptionsDropdown_single_author", "value"),
+    Input("spotlight-selection", "data"),
+    State("authorOptionsDropdown_single_author", "value"),
+    prevent_initial_call=True,
+)
+def sync_trends_author(chosen, current):
+    """Keep the always-mounted trends picker on the current author.
+
+    Returning the value it already holds would be a no-op anyway, but
+    PreventUpdate says so explicitly and keeps this off the callback graph
+    when nothing changed.
+    """
+    if not chosen or chosen == current:
+        raise PreventUpdate
+    return chosen
+
+
 # The instruction that used to sit at the bottom of the right-hand column,
 # lifted into a glass card over the map. It says one thing, once, and then
 # gets out of the way; leaving it in the column meant it occupied space that
@@ -705,10 +760,14 @@ tabs = [
 @callback(Output("content", "children"), [Input("tabs", "active_tab")],
           State("spotlight-selection", "data"))
 def switch_tab(at, picked):
+    # Each panel is built on demand, so the current author is handed to it at
+    # build time rather than written into its dropdown afterwards: the
+    # dropdown does not exist until this returns. Group vs group has no author
+    # side, so it takes nothing.
     if at == "tab-1":
-        return html.Center(author_vs_author_layout())
+        return html.Center(author_vs_author_layout(picked))
     elif at == "tab-2":
-        return html.Center(author_vs_group_layout())
+        return html.Center(author_vs_group_layout(picked))
     elif at == "tab-3":
         return html.Center(group_vs_group_layout())
     elif at == 'tab-0':

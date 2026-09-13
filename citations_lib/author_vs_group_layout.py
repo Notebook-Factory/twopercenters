@@ -29,7 +29,8 @@ from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
 from citations_lib.callback_templates import *
 
-def author_vs_group_layout():
+def author_vs_group_layout(default_author=None):
+    """The author side is seeded from the dashboard's current author."""
     # ========================================================================================== 
     # ========================================================================================== 
     # Data Preparation
@@ -146,7 +147,7 @@ def author_vs_group_layout():
     # =============== Group 1 (author) Dropdown
 
     group1List = dcc.Dropdown(options = [], placeholder = 'Search researchers', multi = False, id = "group1ListDropdown" + SUFFIX, 
-    value = 'Ioannidis, John P.A.', searchable = True)
+    value = default_author or 'Ioannidis, John P.A.', searchable = True)
     generate_es_dropdown_callback("group1ListDropdown" + SUFFIX)
     generate_update_carsing_callback('group1ListDropdown' + SUFFIX, 'careerORSingleYrA1' + SUFFIX)
     generate_update_years_callback('careerORSingleYrA1' + SUFFIX, 'selectYrRadioA1' + SUFFIX, 'group1ListDropdown' + SUFFIX)
@@ -379,14 +380,12 @@ def author_vs_group_layout():
             c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(authorRank), dbc.Col(nAuthors2)]), dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row(html.Center('Composite score C formula:')), dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
                 r'''
 $$
-\begin{aligned}
-C_i \;=\;& \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
+C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
 \;+\; \frac{\log(H_i)}{\mathrm{maxlog}(H)}
-\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)} \\[4pt]
-&+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
+\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)}
+\;+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
 \;+\; \frac{\log(NCSF_i)}{\mathrm{maxlog}(NCSF)}
 \;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
-\end{aligned}
 $$
 ''', mathjax=True, className='ev-formula'))])
             return(figures, fig_list[6], c_img)

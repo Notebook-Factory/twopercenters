@@ -2361,12 +2361,24 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   transform-origin: center center;
 }
 
-/* Measured rather than guessed: the two-line formula renders 580px wide at
-   100%, and the column it sits in is about 0.44 of the viewport, so the
-   steps below keep 580 x scale under the column width at each size. At
-   1680px it fits at full size (580 into 757). */
-@media (max-width: 1500px) { .ev-formula mjx-container { font-size: 92% !important; } }
-@media (max-width: 1250px) { .ev-formula mjx-container { font-size: 82% !important; } }
-@media (max-width: 1150px) { .ev-formula mjx-container { font-size: 70% !important; } }
-@media (max-width: 1000px) { .ev-formula mjx-container { font-size: 60% !important; } }
-@media (max-width: 900px)  { .ev-formula mjx-container { font-size: 50% !important; } }
+/* Scale steps set below, from measurement. */
+
+/* ==========================================================================
+   The formula, kept on one line
+   Breakpoints could not win here: the column is a fraction of the viewport,
+   so it shrinks continuously while a step only changes at a threshold, and
+   whatever the steps were the width just above each one overflowed. The size
+   is tied to the viewport instead, which is the same continuous relationship
+   the container has.
+
+   Measured: at 16px the single line renders 998px, so its width is about
+   62.4x the font size, and the column is about 0.42 of the viewport. That
+   gives font-size <= 0.0067vw; 0.62vw leaves a margin. The clamp stops it
+   becoming unreadably small on a phone or absurdly large on a wall display,
+   and below the lower bound the container scrolls rather than clipping.
+   ========================================================================== */
+.ev-formula mjx-container {
+  font-size: clamp(5px, 0.62vw, 13px) !important;
+}
+
+.ev-formula { overflow-x: auto; }

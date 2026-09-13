@@ -1151,22 +1151,42 @@ def update_cr_options(avail):
     elif avail == 'singleyr':
         return [{"label": "Career", "value": True,'disabled': True}, {"label": "Single year", "value": False, 'disabled': True}]
 
-def update_auth_yrs(keys,prefix):
-    if prefix == 'career':
-        aptx = 'TO '
-    else:
-        aptx = 'IN '
-    opts = []
-    it = 1
-    for key in keys:
-        if key.split('_')[-1] != "log":
-            if it == 1:
-                opts.append({"label": aptx + key.split('_')[-1], "value": key.split('_')[-1]})
-            else:
-                opts.append({"label": key.split('_')[-1], "value": key.split('_')[-1]})
-            it = it + 1
-    return opts
-    
+def update_auth_yrs(keys, prefix):
+    """Year options for one author: every edition, unavailable ones disabled.
+
+    This used to emit only the years the author actually has, so a researcher
+    present in 2024 alone got a single button and the rest of the row simply
+    vanished. That hides the shape of the data: the reader cannot tell whether
+    a year is missing for this person or missing from the dashboard. Every
+    edition of the kind is listed now, and the ones this author has no row in
+    are disabled, so the gap is visible and unclickable.
+    """
+    prefix_label = 'TO ' if prefix == 'career' else 'IN '
+    available = {str(key).split('_')[-1]
+                 for key in keys if str(key).split('_')[-1] != 'log'}
+
+    options = []
+    for index, year in enumerate(edition_years(prefix)):
+        year = str(year)
+        label = (prefix_label if index == 0 else '') + year
+        options.append({'label': label, 'value': year,
+                        'disabled': year not in available})
+    return options
+
+
+def first_available_year(options):
+    """The earliest year an author has data for, from update_auth_yrs output.
+
+    The year row is in ascending edition order, so the first option that is
+    not disabled is the earliest one this author appears in. Selecting it
+    rather than options[0] matters because options[0] is now always the
+    oldest edition, which for most authors is a year they have no data in.
+    """
+    for option in options or []:
+        if not option.get('disabled'):
+            return option['value']
+    return None
+
 
 # Quickly search a df for an author
 def search_df(df,search_str,datatype = 'author'):

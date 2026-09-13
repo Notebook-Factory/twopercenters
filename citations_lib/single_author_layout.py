@@ -65,7 +65,8 @@ def create_author_figures(author_df, author_yrs, metrics_list, author_type, auth
 
     return fig
 
-def single_author_layout():
+def single_author_layout(default_author=None):
+    """Seeded from the dashboard's current author when there is one."""
 
     # ========================================================================================== 
     # ========================================================================================== 

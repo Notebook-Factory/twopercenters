@@ -116,7 +116,9 @@ page_size = 8000
 # END: RUN ONLY ON DATA CHANGE ------------------------------------------------
 
 
-def author_vs_author_layout():
+def author_vs_author_layout(default_author=None):
+    """Author 1 is seeded from the dashboard's current author when there is
+    one, so picking someone in any panel carries across to this one."""
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -273,7 +275,7 @@ def author_vs_author_layout():
     # ========================================================================================== 
 
     author1Options = dcc.Dropdown(options = [], placeholder = 'Search researchers', multi = False, id = "author1OptionsDropdown" + SUFFIX, 
-        value = 'Ioannidis, John P.A.', searchable = True)
+        value = default_author or 'Ioannidis, John P.A.', searchable = True)
     generate_es_dropdown_callback("author1OptionsDropdown" + SUFFIX)
     generate_update_carsing_callback('author1OptionsDropdown' + SUFFIX, 'careerORSingleYrA1' + SUFFIX)
     generate_update_years_callback('careerORSingleYrA1' + SUFFIX, 'selectYrRadioA1' + SUFFIX, 'author1OptionsDropdown' + SUFFIX)
@@ -408,14 +410,12 @@ def author_vs_author_layout():
             c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1), dbc.Col(rankAuthor2)]), dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
                 r'''
 $$
-\begin{aligned}
-C_i \;=\;& \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
+C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
 \;+\; \frac{\log(H_i)}{\mathrm{maxlog}(H)}
-\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)} \\[4pt]
-&+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
+\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)}
+\;+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
 \;+\; \frac{\log(NCSF_i)}{\mathrm{maxlog}(NCSF)}
 \;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
-\end{aligned}
 $$
 ''', mathjax=True, className='ev-formula'))])
             return(figures, fig_list[6], c_img)
