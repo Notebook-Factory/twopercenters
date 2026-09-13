@@ -2283,3 +2283,64 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   bottom: auto;
   left: 18px;
 }
+
+/* The hint sits over the middle of the map rather than in a corner: it is the
+   first thing to read on arrival, and the corner made it easy to miss. */
+.ev-hint {
+  top: 50%;
+  left: 50%;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  max-width: 400px;
+  text-align: left;
+}
+.ev-hint-gone {
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 6px));
+}
+
+.ev-of-total {
+  color: var(--ev-text-muted);
+  font-size: 0.82rem;
+}
+
+/* ==========================================================================
+   The country results table
+   Rows are clickable, but nothing said so: the pointer stayed a text caret
+   over the cells and there was no hover response, so the table read as a
+   printout rather than as a list you can pick from.
+   ========================================================================== */
+#instnametable .dash-cell,
+#instnametable .dash-cell div,
+#instnametable .dash-cell .dash-cell-value {
+  cursor: pointer !important;
+  user-select: none;
+}
+
+#instnametable .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
+  background-color: var(--ev-surface-2) !important;
+  color: var(--ev-text) !important;
+}
+
+/* The selected row keeps a mark after the click, so it is clear which
+   researcher the panel below is describing. */
+#instnametable td.focused,
+#instnametable td.cell--selected {
+  background-color: color-mix(in srgb, var(--ev-accent) 26%, transparent) !important;
+  border: none !important;
+  box-shadow: inset 2px 0 0 var(--ev-accent);
+}
+
+/* Dash draws a text-input outline on the focused cell; these are not editable
+   so that outline only suggests they are. */
+#instnametable input.dash-cell-value:focus,
+#instnametable .dash-cell-value.focused {
+  outline: none !important;
+  caret-color: transparent;
+}
+
+#instnametable .dash-spreadsheet-inner th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}

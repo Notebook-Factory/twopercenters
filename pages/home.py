@@ -271,7 +271,19 @@ def click_on_map_update(val,is_career,yr,sts):
     # country listed nobody. country_researchers asks Postgres, where the
     # fact rows actually live, for the same thing.
     career_all_c = country_researchers(cntry, nm, yr)
-    msg = f'<div class="danger"><center><strong>{txt}</strong><br/><strong>{len(career_all_c)}</strong> researchers from <strong>{len(set(get_all_values_by_key(career_all_c,"INSTITUTE")))}</strong> institutions in <strong>{cntry.upper()}</strong><br/> <u>Click on a cell to display respective summaries</u></center></div>'
+    # The code is what the lookups key on; the name is what a reader wants.
+    cntry_full = str(coco.convert(names=cntry, to='name_short'))
+    if cntry_full in ('not found', 'None'):
+        cntry_full = cntry.upper()
+    total_authors = edition_author_count(nm, yr)
+    institutions = len(set(get_all_values_by_key(career_all_c, "INSTITUTE")))
+    msg = (f'<div class="danger"><center><strong>{txt}</strong><br/>'
+           f'<strong>{len(career_all_c):,}</strong> researchers from '
+           f'<strong>{institutions:,}</strong> institutions in '
+           f'<strong>{cntry_full}</strong>'
+           f'<br/><span class="ev-of-total">of {total_authors:,} worldwide '
+           f'in this selection</span>'
+           f'<br/><u>Click a row to see that researcher</u></center></div>')
     return(self_cit,career_all_c, msg, {'height': '400px', 'overflowY': 'auto','display':'block'},[],None)
 
 # The map's opening frame. Was pinned to '2021'; it follows the most recent
@@ -386,7 +398,7 @@ explain  =  f'''
                     </div>
                     <br/>
                     '''
-zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel',children="No country selected. Click on a country.",dangerously_allow_html = True),
+zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel', children="", dangerously_allow_html=True),
                     tbl,dcc.Markdown(id='worldtitle',
                     dangerously_allow_html = True,
                     highlight_config  = dict(theme='dark'),
@@ -418,11 +430,6 @@ map_hint = html.Div(
                             "institutions and researchers it contributes, "
                             "for the dataset and year selected above.",
                             className="ev-hint-body"),
-                        dbc.Button(
-                            [html.Span("Go to comparisons and trends"),
-                             html.I(**{"data-lucide": "arrow-down"})],
-                            id="hint-jump", n_clicks=0, className="ev-hint-jump",
-                        ),
                     ]
                 ),
             ],
@@ -437,11 +444,10 @@ map_hint = html.Div(
 @callback(
     Output("map-hint", "className"),
     Input("map-hint-close", "n_clicks"),
-    Input("hint-jump", "n_clicks"),
     Input("nav", "clickData"),
     prevent_initial_call=True,
 )
-def dismiss_map_hint(_close, _jump, _clicked):
+def dismiss_map_hint(_close, _clicked):
     """Hide the hint once it has been read, acted on, or made redundant.
 
     Clicking a country is included deliberately: at that point the user has
@@ -952,7 +958,7 @@ dash.clientside_callback(
 # runs in the browser, after the section has had a moment to expand.
 dash.clientside_callback(
     """
-    function (compareClicks, trendsClicks, picked, hintClicks) {
+    function (compareClicks, trendsClicks, picked) {
         setTimeout(function () {
             var el = document.getElementById('accordion-anchor');
             if (el) { el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
@@ -964,7 +970,6 @@ dash.clientside_callback(
     Input("jump-compare", "n_clicks"),
     Input("jump-trends", "n_clicks"),
     Input("spotlight-selection", "data"),
-    Input("hint-jump", "n_clicks"),
     prevent_initial_call=True,
 )
 

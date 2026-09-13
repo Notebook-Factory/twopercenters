@@ -606,6 +606,22 @@ def get_auth_years(data):
     else:
         return None
 
+@lru_cache(maxsize=64)
+def edition_author_count(kind, year):
+    """How many researchers are in one edition.
+
+    The rank shown beside an author means little on its own: 4,812 is very
+    different out of 5,000 than out of 200,000. This is the denominator for
+    that sentence, cached because it is one count per edition and the answer
+    does not change between requests.
+    """
+    if kind not in _TABLE_BY_KIND:
+        return None
+    rows = _fetch(f'select count(*) from {_TABLE_BY_KIND[kind]} '
+                  f'where edition_id = %s', (f'{kind}-{year}',))
+    return rows[0][0] if rows else None
+
+
 def country_researchers(country, kind, year):
     """[{'INSTITUTE': ..., 'RESEARCHER': ...}] for one country and edition.
 

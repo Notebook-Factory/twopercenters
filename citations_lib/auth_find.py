@@ -343,11 +343,24 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             
 
             names = get_inst_field_cntry(data, prefix1, yr1)
+            # The stored country is a lowercase ISO3 code ("usa"), which is
+            # what the aggregate lookups key on, but it is not what a reader
+            # wants to see. coco turns it into a name for display only; the
+            # code itself is still what gets passed to get_es_aggregate below.
+            cntry_full = str(coco.convert(names=names['cntry'],
+                                          to='name_short'))
+            if cntry_full in ('not found', 'None'):
+                cntry_full = str(names['cntry']).upper()
+            # A rank means little without its denominator: 4,812 is a very
+            # different result out of 5,000 than out of 230,000.
+            total_authors = edition_author_count(prefix1, yr1)
+            span = 'career-long up to' if prefix1 == 'career' else 'in'
             auth_info = f'''
-                        * **Country:** {names['cntry']}
+                        * **Country:** {cntry_full}
                         * **Field:** {names['field']}
                         * **Institute:** {names['inst']}
                         * **Self citation (%):** {round(data1['self%']*100,2)}
+                        * **Ranked among:** {total_authors:,} researchers ({span} {yr1})
                         '''
             if uplim == 'Max and median (red) by country':
                 kek = get_es_aggregate('cntry',names['cntry'],prefix1)
