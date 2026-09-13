@@ -562,6 +562,17 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
     have that kind, which is how single_author_layout still learns an author
     has no single-year data) or ['career', 'singleyr'] for both. And _source
     is filtered, so a keystroke no longer ships a hundred full documents.
+
+    Task-10 remedy (RULING R14, typeahead p50 regression): `size` dropped
+    from 100 to 30. The unified `authors` alias holds 818,667 documents
+    against the legacy `career` index's 270,910, so the same fuzzy
+    multi_match now scores three times as many candidates and, worse, a
+    caller requesting both kinds used to get at most 100 rows total (one ES
+    query across two indices); against the single alias it could get up to
+    100 hits x 2 kinds = 200 rows built and DataFrame-sorted below. Neither
+    the typeahead dropdown nor the radio-enabling callback in
+    callback_templates.py needs anywhere near 100 relevance-ranked
+    candidates; fuzziness itself is untouched.
     """
     if not search_term:
         return None
@@ -578,7 +589,7 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
                 "fields": search_fields
             },
         }
-    result = es.search(index=AUTHOR_ALIAS, size=100,
+    result = es.search(index=AUTHOR_ALIAS, size=30,
                        body={"query": query, "_source": _SOURCE_FIELDS})
     hits = result.get('hits', {}).get('hits', [])
     if not hits:

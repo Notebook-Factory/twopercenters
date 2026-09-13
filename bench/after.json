@@ -1,10 +1,10 @@
 {
   "n": 12,
   "repeats": 20,
-  "typeahead_p50_ms": 6.69,
-  "typeahead_p95_ms": 12.87,
-  "fetch_p50_ms": 15.03,
-  "fetch_p95_ms": 28.6,
+  "typeahead_p50_ms": 4.76,
+  "typeahead_p95_ms": 7.83,
+  "fetch_p50_ms": 13.3,
+  "fetch_p95_ms": 19.28,
   "mode": "current",
   "terms": [
     "an",
