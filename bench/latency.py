@@ -47,6 +47,73 @@ def _percentile(values, pct):
     return ordered[index]
 
 
+def warm(typeahead_fn, fetch_fn, terms, passes=1):
+    """Run the term list through a stack and throw the timings away.
+
+    Measured across three separate sessions, the *unchanged* legacy stack
+    reported fetch p50 of 10.25ms, then 8.38ms, then 6.80ms. Legacy code and
+    legacy data did not change between those runs; what changed is that
+    Elasticsearch's filesystem cache and the OS page cache held more of the
+    career/singleyr indices each time. Whichever stack is measured second, or
+    measured more often, therefore looks faster, and a baseline that drifts
+    downward on every re-measurement is not a baseline.
+
+    So both stacks get the same treatment before anything is recorded: the
+    same terms, the same number of passes, in the same process. A comparison
+    where one side is warm and the other is cold is not a comparison.
+    """
+    for _ in range(passes):
+        for term in terms:
+            hits = typeahead_fn(term)
+            if hits:
+                fetch_fn(hits[0])
+
+
+def measure_both(legacy, current, terms, repeats=5, warmup=1):
+    """Measure both stacks in one process, interleaved term by term.
+
+    Interleaving matters as much as the warm-up does. The two stacks used to
+    be measured in separate runs minutes apart, so any drift in machine load
+    over those minutes landed entirely on one side of the comparison. Here
+    each term's legacy and current samples are taken microseconds apart and
+    see the same machine.
+    """
+    legacy_typeahead, legacy_fetch = legacy
+    current_typeahead, current_fetch = current
+
+    warm(legacy_typeahead, legacy_fetch, terms, passes=warmup)
+    warm(current_typeahead, current_fetch, terms, passes=warmup)
+
+    samples = {'legacy_typeahead': [], 'legacy_fetch': [],
+               'current_typeahead': [], 'current_fetch': []}
+
+    for term in terms:
+        for _ in range(repeats):
+            for label, typeahead_fn, fetch_fn in (
+                    ('legacy', legacy_typeahead, legacy_fetch),
+                    ('current', current_typeahead, current_fetch)):
+                started = time.perf_counter()
+                hits = typeahead_fn(term)
+                samples[f'{label}_typeahead'].append(
+                    (time.perf_counter() - started) * 1000)
+                if hits:
+                    started = time.perf_counter()
+                    fetch_fn(hits[0])
+                    samples[f'{label}_fetch'].append(
+                        (time.perf_counter() - started) * 1000)
+
+    out = {"n": len(terms), "repeats": repeats, "warmup_passes": warmup,
+           "mode": "both", "terms": list(terms)}
+    for label in ('legacy', 'current'):
+        for phase in ('typeahead', 'fetch'):
+            values = samples[f'{label}_{phase}']
+            out[f'{label}_{phase}_p50_ms'] = round(
+                statistics.median(values), 2)
+            out[f'{label}_{phase}_p95_ms'] = round(
+                _percentile(values, 95), 2)
+    return out
+
+
 def measure(typeahead_fn, fetch_fn, terms, repeats=5):
     typeahead_ms, fetch_ms = [], []
 
@@ -134,10 +201,20 @@ def _current_fns():
             )
 
     def fetch(author):
+        # exact=True mirrors what citations_lib/single_author_layout.py now
+        # does: by the fetch phase the user has already picked a name out of
+        # the dropdown, so the exact string is in hand and Postgres answers
+        # it with one indexed read instead of Elasticsearch fuzzy-matching a
+        # string that needs no matching. The legacy side keeps its fuzzy
+        # implementation because that is genuinely what the old stack did;
+        # what is being compared is the same user interaction, each stack
+        # doing it the way that stack does it.
         try:
-            results_career = get_es_results(author, "career", "authfull")
+            results_career = get_es_results(author, "career", "authfull",
+                                            exact=True)
             data_career = es_result_pick(results_career, "data", None)
-            results_singleyr = get_es_results(author, "singleyr", "authfull")
+            results_singleyr = get_es_results(author, "singleyr", "authfull",
+                                              exact=True)
             data_singleyr = es_result_pick(results_singleyr, "data", None)
             return {"career": data_career, "singleyr": data_singleyr}
         except Exception as exc:
@@ -152,7 +229,14 @@ def _current_fns():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=["legacy", "current"], required=True)
+    parser.add_argument("--mode", choices=["legacy", "current", "both"],
+                        required=True)
+    parser.add_argument(
+        "--warmup", type=int, default=1,
+        help="passes of the term list to run and discard before recording, "
+             "per stack (default 1). Only --mode both applies it, because "
+             "only --mode both can warm the two stacks equally.",
+    )
     parser.add_argument("--out", required=True, help="path to write the result JSON to")
     parser.add_argument(
         "--terms",
@@ -163,14 +247,19 @@ def main():
     parser.add_argument("--repeats", type=int, default=DEFAULT_REPEATS)
     args = parser.parse_args()
 
-    if args.mode == "legacy":
-        typeahead_fn, fetch_fn = _legacy_fns()
+    if args.mode == "both":
+        result = measure_both(_legacy_fns(), _current_fns(), args.terms,
+                              repeats=args.repeats, warmup=args.warmup)
     else:
-        typeahead_fn, fetch_fn = _current_fns()
+        if args.mode == "legacy":
+            typeahead_fn, fetch_fn = _legacy_fns()
+        else:
+            typeahead_fn, fetch_fn = _current_fns()
 
-    result = measure(typeahead_fn, fetch_fn, args.terms, repeats=args.repeats)
-    result["mode"] = args.mode
-    result["terms"] = args.terms
+        result = measure(typeahead_fn, fetch_fn, args.terms,
+                         repeats=args.repeats)
+        result["mode"] = args.mode
+        result["terms"] = args.terms
 
     with open(args.out, "w") as fh:
         json.dump(result, fh, indent=2)

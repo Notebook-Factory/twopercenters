@@ -125,11 +125,11 @@ def update_Author1(author, ns):
 
     if author == None: raise PreventUpdate
     else:
-        results_career = get_es_results(author,'career','authfull')
+        results_career = get_es_results(author,'career','authfull',exact=True)
         #print(results_career)
         results_career = es_result_pick(results_career,'data', None)
 
-        results_singleyr = get_es_results(author,'singleyr','authfull')
+        results_singleyr = get_es_results(author,'singleyr','authfull',exact=True)
         results_singleyr  = es_result_pick(results_singleyr,'data', None)
         
         inst_name = ''

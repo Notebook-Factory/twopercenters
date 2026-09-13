@@ -128,11 +128,14 @@ def single_author_layout():
 
         if author == None: raise PreventUpdate
         else:
-            results_career = get_es_results(author,'career','authfull')
+            # exact=True: `author` is a display name the user picked out
+            # of the typeahead dropdown, so it is already the exact string
+            # and there is nothing to fuzzy-match. See get_es_results.
+            results_career = get_es_results(author,'career','authfull',exact=True)
             #print(results_career)
             results_career = es_result_pick(results_career,'data', None)
 
-            results_singleyr = get_es_results(author,'singleyr','authfull')
+            results_singleyr = get_es_results(author,'singleyr','authfull',exact=True)
             results_singleyr  = es_result_pick(results_singleyr,'data', None)
             
             inst_name = ''

@@ -551,6 +551,96 @@ def get_es_aggregate(group,group_name,prefix):
         return _group_data('inst_name', group_name, prefix)
     return {}
 
+# The seven fields build_search_index.py puts in each Elasticsearch document,
+# rebuilt for one name straight from the tables they were indexed from. It is
+# the same shape as that module's _AUTHORS_QUERY, narrowed to the authors
+# whose normalized name matches, so the two cannot describe an author
+# differently: "the most recent fact row decides inst/cntry/field, and
+# years_present is every edition the author has a row in".
+_EXACT_NAME_QUERY = """
+with matched as (
+    select author_id, authfull_display, name_normalized
+    from authors
+    where authfull_display = %s
+),
+unioned as (
+    select c.author_id, c.edition_id, c.institution_id, c.field_id,
+           c.country_code, c.observation_date
+    from career_metrics c join matched m on m.author_id = c.author_id
+    union all
+    select s.author_id, s.edition_id, s.institution_id, s.field_id,
+           s.country_code, s.observation_date
+    from singleyr_metrics s join matched m on m.author_id = s.author_id
+),
+ranked as (
+    select unioned.*,
+           row_number() over (
+               partition by author_id order by observation_date desc, edition_id desc
+           ) as rn
+    from unioned
+),
+latest as (
+    select author_id, institution_id, field_id, country_code
+    from ranked where rn = 1
+),
+years as (
+    select author_id, array_agg(distinct edition_id order by edition_id) as years_present
+    from unioned group by author_id
+)
+select m.author_id, m.authfull_display, m.name_normalized, i.inst_name,
+       l.country_code, f.name, coalesce(y.years_present, '{}')
+from matched m
+left join latest l on l.author_id = m.author_id
+left join institutions i on i.institution_id = l.institution_id
+left join fields f on f.field_id = l.field_id
+left join years y on y.author_id = m.author_id
+"""
+
+
+def _authors_by_exact_name(name):
+    """Authors whose display name is exactly `name`, shaped like ES hits.
+
+    Elasticsearch is kept for fuzzy search, and this is not search. By the
+    time the dashboard fetches an author's metrics the user has already
+    picked a name out of the dropdown, so the exact string is in hand, and
+    fuzzy-matching a string you already have exactly is work with no
+    purpose. That work was 79% of the fetch cost, because the fuzzy
+    multi_match scores candidates across all 818,667 documents in the
+    `authors` alias. Postgres answers the same question with one indexed
+    read of `authors_name_normalized_idx`.
+
+    Matching is on `authfull_display`, the exact string the typeahead hands
+    back, indexed by migration 006. It deliberately does not go through
+    `name_normalized`: build_relational.py writes one `authors` row per
+    author_id while the same author's raw name can be spelled differently in
+    different editions, so a stored name_normalized may have come from a
+    different edition's spelling than the stored authfull_display. Matching
+    the display string needs no agreement between the two.
+
+    One display name can resolve to several author_ids (identity resolution
+    splits genuinely different people who share a name), which is why this
+    returns a list; es_result_pick orders them richest-first.
+
+    `_score` is 1.0 for every row: these are exact matches, so there is no
+    relevance to rank by, and es_result_pick orders by edition count anyway.
+    """
+    rows = _fetch(_EXACT_NAME_QUERY, (name,))
+    return [{
+        '_id': author_id,
+        '_score': 1.0,
+        '_source': {
+            'author_id': author_id,
+            'authfull': authfull,
+            'name_normalized': name_normalized,
+            'inst_name': inst_name,
+            'cntry': cntry,
+            'sm_field': sm_field,
+            'years_present': list(years_present or []),
+        },
+    } for (author_id, authfull, name_normalized, inst_name, cntry,
+           sm_field, years_present) in rows]
+
+
 def get_es_results(search_term,idx_name, search_fields, exact = False):
     """Search authors by name. Still Elasticsearch, still fuzzy.
 
@@ -578,6 +668,8 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
         return None
     kinds = _requested_kinds(idx_name)
     if exact:
+        if search_fields == 'authfull':
+            return _frame_from_hits(_authors_by_exact_name(search_term), kinds)
         query = {"term": {search_fields: search_term}}
     else:
         query = {
@@ -590,37 +682,71 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
             },
         }
     result = es.search(index=AUTHOR_ALIAS, size=30,
-                       body={"query": query, "_source": _SOURCE_FIELDS})
+                       body={"query": query, "_source": _SOURCE_FIELDS,
+                             # Nobody here reads hits.total: get_es_results
+                             # uses hits only. Left at the default,
+                             # Elasticsearch counts matches up to 10,000
+                             # before it can stop, which on a fuzzy query
+                             # over the 818,667-document alias means scoring
+                             # far more documents than the 30 that are
+                             # returned. Turning the count off lets Lucene
+                             # skip documents that cannot reach the top 30.
+                             # The hits themselves are unchanged: every one
+                             # of the 15 terms checked returned the same
+                             # ids in the same order with the same scores.
+                             "track_total_hits": False})
     hits = result.get('hits', {}).get('hits', [])
     if not hits:
         return None
+    return _frame_from_hits(hits, kinds)
+
+
+def _frame_from_hits(hits, kinds):
+    """One row per (hit, kind) the hit actually has data for.
+
+    Shared by the fuzzy Elasticsearch path and the exact Postgres path so
+    both hand callers the identical frame; a hit is {'_id', '_score',
+    '_source'} from either source.
+    """
     records = []
     for hit in hits:
         source = hit['_source']
+        years = source.get('years_present', [])
         # years_present holds hyphenated edition ids, so the kind is what
         # comes before the hyphen.
-        present = {edition.partition('-')[0]
-                   for edition in source.get('years_present', [])}
-        for kind in kinds:
-            if kind not in present:
-                continue
-            record = {f'_source.{key}': value for key, value in source.items()}
-            # callback_templates reads result['_index'] and looks for the
-            # literal strings 'career' and 'singleyr' in it to decide which
-            # radio buttons to enable. That used to be the index name.
+        present = {edition.partition('-')[0] for edition in years}
+        matched = [kind for kind in kinds if kind in present]
+        if not matched:
+            continue
+        # Built once per hit rather than once per (hit, kind): a two-kind
+        # caller used to re-flatten the same _source twice.
+        base = {f'_source.{key}': value for key, value in source.items()}
+        # callback_templates reads result['_index'] and looks for the
+        # literal strings 'career' and 'singleyr' in it to decide which
+        # radio buttons to enable. That used to be the index name. It is
+        # seeded here, before the three keys below, so that the frame's
+        # column order is the same as when each record was built inline.
+        base['_index'] = None
+        base['_id'] = hit['_id']
+        base['_score'] = hit['_score']
+        base['_editions'] = len(years)
+        for kind in matched:
+            record = dict(base)
             record['_index'] = kind
-            record['_id'] = hit['_id']
-            record['_score'] = hit['_score']
-            record['_editions'] = len(source.get('years_present', []))
             records.append(record)
     if not records:
         return None
     # Hits arrive in relevance order. Within one name, prefer the author_id
     # that covers the most editions, so es_result_pick(result, 'data') reads
     # the fuller record when identity resolution split a display name.
-    frame = pd.DataFrame.from_records(records)
-    frame = frame.sort_values('_editions', ascending=False, kind='stable')
-    return frame.reset_index(drop=True)
+    #
+    # list.sort is stable, like the sort_values(kind='stable') this replaces,
+    # so relevance order still breaks ties. Sorting the records before the
+    # frame is built saves a sort_values pass and a reset_index pass over a
+    # freshly constructed DataFrame; from_records on an already-ordered list
+    # produces the same RangeIndex reset_index(drop=True) produced.
+    records.sort(key=lambda record: -record['_editions'])
+    return pd.DataFrame.from_records(records)
 
 def base64_decode_and_decompress(encoded_data,flg=True):
     """Dead as of the Postgres migration: nothing stores compressed blobs.
@@ -636,8 +762,18 @@ def base64_decode_and_decompress(encoded_data,flg=True):
     )
 
 def get_metric_long_name(career, yr, metric, include_year = True):
-    yrs = [2017, 2018, 2019, 2020, 2021]
-    if yr == 0: year = 2017
+    # This list used to be hardcoded as [2017, 2018, 2019, 2020, 2021], one
+    # of the six hardcoded year lists the migration replaced everywhere
+    # else. update_yr_options() now offers 2022, 2023 and 2024 because it is
+    # derived from the editions table, so picking one of those years reached
+    # this function with yr=5, 6 or 7 and raised IndexError off the end of
+    # the five-element list. Deriving it from the same table is what the
+    # rest of the module already does.
+    #
+    # The indexing convention is unchanged: yr indexes the career year list,
+    # and a single-year yr is bumped by one because the single-year series
+    # has no 2018 edition while the career series does.
+    yrs = edition_years('career')
     if yr != 0 and career == False: yr = yr + 1
     year = yrs[yr]
     if include_year == True: metric_name_dict = {
