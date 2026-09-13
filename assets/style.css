@@ -881,7 +881,9 @@ color: var(--ev-bg);
 }
 
 .ev-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.ev-field-grow { flex: 1 1 320px; }
+.ev-field-grow { flex: 0 1 auto; }   /* was 1 1 320px: it stretched the
+                                        year row and pushed the statistic
+                                        control to the far edge */
 
 .ev-field-label {
   color: var(--ev-text-muted);
@@ -1023,14 +1025,17 @@ color: var(--ev-bg);
 
 /* ==========================================================================
    Controls, rebuilt.
-   The dropdowns were a near-white box with a 2px cyan border, centred text,
-   a 4px radius and a black placeholder: a light-theme control dropped into a
-   dark page. That is the whole reason they read as dated. They are surfaces
-   now, like every other panel, with a hairline border, a generous radius,
-   left-aligned text and the accent reserved for focus.
-   ========================================================================== */
+   The dropdowns were a near-white box with a 2px cyan border, centred text
+   and a black placeholder: a light-theme control dropped into a dark page,
+   which is why they read as dated.
 
-.Select, .Select div, .Select input, .Select span { outline: none; }
+   The important constraint, learned the hard way: dcc.Dropdown is
+   react-select v1, whose control is a display:table with an absolutely
+   positioned value/placeholder and a table-cell arrow zone. Forcing
+   display:flex on it makes the value and placeholder paint on top of each
+   other and drops the chevron entirely. So this restyles surfaces, borders,
+   radius and colour only, and leaves react-select's own box model alone.
+   ========================================================================== */
 
 .Select-control {
   background-color: var(--ev-bg-deep) !important;
@@ -1038,18 +1043,14 @@ color: var(--ev-bg);
   border-radius: 10px !important;
   color: var(--ev-text) !important;
   height: 44px !important;
-  display: flex !important;
-  align-items: center;
-  padding: 0 10px 0 14px;
   text-align: left !important;
-  overflow: visible;
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .Select-control:hover { border-color: var(--ev-text-muted) !important; }
 
-/* Focus is the one place the accent appears, with a soft ring instead of a
-   heavy border, so the control does not jump in weight when you click it. */
+/* Focus is the only place the accent appears, as a soft ring rather than a
+   heavier border, so the control does not change weight when clicked. */
 .is-focused:not(.is-open) > .Select-control,
 .is-open > .Select-control {
   background-color: var(--ev-bg-deep) !important;
@@ -1057,13 +1058,13 @@ color: var(--ev-bg);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev-accent) 22%, transparent) !important;
 }
 
+/* Value and placeholder are absolutely positioned by react-select; only the
+   line-height needs to follow the taller control so the text sits centred. */
 .Select-placeholder,
 .Select--single > .Select-control .Select-value {
-  display: flex !important;
-  align-items: center;
-  padding-left: 0 !important;
-  padding-right: 30px !important;
-  line-height: normal !important;
+  line-height: 42px !important;
+  padding-left: 14px !important;
+  padding-right: 34px !important;
   text-align: left;
 }
 
@@ -1075,14 +1076,20 @@ color: var(--ev-bg);
   font-weight: 500;
 }
 
-.Select-input { height: 42px; padding-left: 0; }
+/* react-select renders one of these at a time, but a stale placeholder behind
+   a chosen value is exactly the double-text artefact above. Belt and braces. */
+.has-value > .Select-control .Select-placeholder { display: none !important; }
+
+.Select-input { height: 42px; padding-left: 14px; }
 .Select-input > input {
   color: var(--ev-text) !important;
-  line-height: 26px;
-  padding: 8px 0;
+  line-height: 24px;
+  padding: 9px 0;
 }
 .is-focused .Select-input > input { color: var(--ev-text) !important; }
 
+/* Left as a table-cell, which is what makes the chevron appear at all. */
+.Select-arrow-zone { padding-right: 12px; }
 .Select-arrow {
   border-color: var(--ev-text-muted) transparent transparent;
   border-width: 6px 5px 0;
@@ -1092,8 +1099,7 @@ color: var(--ev-bg);
 .Select-clear-zone { color: var(--ev-text-muted); }
 .Select-clear-zone:hover { color: var(--ev-magenta); }
 
-/* The menu is a floating panel, so it gets the panel treatment: its own
-   surface, a real shadow, rounded corners, and room between rows. */
+/* The menu is a floating panel, so it gets the panel treatment. */
 .Select-menu-outer {
   background-color: var(--ev-surface) !important;
   color: var(--ev-text) !important;
@@ -1132,8 +1138,8 @@ color: var(--ev-bg);
   border-radius: 7px !important;
   color: var(--ev-text) !important;
   font-size: 0.86em;
-  line-height: 1.6;
-  margin: 4px 4px 0 0;
+  line-height: 1.6 !important;
+  margin: 6px 4px 0 0;
 }
 .Select--multi .Select-value-icon {
   border-right: 1px solid var(--ev-accent) !important;
@@ -1186,3 +1192,179 @@ color: var(--ev-bg);
 /* The year picker sat flush against the labels above and below it. */
 .year-picker .btn-group { padding: 4px 0; }
 .year-picker .btn-group > .form-check > .btn { padding: 8px 14px; }
+
+/* ==========================================================================
+   Fixes from looking at the rendered page rather than at the markup.
+   ========================================================================== */
+
+/* The toolbar captions sat at three different heights, because the row was
+   bottom-aligned and the three controls are different heights. Align the row
+   to the top and give every caption the same block, so the captions line up
+   and the controls hang from one baseline. */
+.ev-toolbar { align-items: flex-start; }
+.ev-field-label {
+  height: 14px;
+  line-height: 14px;
+  display: block;
+}
+.ev-field { justify-content: flex-start; }
+.ev-toolbar-end { align-self: center; padding-top: 18px; }
+
+/* The dataset toggle was a pair of tiny buttons next to a row of much larger
+   year buttons, so the two controls read as different systems. */
+[id^="careerORSingleYr"] .btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}
+
+/* The active tab was outlined but not filled: the fill rule lost to
+   Bootstrap's own .nav-link.active further up the cascade. Raising it here
+   also drops the coloured top edge on the selected card, which was reading as
+   a second, competing indicator. */
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item .nav-link.active {
+  background-color: var(--tab-accent) !important;
+  border-color: var(--tab-accent) !important;
+  color: #10151D !important;
+}
+
+/* A 2px accent rectangle drawn around the whole tab body. It fought the cards
+   above it and boxed in content that does not need a box. */
+.tab-content {
+  border: none;
+  border-radius: 0;
+  padding-top: 18px;
+}
+
+/* ====== Plotly's own controls ======
+   The play/stop buttons and the animation slider are drawn by Plotly from the
+   figure's ocre, which survived the palette change because they are figure
+   properties rather than CSS. They are SVG, so they can be restyled here with
+   everything else. */
+.js-plotly-plot .updatemenu-button rect,
+.js-plotly-plot .slider-rail-touch-rect,
+.js-plotly-plot .slider-rail-rect {
+  fill: var(--ev-surface-2) !important;
+  stroke: none !important;
+}
+.js-plotly-plot .updatemenu-button:hover rect { fill: var(--ev-accent) !important; }
+.js-plotly-plot .updatemenu-button text,
+.js-plotly-plot .slider-label-text,
+.js-plotly-plot .slider-tick-text {
+  fill: var(--ev-text) !important;
+}
+.js-plotly-plot .slider-grip-rect { fill: var(--ev-accent) !important; }
+.js-plotly-plot .slider-tick-rect { fill: var(--ev-text-muted) !important; }
+
+/* The colourbar frame and its title were drawn against the old ground. */
+.js-plotly-plot .colorbar .cbbg { fill: transparent !important; }
+.js-plotly-plot .colorbar .cbtitle text { fill: var(--ev-text) !important; }
+
+/* ==========================================================================
+   Comparison tabs, third attempt, from looking at them rendered.
+   The card version was wrong: four dark rectangles each capped with a
+   different neon edge read as decoration competing with the content, the
+   rainbow assigned meaning where there is none (these are four views of the
+   same thing, not four categories), and the selected card never actually
+   filled, so the one job the styling had went undone.
+   A segmented control instead: one track, one accent, the selected segment
+   filled. It is the pattern people already read as "pick one of these".
+   ========================================================================== */
+
+.nav-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background-color: var(--ev-bg-deep);
+  border: 1px solid var(--ev-surface-2);
+  border-bottom: 1px solid var(--ev-surface-2);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+
+.nav-tabs .nav-item { display: flex; }
+
+/* Reset everything the card version set, including the per-tab accent. */
+.nav-tabs .nav-link,
+.nav-tabs .nav-item .nav-link {
+  --tab-accent: var(--ev-accent);
+  flex: 0 0 auto;
+  cursor: pointer;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 9px !important;
+  color: var(--ev-text-muted) !important;
+  padding: 9px 18px !important;
+  font-size: 0.92rem;
+  font-weight: 560;
+  line-height: 1.2;
+  text-align: center;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.nav-tabs .nav-link:hover:not(.active),
+.nav-tabs .nav-item .nav-link:hover:not(.active) {
+  background-color: var(--ev-surface-2) !important;
+  color: var(--ev-text) !important;
+}
+
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item .nav-link.active {
+  background-color: var(--ev-accent) !important;
+  color: #10151D !important;
+  font-weight: 680;
+  box-shadow: none !important;
+}
+
+.nav-tabs .nav-link:focus-visible {
+  outline: 2px solid var(--ev-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .nav-tabs { display: flex; width: 100%; }
+  .nav-tabs .nav-item, .nav-tabs .nav-link { flex: 1 1 auto; }
+}
+
+/* ==========================================================================
+   Kill SLATE's gradients.
+   This is why the selected tab stayed grey however hard the rule shouted:
+   getComputedStyle reported the cyan background-color correctly, but
+   Bootstrap SLATE paints a linear-gradient background-IMAGE over buttons,
+   nav links, the navbar and accordion headers, and an image covers a colour.
+   It is also why the controls looked plasticky and dated in general: every
+   one of them carried a 2010-era vertical gradient. Flat everywhere.
+   ========================================================================== */
+.btn,
+.btn:hover,
+.btn:focus,
+.btn:active,
+.btn.active,
+.nav-link,
+.nav-tabs .nav-link,
+.nav-tabs .nav-link.active,
+.navbar,
+.accordion-button,
+.accordion-button:not(.collapsed),
+.card,
+.modal-content,
+.dropdown-menu,
+.form-control,
+.Select-control,
+.Select-menu-outer,
+.list-group-item,
+.page-link {
+  background-image: none !important;
+}
+
+/* SLATE also gives buttons an inset highlight and a text shadow, which read
+   as embossing. Both go with the gradients. */
+.btn, .nav-tabs .nav-link, .accordion-button {
+  text-shadow: none !important;
+}
+.btn:not(.ev-info-btn):not(.ev-nav-btn):not(.ev-nav-search):not(.ev-theme-toggle) {
+  box-shadow: none;
+}

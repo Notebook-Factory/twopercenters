@@ -586,10 +586,13 @@ navigation_row = html.Div(
 tabs = [
     dbc.Tabs(
         [   
+            # "comparison" on three of four labels is the word they have in
+            # common, so it carries no information and only makes the row wide
+            # enough to wrap.
             dbc.Tab(label="Find an author", tab_id="tab-0"),
-            dbc.Tab(label="Author vs author comparison", tab_id="tab-1"),
-            dbc.Tab(label="Author vs group comparison", tab_id="tab-2"),
-            dbc.Tab(label="Group vs group comparison", tab_id="tab-3"),
+            dbc.Tab(label="Author vs author", tab_id="tab-1"),
+            dbc.Tab(label="Author vs group", tab_id="tab-2"),
+            dbc.Tab(label="Group vs group", tab_id="tab-3"),
         ],
         id="tabs",
         active_tab="tab-0",
