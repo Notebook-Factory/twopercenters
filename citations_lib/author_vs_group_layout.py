@@ -112,8 +112,13 @@ def author_vs_group_layout():
 
     # =============== Year
 
-    single_yr_convention = {"2017":0,"2019":1,"2020":2,"2021":3}
-    career_yr_convention = {"2017":0,"2018":1,"2019":2,"2020":3,"2021":4}
+    # year -> radio index, the inverse of yr_convention_map. Derived from the
+    # editions loaded in Postgres, not hardcoded: these used to stop at 2021,
+    # so 2022, 2023 and 2024 raised KeyError.
+    single_yr_convention = {year: int(index) for index, year
+                            in yr_convention_map(False).items()}
+    career_yr_convention = {year: int(index) for index, year
+                            in yr_convention_map(True).items()}
     # def update_yr_options(career):
     #     if career == False: return [{"label": "2017", "value": 0, 'disabled': False}, {"label": "2018", 'disabled': True}, {"label": "2019", "value": 1, 'disabled': False}, 
     #         {"label": "2020", "value": 2, 'disabled': False}, {"label": "2021", "value": 3, 'disabled': False}]

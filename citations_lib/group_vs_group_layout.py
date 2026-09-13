@@ -133,10 +133,10 @@ def group_vs_group_layout():
     def update_group_1_dropdown_values(career, yr, group, group_name):
         if career == None or yr == None or group == None: raise PreventUpdate
         else:
-            if not career:
-                yr_convention_r = {"0":"2017","1":"2019","2":"2020","3":"2021"}
-            else:
-                yr_convention_r = {"0":"2017","1":"2018","2":"2019","3":"2020","4":"2021"}
+            # Derived from the editions loaded in Postgres, not hardcoded:
+            # this map used to stop at index 4 / 2021, so selecting 2022,
+            # 2023 or 2024 raised KeyError.
+            yr_convention_r = yr_convention_map(career)
            
             prefix = 'career' if career else 'singleyr'
             data = get_es_aggregate(group,group_name,prefix)
@@ -195,10 +195,10 @@ def group_vs_group_layout():
         else:
             # if career == True: dfs = dfs_career.copy()
             # else: dfs = dfs_singleyr.copy()
-            if not career:
-                yr_convention_r = {"0":"2017","1":"2019","2":"2020","3":"2021"}
-            else:
-                yr_convention_r = {"0":"2017","1":"2018","2":"2019","3":"2020","4":"2021"}
+            # Derived from the editions loaded in Postgres, not hardcoded:
+            # this map used to stop at index 4 / 2021, so selecting 2022,
+            # 2023 or 2024 raised KeyError.
+            yr_convention_r = yr_convention_map(career)
            
             prefix = 'career' if career else 'singleyr'
             data = get_es_aggregate(group,group_name,prefix)
@@ -274,10 +274,10 @@ def group_vs_group_layout():
         else:
             
             prefix = 'career' if career else 'singleyr'
-            if not career:
-                yr_convention_r = {"0":"2017","1":"2019","2":"2020","3":"2021"}
-            else:
-                yr_convention_r = {"0":"2017","1":"2018","2":"2019","3":"2020","4":"2021"}
+            # Derived from the editions loaded in Postgres, not hardcoded:
+            # this map used to stop at index 4 / 2021, so selecting 2022,
+            # 2023 or 2024 raised KeyError.
+            yr_convention_r = yr_convention_map(career)
             # copy correct dfs (all were loaded at the beginning)
             # if career == True:
             #     dfs = dfs_career.copy()
