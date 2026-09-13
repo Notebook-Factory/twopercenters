@@ -32,7 +32,11 @@ from citations_lib.auth_find import *
 
 
 # =============== Register page
-dash.register_page(__name__, path = '/')
+# name is what dash.page_registry and the nav label show; without it Dash
+# derives it from the module filename, which made this page "Home".
+# title is what the browser tab says.
+dash.register_page(__name__, path='/', name='Twopercenters',
+                   title='Twopercenters')
 SUFFIX = "HOME"
 # FOR TESTING ONLY:
 # layout = html.Div([dbc.Container(fluid = True, children = [dbc.Row(dbc.Col(dbc.Button('Testing ground', href = '/test', target = '_blank'), width = 1))])])

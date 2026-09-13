@@ -336,12 +336,14 @@ def group_vs_group_layout():
             c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(nAuthors1), dbc.Col(nAuthors2)]), dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row(html.Center('Composite score C formula:')), dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
                 r'''
 $$
-C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
+\begin{aligned}
+C_i \;=\;& \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
 \;+\; \frac{\log(H_i)}{\mathrm{maxlog}(H)}
-\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)}
-\;+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
+\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)} \\[4pt]
+&+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
 \;+\; \frac{\log(NCSF_i)}{\mathrm{maxlog}(NCSF)}
 \;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
+\end{aligned}
 $$
 ''', mathjax=True, className='ev-formula'))])
             return(figures, fig_list[6], c_img)

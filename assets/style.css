@@ -707,15 +707,6 @@ color: var(--ev-bg);
 
 /* Below roughly a tablet the equation cannot fit at full size, so scale it
    down rather than clip it. */
-@media (max-width: 1400px) {
-  .ev-formula mjx-container { font-size: 88% !important; }
-}
-@media (max-width: 1100px) {
-  .ev-formula mjx-container { font-size: 74% !important; }
-}
-@media (max-width: 860px) {
-  .ev-formula mjx-container { font-size: 62% !important; }
-}
 
 /* ==========================================================================
    Rebuilt top bar and control toolbar.
@@ -2344,3 +2335,38 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   top: 0;
   z-index: 2;
 }
+
+/* ==========================================================================
+   The composite-score formula
+   It was one long line of six fractions, which needed a horizontal scrollbar
+   on anything narrower than a wide desktop and was shrunk by breakpoints to
+   compensate. It is two aligned lines now, so it fits at full size, and the
+   container scales it down only if it still would not.
+   ========================================================================== */
+.ev-formula {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ev-formula mjx-container {
+  overflow: visible !important;
+  max-width: 100%;
+}
+
+/* MathJax reports its own width, so the last resort is a proportional scale
+   rather than a scrollbar: the formula gets smaller, never clipped. */
+.ev-formula mjx-container[display] {
+  margin: 0 !important;
+  transform-origin: center center;
+}
+
+/* Measured rather than guessed: the two-line formula renders 580px wide at
+   100%, and the column it sits in is about 0.44 of the viewport, so the
+   steps below keep 580 x scale under the column width at each size. At
+   1680px it fits at full size (580 into 757). */
+@media (max-width: 1500px) { .ev-formula mjx-container { font-size: 92% !important; } }
+@media (max-width: 1250px) { .ev-formula mjx-container { font-size: 82% !important; } }
+@media (max-width: 1150px) { .ev-formula mjx-container { font-size: 70% !important; } }
+@media (max-width: 1000px) { .ev-formula mjx-container { font-size: 60% !important; } }
+@media (max-width: 900px)  { .ev-formula mjx-container { font-size: 50% !important; } }
