@@ -264,7 +264,11 @@ def click_on_map_update(val,is_career,yr,sts):
     msg = f'<div class="danger"><center><strong>{txt}</strong><br/><strong>{len(career_all_c)}</strong> researchers from <strong>{len(set(get_all_values_by_key(career_all_c,"INSTITUTE")))}</strong> institutions in <strong>{cntry.upper()}</strong><br/> <u>Click on a cell to display respective summaries</u></center></div>'
     return(self_cit,career_all_c, msg, {'height': '400px', 'overflowY': 'auto','display':'block'},[],None)
 
-df =  get_world_df('2021','median','career') 
+# The map's opening frame. Was pinned to '2021'; it follows the most recent
+# career edition now, so loading a new edition moves it without an edit here.
+_MAP_YEAR_OPTIONS, _MAP_DEFAULT_YEAR = update_yr_options2(True)
+
+df =  get_world_df(_MAP_DEFAULT_YEAR,'median','career') 
 fig = px.choropleth(data_frame=df,
                         locations='code',
                         color='median',
@@ -316,10 +320,16 @@ zort = html.Div([dbc.RadioItems(id='selectYrRadio' + SUFFIX,
                       inputClassName = "btn-check",
                       style = {'size':'sm'},
                       labelClassName = "btn btn-outline-primary",
-                      options = [{"label": "2017", "value": '2017', 'disabled': False}, {"label": "2018", "value": '2018', 'disabled': False}, 
-            {"label": "2019", "value": '2019', 'disabled': False}, {"label": "2020", "value": '2020', 'disabled': False}, {"label": "2021", "value": '2021', 'disabled': False}],value='2021')], className = "radio-group")
+                      # These were hardcoded 2017-2021. The callback below
+                      # rebuilds them from the editions table, but it is
+                      # prevent_initial_call=True and only fires when the
+                      # career/single-year toggle changes, so on first load
+                      # the map showed the stale list and stopped at 2021.
+                      # Seeding from the same helper fixes the initial render.
+                      options = _MAP_YEAR_OPTIONS,
+                      value = _MAP_DEFAULT_YEAR)], className = "radio-group")
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
-explain  =  '''
+explain  =  f'''
                     <h3 style='color:#ECAB4C;'> Bird's eye view of the top 2% </h3>
 
                     ---
@@ -330,12 +340,12 @@ explain  =  '''
                     #### Global distribution of performance metrics
 
                     Currently, the world map on the left illustrates the distribution of `median` `H-Index` across countries, derived from the academic performance of the top 2% 
-                    researchers throughout their career span (referred to as `Career` data) up to the year `2021`.
+                    researchers throughout their career span (referred to as `Career` data) up to the year `{_MAP_DEFAULT_YEAR}`.
                     
                     <div class="danger">
                     <details>
                     <summary>❓ <strong>Career vs single-year</strong></summary>
-                    <p>The Elsevier database includes <strong>career-long</strong> and <strong>single-year</strong> records per researcher. For instance, the <strong>career & 2021</strong> selection for H-index shows the score
+                    <p>The Elsevier database includes <strong>career-long</strong> and <strong>single-year</strong> records per researcher. For instance, the <strong>career &amp; {_MAP_DEFAULT_YEAR}</strong> selection for H-index shows the score
                     a researcher accumulated up to 2021, while the <strong>single-year & 2021</strong> displays H-index obtained in that year only.</p>
                     </details>
                     </div>
