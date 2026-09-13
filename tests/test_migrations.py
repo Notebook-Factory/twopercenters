@@ -3,15 +3,27 @@ import psycopg
 import pytest
 from db.migrate import apply_all
 
+from conftest import assert_distinct_urls
+
 DSN = os.environ["DATABASE_URL"]
+TEST_DSN = os.environ["TEST_DATABASE_URL"]
 
 
 @pytest.fixture
 def conn():
-    with psycopg.connect(DSN) as c:
+    assert_distinct_urls(TEST_DSN, DSN)
+    with psycopg.connect(TEST_DSN) as c:
         c.execute("drop schema public cascade; create schema public;")
         c.commit()
         yield c
+
+
+def test_conn_fixture_refuses_to_drop_the_development_database():
+    # R23: the fixture drops and recreates the public schema, so it must
+    # refuse outright if TEST_DATABASE_URL and DATABASE_URL ever collapse to
+    # the same database.
+    with pytest.raises(AssertionError, match="TEST_DATABASE_URL must not equal DATABASE_URL"):
+        assert_distinct_urls(DSN, DSN)
 
 
 def test_apply_all_creates_tables_and_is_idempotent(conn):

@@ -823,6 +823,31 @@ def export_parquet(conn, out_dir="data_parquet"):
 # top level
 # --------------------------------------------------------------------------
 
+def refresh_group_metrics(conn):
+    """Refresh the group_metrics materialized view (RULING R24).
+
+    A materialized view does not update itself as its underlying tables
+    change, and `pg_matviews.ispopulated` stays true even when the view holds
+    zero rows -- it only tracks whether a refresh has ever completed, not
+    whether the data is current. So this is a required, not optional, step of
+    a full build: skipping it leaves group_metrics silently stale.
+
+    Migrations may run in an order where group_metrics has not been created
+    yet, so this is a guarded no-op rather than an error in that case.
+    """
+    exists = conn.execute(
+        "select 1 from pg_matviews where schemaname = 'public' "
+        "and matviewname = 'group_metrics'"
+    ).fetchone()
+    if not exists:
+        print("group_metrics does not exist yet; skipping refresh", flush=True)
+        return
+    started = time.time()
+    conn.execute("refresh materialized view group_metrics")
+    conn.commit()
+    print(f"refreshed group_metrics in {time.time() - started:.1f}s", flush=True)
+
+
 def build(conn, root="data_clean", out_dir="data_parquet"):
     """Load every edition under `root` in ascending data-year order.
 
@@ -844,6 +869,7 @@ def build(conn, root="data_clean", out_dir="data_parquet"):
               f"{time.time() - started:7.1f}s", flush=True)
     for target, rows in export_parquet(conn, out_dir):
         print(f"wrote {target} ({rows:,} rows)", flush=True)
+    refresh_group_metrics(conn)
     return counts
 
 

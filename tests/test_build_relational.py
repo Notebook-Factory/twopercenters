@@ -5,14 +5,18 @@ import psycopg
 import pytest
 
 from db.migrate import apply_all
-from pipeline.build_relational import load_edition
+from pipeline.build_relational import build, load_edition, refresh_group_metrics
+
+from conftest import assert_distinct_urls
 
 DSN = os.environ["DATABASE_URL"]
+TEST_DSN = os.environ["TEST_DATABASE_URL"]
 
 
 @pytest.fixture
 def conn():
-    with psycopg.connect(DSN) as c:
+    assert_distinct_urls(TEST_DSN, DSN)
+    with psycopg.connect(TEST_DSN) as c:
         c.execute("drop schema public cascade; create schema public;")
         c.commit()
         apply_all(c, "db/migrations")
@@ -166,3 +170,30 @@ def test_career_2018_may_follow_singleyr_2017_because_the_check_is_per_kind(conn
     kinds = dict(conn.execute(
         "select kind, max(data_year) from editions group by 1").fetchall())
     assert kinds == {"career": 2018, "singleyr": 2017}
+
+
+def test_refresh_group_metrics_populates_the_view(conn):
+    # R24: group_metrics is a materialized view, so it stays at whatever it
+    # held when it was last refreshed -- ispopulated does not mean non-empty.
+    load_edition(conn, "data_clean/version-8", kind="career")
+    refresh_group_metrics(conn)
+    rows = conn.execute("select count(*) from group_metrics").fetchone()[0]
+    assert rows > 0
+
+
+def test_refresh_group_metrics_is_a_no_op_if_the_view_does_not_exist_yet(conn):
+    conn.execute("drop materialized view group_metrics")
+    conn.commit()
+    refresh_group_metrics(conn)  # must not raise
+
+
+def test_build_refreshes_group_metrics_as_its_final_step(conn, tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "pipeline.build_relational.refresh_group_metrics",
+        lambda c: calls.append(c),
+    )
+    empty_root = tmp_path / "data_clean"
+    empty_root.mkdir()
+    build(conn, root=str(empty_root), out_dir=str(tmp_path / "data_parquet"))
+    assert calls == [conn]
