@@ -29,14 +29,36 @@
 
   document.addEventListener('keydown', onKeyDown);
 
-  // Focus the field when the overlay appears. The modal mounts asynchronously,
-  // so this watches for it rather than assuming it is already in the DOM.
+  // Focus the field the moment the overlay appears, so you can type straight
+  // away. The modal mounts asynchronously and Bootstrap animates it in, so a
+  // single focus() on open lands before the element is focusable. This retries
+  // briefly instead, and stops as soon as the field has focus.
+  function focusSearch() {
+    var modal = document.getElementById('spotlight');
+    if (!modal || !modal.classList.contains('show')) { return false; }
+    var input = document.getElementById('spotlight-input');
+    if (!input) { return false; }
+    if (document.activeElement === input) { return true; }
+    input.focus();
+    // Put the caret after any existing text rather than selecting it.
+    var len = (input.value || '').length;
+    try { input.setSelectionRange(len, len); } catch (e) {}
+    return document.activeElement === input;
+  }
+
+  var wasOpen = false;
   var observer = new MutationObserver(function () {
     var modal = document.getElementById('spotlight');
-    if (modal && modal.classList.contains('show')) {
-      var input = modal.querySelector('input');
-      if (input && document.activeElement !== input) { input.focus(); }
+    var open = !!(modal && modal.classList.contains('show'));
+
+    if (open && !wasOpen) {
+      // Opened just now: try until it takes, for at most ~600ms.
+      var tries = 0;
+      var timer = setInterval(function () {
+        if (focusSearch() || ++tries > 12) { clearInterval(timer); }
+      }, 50);
     }
+    wasOpen = open;
   });
   observer.observe(document.body, {childList: true, subtree: true,
                                    attributes: true, attributeFilter: ['class']});

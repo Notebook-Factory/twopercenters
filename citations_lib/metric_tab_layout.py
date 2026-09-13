@@ -55,8 +55,9 @@ def get_metric_tab_layout(): # DEFAULT_CAREER = None, DEFAULT_YR = None
     theme =  {'dark': True,'detail': lightAccent1,'primary': darkAccent1,'secondary': lightAccent1}
     g1c = [highlight1,highlight1, darkAccent2, darkAccent2] # bar plot bars 1 & 2
     g2c = [highlight2, highlight2] # bar plot bar 3
-    bgc = darkAccent1 # bar plot background
-
+    # Transparent, not a colour: the page's own background shows through,
+    # so a chart follows the light/dark switch without being redrawn.
+    bgc = 'rgba(0,0,0,0)' # chart background: inherit the page
     #dfs_career, dfs_singleyr, dfs_career_log, dfs_singleyr_log, _, _, _, _ = load_standardized_data()
     dropdown_opts = dict()
     # for i in range(5):
@@ -73,7 +74,7 @@ def get_metric_tab_layout(): # DEFAULT_CAREER = None, DEFAULT_YR = None
     # ============================================= 
 
     # =============== Card: 'Select dataset'
-    selectStep1 = dbc.Card(dbc.CardBody(html.Center("Select dataset", style = {'color':darkAccent3, 'font-size':20})),color = darkAccent2)
+    selectStep1 = dbc.Card(dbc.CardBody(html.Center("Select dataset", style = {'color':'var(--ev-text)', 'font-size':20})),color = darkAccent2)
 
     # =============== Career vs Singleyr
     careerORSingleYr = html.Div([
@@ -135,7 +136,7 @@ def get_metric_tab_layout(): # DEFAULT_CAREER = None, DEFAULT_YR = None
 
     # =============== Figure titles
    # figTitle1 = html.Div(' ', id = CURR_METRIC + 'figTitleCard1', style = {'color':lightAccent1, 'font-size':25})
-    figTitle2 = html.Div(' ', id = CURR_METRIC + 'figTitleCard2', style = {'color':lightAccent1, 'font-size':25})
+    figTitle2 = html.Div(' ', id = CURR_METRIC + 'figTitleCard2', style = {'color':'var(--ev-accent)', 'font-size':25})
     #figTitle3 = html.Div(' ', id = CURR_METRIC + 'figTitleCard3', style = {'color':lightAccent1, 'font-size':25})
 
     # =============== Figure 1: violin plots by field
@@ -315,6 +316,6 @@ def get_metric_tab_layout(): # DEFAULT_CAREER = None, DEFAULT_YR = None
             dbc.Row(html.Br()),dbc.Row(html.Hr()), row2,
             #dbc.Row(html.Br()),dbc.Row(html.Hr()), row3,
             dbc.Row(html.Br())
-        ], style = {'backgroundColor':darkAccent1}),
+        ], className = 'ev-page'),
         # dbc.Tooltip("Options selected in this row determine what dataset metrics are obtained from.", target = "selectStep1Card",placement = "right"), dbc.Tooltip("Exclude or include author self citations.", target = "selfCToggle",placement = "right"), dbc.Tooltip("Author metrics from entire career-span ('Career') or just from year of interest ('Single year').", target = "careerORSingleYrRadio",placement = "right"), dbc.Tooltip("Note: single year data not available for 2018.", target = "selectYrRadioRadio",placement = "right")
     ]))

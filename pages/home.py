@@ -15,7 +15,7 @@ import plotly.express as px
 # =============== Plotly Dash libraries
 import dash
 from dash import html, dcc, callback, dash_table, callback_context #, Input, Output
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output, State, ALL
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import dash_daq as daq
@@ -53,7 +53,9 @@ theme =  {'dark': True, 'detail': lightAccent1, 'primary': darkAccent1, 'seconda
 
 g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
 g2c = [highlight2, darkAccent3] # bar plot bar 3
-bgc = darkAccent1 # bar plot background
+# Transparent, not a colour: the page's own background shows through, so
+# a chart follows the light/dark switch without being redrawn.
+bgc = 'rgba(0,0,0,0)' # chart background: inherit the page
 
 tbl  = dash_table.DataTable(
     id = 'instnametable',
@@ -154,11 +156,11 @@ compare_row = html.Div([
             style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
             n_clicks = 0, color = darkAccent1))], width = 3),
     ], justify="center"),
-    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [author_vs_author_layout()], style = {'backgroundColor':darkAccent1}), 
+    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [author_vs_author_layout()], className = 'ev-page'), 
         id = "collapse_author_vs_author", is_open = False))], className="mt-3"),
-    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [author_vs_group_layout()], style = {'backgroundColor':darkAccent1}), 
+    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [author_vs_group_layout()], className = 'ev-page'), 
          id = "collapse_author_vs_group", is_open = False))], className="mt-3"),
-    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [group_vs_group_layout(),author_find_layout()], style = {'backgroundColor':darkAccent1}), 
+    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [group_vs_group_layout(),author_find_layout()], className = 'ev-page'), 
         id = "collapse_group_vs_group", is_open = False))], className="mt-3")
     ])
 
@@ -527,14 +529,14 @@ def jump_to_section(_compare, _trends):
     raise PreventUpdate
 
 
-info_button = dbc.Button("ℹ️ MORE INFO", id='off',  n_clicks=0,
-                    className='lel2')
+info_button = dbc.Button("More info", id='off', n_clicks=0,
+                    className='ev-info-btn')
 
 row1 = dbc.Row([
             dbc.Col(html.Center(careerORSingleYr), width = 2), 
             dbc.Col(html.Center(zort), width = 4),
             dbc.Col(html.Center(zortt),width = 2),
-            dbc.Col(info_button,width='auto')
+            dbc.Col(info_button, width='auto', className='d-flex align-items-center')
             # dbc.Col(dcc.Markdown(id='cntrylabel',children="`No country selected`",dangerously_allow_html = True),width=4)
             ],justify="start",align="center",style={'margin-top':'10px'})
 
@@ -645,15 +647,28 @@ spotlight = dbc.Modal(
     [
         dbc.ModalBody(
             [
-                dcc.Dropdown(
+                # A plain text input, not a dcc.Dropdown. The dropdown could
+                # not be focused reliably on open (its real <input> is nested
+                # and remounts as options arrive), and it draws a form control
+                # where Spotlight draws a bare line of text. This is one big
+                # borderless field plus a result list underneath, which is the
+                # shape people already know.
+                dcc.Input(
                     id="spotlight-input",
-                    options=[],
-                    placeholder="Search researchers by name…",
-                    searchable=True,
+                    type="text",
+                    value="",
+                    placeholder="Search researchers…",
+                    autoComplete="off",
+                    debounce=False,
                     className="ev-spotlight-input",
                 ),
+                html.Div(id="spotlight-results",
+                         className="ev-spotlight-results"),
                 html.Div(
-                    "Type a name. Misspellings are fine.",
+                    [
+                        html.Span("Fuzzy search: misspellings are fine."),
+                        html.Span("esc to close", className="ev-spotlight-esc"),
+                    ],
                     className="ev-spotlight-hint",
                 ),
             ],
@@ -668,33 +683,48 @@ spotlight = dbc.Modal(
     backdrop=True,
 )
 
+# How many names the overlay offers. Spotlight-style lists are short on
+# purpose: a long list is a second search problem.
+SPOTLIGHT_LIMIT = 8
+
 
 @callback(
-    Output("spotlight-input", "options"),
-    Input("spotlight-input", "search_value"),
+    Output("spotlight-results", "children"),
+    Input("spotlight-input", "value"),
 )
-def spotlight_options(search_value):
-    """Same fuzzy author search the in-tab dropdown runs."""
-    if not search_value:
-        raise PreventUpdate
-    return es_result_pick(
-        get_es_results(search_value, ['career', 'singleyr'], 'authfull'),
-        'authfull')
+def spotlight_results(term):
+    """The same fuzzy search the in-tab dropdown runs, as a clickable list."""
+    if not term or len(term) < 2:
+        return []
+    names = es_result_pick(
+        get_es_results(term, ['career', 'singleyr'], 'authfull'), 'authfull')
+    if not names:
+        return html.Div("No researcher by that name.",
+                        className="ev-spotlight-empty")
+    return [
+        html.Button(
+            name,
+            id={"type": "spotlight-hit", "index": i},
+            className="ev-spotlight-hit",
+            n_clicks=0,
+        )
+        for i, name in enumerate(names[:SPOTLIGHT_LIMIT])
+    ]
 
 
 @callback(
     Output("spotlight", "is_open"),
     Input("spotlight-open", "n_clicks"),
-    Input("spotlight-input", "value"),
+    Input({"type": "spotlight-hit", "index": ALL}, "n_clicks"),
     State("spotlight", "is_open"),
     prevent_initial_call=True,
 )
-def toggle_spotlight(_clicks, chosen, is_open):
-    """Open on the navbar button, close once a name has been chosen."""
+def toggle_spotlight(_clicks, hits, is_open):
+    """Open on the navbar button, close once a result has been clicked."""
     triggered = callback_context.triggered_id
     if triggered == "spotlight-open":
         return not is_open
-    if triggered == "spotlight-input" and chosen:
+    if isinstance(triggered, dict) and any(hits or []):
         return False
     raise PreventUpdate
 
@@ -703,17 +733,24 @@ def toggle_spotlight(_clicks, chosen, is_open):
     Output("accordion", "active_item", allow_duplicate=True),
     Output("tabs", "active_tab"),
     Output("spotlight-selection", "data"),
-    Input("spotlight-input", "value"),
+    Input({"type": "spotlight-hit", "index": ALL}, "n_clicks"),
+    State("spotlight-results", "children"),
     prevent_initial_call=True,
 )
-def spotlight_pick(chosen):
-    """Open "Find an author" on the name the user just picked.
+def spotlight_pick(hits, rendered):
+    """Open "Find an author" on the name that was clicked.
 
-    Three outputs rather than one: the section has to be open, the right tab
-    has to be selected inside it, and the name has to reach the tab's layout,
-    which switch_tab builds from the store above.
+    The name is read back out of the rendered button rather than kept in a
+    parallel list, so the label the user clicked and the name that is opened
+    cannot disagree.
     """
-    if not chosen:
+    triggered = callback_context.triggered_id
+    if not isinstance(triggered, dict) or not any(hits or []):
+        raise PreventUpdate
+    index = triggered["index"]
+    try:
+        chosen = rendered[index]["props"]["children"]
+    except (TypeError, IndexError, KeyError):
         raise PreventUpdate
     return ACCORDION_SECTIONS[0][0], "tab-0", chosen
 
@@ -771,7 +808,7 @@ layout = dbc.Container(fluid = True, children = [
         html.Hr(),
         dbc.Row(accordion),
         footer
-        ], style = {'backgroundColor':darkAccent1})
+        ], className = 'ev-page')
     # dbc.Tooltip("Options selected in this row determine what dataset NC metrics are obtained from.", target = "selectStep1Card", placement = "right"), 
     # dbc.Tooltip("Exclude or include author self citations.", target = "selfCToggle", placement = "right"), 
     # dbc.Tooltip("Author metrics from entire career-span ('Career') or just from year of interest ('Single year').", target = "careerSingleYrRadio", placement = "right"), 

@@ -156,7 +156,9 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
 
     g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
     g2c = [highlight2, darkAccent3] # bar plot bar 3
-    bgc = darkAccent1 # bar plot background
+    # Transparent, not a colour: the page's own background shows through,
+    # so a chart follows the light/dark switch without being redrawn.
+    bgc = 'rgba(0,0,0,0)' # chart background: inherit the page
     SUFFIX = '_author_find_'
 
     # ========================================================================================== 
@@ -166,7 +168,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # ========================================================================================== 
 
     # =============== Select dataset!
-    selectStep1 = dbc.Card(dbc.CardBody(html.Center("Select dataset", style = {'color':darkAccent3, 'font-size':20})),color = darkAccent2)
+    selectStep1 = dbc.Card(dbc.CardBody(html.Center("Select dataset", style = {'color':'var(--ev-text)', 'font-size':20})),color = darkAccent2)
 
     # =============== Career vs Singleyr
     careerORSingleYr = html.Div([
@@ -685,5 +687,5 @@ $$
             html.Br(),
             row2, 
             dls.GridFade(row3,color="#ECAB4C"), 
-        ], style = {'backgroundColor':darkAccent1}), 
+        ], className = 'ev-page'), 
     ]))

@@ -84,7 +84,9 @@ def single_author_layout():
 
     g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
     g2c = [highlight2, darkAccent3] # bar plot bar 3
-    bgc = darkAccent1 # bar plot background
+    # Transparent, not a colour: the page's own background shows through,
+    # so a chart follows the light/dark switch without being redrawn.
+    bgc = 'rgba(0,0,0,0)' # chart background: inherit the page
     SUFFIX = '_single_author'
 
     # =============== Empty fig
@@ -190,5 +192,5 @@ def single_author_layout():
             html.Label(id='tmpLabel',children=""),
             row1, html.Hr(), 
             row2, html.Br(), 
-        ], style = {'backgroundColor':darkAccent1}), 
+        ], className = 'ev-page'), 
     ]))
