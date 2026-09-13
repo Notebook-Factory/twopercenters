@@ -513,8 +513,7 @@ dede = dbc.Navbar(
                                id="jump-trends", className="ev-nav-btn",
                                n_clicks=0),
                     html.Span(className="ev-nav-sep"),
-                    dbc.Button(html.I(**{"data-lucide": "sun-moon"}),
-                               id="theme-toggle", n_clicks=0,
+                    dbc.Button(id="theme-toggle", n_clicks=0,
                                className="ev-theme-toggle",
                                title="Switch between dark and light"),
                 ],
@@ -700,9 +699,22 @@ footer = html.Footer(
         html.Div(
             [
                 html.A(
-                    html.Img(src="/assets/evidence-mark.svg",
-                             className="ev-foot-mark", alt="Evidence"),
+                    [
+                        # Two files rather than a CSS filter: the mark's body
+                        # is one class in the SVG (#394459, the same navy as
+                        # the dark page), and a light page needs that piece
+                        # white while the coloured leaves stay as they are. A
+                        # filter cannot single it out. CSS shows one or the
+                        # other per theme.
+                        html.Img(src="/assets/evidence-mark.svg",
+                                 className="ev-foot-mark ev-only-dark",
+                                 alt="Evidence"),
+                        html.Img(src="/assets/evidence-mark-light.svg",
+                                 className="ev-foot-mark ev-only-light",
+                                 alt="Evidence"),
+                    ],
                     href="https://evidencepub.io", target="_blank",
+                    className="ev-foot-brand",
                 ),
                 html.Div(
                     [
@@ -869,31 +881,20 @@ def spotlight_pick(hits, rendered):
 dash.clientside_callback(
     """
     function (n) {
+        if (!n) { return window.dash_clientside.no_update; }
         var root = document.documentElement;
-        if (n) {
-            var next = root.dataset.theme === 'light' ? 'dark' : 'light';
-            root.dataset.theme = next;
-            try { window.localStorage.setItem('ev-theme', next); } catch (e) {}
-        }
-        // The button holds a Lucide icon, so the glyph is swapped on the
-        // element rather than returned as children: returning a string here
-        // would replace the icon with a character.
-        var button = document.getElementById('theme-toggle');
-        if (button) {
-            var icon = button.querySelector('[data-lucide], svg');
-            var name = root.dataset.theme === 'light' ? 'moon' : 'sun';
-            if (icon) {
-                var fresh = document.createElement('i');
-                fresh.setAttribute('data-lucide', name);
-                icon.replaceWith(fresh);
-                if (window.lucide) { window.lucide.createIcons(); }
-            }
-        }
+        var next = root.dataset.theme === 'light' ? 'dark' : 'light';
+        root.dataset.theme = next;
+        try { window.localStorage.setItem('ev-theme', next); } catch (e) {}
+        // Nothing is written back into the button. Its icon is drawn by CSS
+        // from data-theme, so there is no DOM for this callback to fight
+        // with, which is what made the toggle need several clicks before.
         return window.dash_clientside.no_update;
     }
     """,
     Output("theme-toggle", "title"),
     Input("theme-toggle", "n_clicks"),
+    prevent_initial_call=True,
 )
 
 
