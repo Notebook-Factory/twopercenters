@@ -377,7 +377,17 @@ def author_vs_group_layout():
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[0]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[1]))], width = 2),
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[2]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[3]))], width = 2),
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[4]))], width = 2), dbc.Col([html.Center(dcc.Graph(figure = fig_list[5]))], width = 2)]),
-            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(authorRank), dbc.Col(nAuthors2)]), dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row(html.Center('Composite score C formula:')), dbc.Row(html.Br()), dbc.Row(html.Img(src = 'assets/c_formula.png', style = {'width':1000}))])
+            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row([dbc.Col(authorRank), dbc.Col(nAuthors2)]), dbc.Row(html.Br()), dbc.Row(html.Br()), dbc.Row(html.Center('Composite score C formula:')), dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
+                r'''
+$$
+C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
+\;+\; \frac{\log(H_i)}{\mathrm{maxlog}(H)}
+\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)}
+\;+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
+\;+\; \frac{\log(NCSF_i)}{\mathrm{maxlog}(NCSF)}
+\;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
+$$
+''', mathjax=True, className='ev-formula'))])
             return(figures, fig_list[6], c_img)
 
     def main_author_group_figs(df1_in, df1_in_log, df2_in, df2_in_log, group1_name, group2, group2_name, ns, logTransf, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue']):

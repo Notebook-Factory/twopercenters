@@ -487,6 +487,9 @@ dede = dbc.Navbar(
                 [
                     dbc.Button("Search", id="spotlight-open",
                                className="ev-nav-search", n_clicks=0),
+                    dbc.Button("◑", id="theme-toggle", n_clicks=0,
+                               className="ev-theme-toggle",
+                               title="Switch between dark and light"),
                     dbc.Button("Compare", id="jump-compare",
                                className="ev-nav-btn", n_clicks=0),
                     dbc.Button("Trends", id="jump-trends",
@@ -553,8 +556,9 @@ tabs = [
     html.Div(id="content"),
 ]
 
-@callback(Output("content", "children"), [Input("tabs", "active_tab")])
-def switch_tab(at):
+@callback(Output("content", "children"), [Input("tabs", "active_tab")],
+          State("spotlight-selection", "data"))
+def switch_tab(at, picked):
     if at == "tab-1":
         return html.Center(author_vs_author_layout())
     elif at == "tab-2":
@@ -562,7 +566,11 @@ def switch_tab(at):
     elif at == "tab-3":
         return html.Center(group_vs_group_layout())
     elif at == 'tab-0':
-        return html.Center(author_find_layout())
+        # The tab is built on demand, so a name chosen in the spotlight is
+        # handed over by seeding the layout rather than by a callback writing
+        # into a dropdown that does not exist until this returns.
+        return html.Center(author_find_layout(picked)
+                           if picked else author_find_layout())
     return html.P("This shouldn't ever be displayed...")
 
 
@@ -693,26 +701,70 @@ def toggle_spotlight(_clicks, chosen, is_open):
 
 @callback(
     Output("accordion", "active_item", allow_duplicate=True),
-    Output("authorOptionsDropdown_single_author", "value"),
+    Output("tabs", "active_tab"),
+    Output("spotlight-selection", "data"),
     Input("spotlight-input", "value"),
     prevent_initial_call=True,
 )
 def spotlight_pick(chosen):
-    """Send the chosen author to the trends section and open it.
+    """Open "Find an author" on the name the user just picked.
 
-    The target is single_author_layout's own dropdown
-    ("authorOptionsDropdown" + SUFFIX, SUFFIX = "_single_author"), so setting
-    its value drives every callback that section already has.
+    Three outputs rather than one: the section has to be open, the right tab
+    has to be selected inside it, and the name has to reach the tab's layout,
+    which switch_tab builds from the store above.
     """
     if not chosen:
         raise PreventUpdate
-    return ACCORDION_SECTIONS[1][0], chosen
+    return ACCORDION_SECTIONS[0][0], "tab-0", chosen
+
+
+# The theme switch is clientside for two reasons: it must not wait on a server
+# round trip to repaint, and the choice has to survive a reload, which means
+# localStorage rather than Dash state. It sets data-theme on <html>; style.css
+# defines the light palette against that attribute, so nothing else changes.
+dash.clientside_callback(
+    """
+    function (n) {
+        var root = document.documentElement;
+        if (n) {
+            var next = root.dataset.theme === 'light' ? 'dark' : 'light';
+            root.dataset.theme = next;
+            try { window.localStorage.setItem('ev-theme', next); } catch (e) {}
+        }
+        return root.dataset.theme === 'light' ? '◐' : '◑';
+    }
+    """,
+    Output("theme-toggle", "children"),
+    Input("theme-toggle", "n_clicks"),
+)
+
+
+# Scrolling is the other half of "bring it into scope": opening a section
+# below the fold changes nothing the user can see. Dash cannot scroll, so this
+# runs in the browser, after the section has had a moment to expand.
+dash.clientside_callback(
+    """
+    function (compareClicks, trendsClicks, picked) {
+        setTimeout(function () {
+            var el = document.getElementById('accordion-anchor');
+            if (el) { el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
+        }, 250);
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("spotlight-hotkey", "data"),
+    Input("jump-compare", "n_clicks"),
+    Input("jump-trends", "n_clicks"),
+    Input("spotlight-selection", "data"),
+    prevent_initial_call=True,
+)
 
 
 layout = dbc.Container(fluid = True, children = [
         offcanvas,
         spotlight,
         dcc.Store(id="spotlight-hotkey"),
+        dcc.Store(id="spotlight-selection"),
         dede,
         html.Div(navigation_row),
         html.Br(),

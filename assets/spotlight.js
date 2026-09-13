@@ -41,3 +41,13 @@
   observer.observe(document.body, {childList: true, subtree: true,
                                    attributes: true, attributeFilter: ['class']});
 })();
+
+// Restore the saved theme before first paint so a light-theme user does not
+// get a dark flash on every load. The toggle itself lives in a Dash
+// clientside callback; this only replays the remembered choice.
+(function () {
+  try {
+    var saved = window.localStorage.getItem('ev-theme');
+    if (saved) { document.documentElement.dataset.theme = saved; }
+  } catch (e) { /* private mode: fall through to the dark default */ }
+})();

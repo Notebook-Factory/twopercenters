@@ -116,7 +116,15 @@ page_size = 8000
 # END: RUN ONLY ON DATA CHANGE ------------------------------------------------
 
 
-def author_find_layout():
+def author_find_layout(default_author='Ioannidis, John P.A.'):
+    """The "Find an author" tab.
+
+    default_author lets the spotlight search open this tab on the name the
+    user just picked. The tab's content is built on demand by home.py's
+    switch_tab callback, so the dropdown does not exist until the tab is
+    shown; seeding it at build time is what makes the hand-off work without
+    a callback writing into a component that may not be mounted.
+    """
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -233,7 +241,7 @@ def author_find_layout():
     # ========================================================================================== 
 
     author1Options = dcc.Dropdown(options = [], placeholder = 'Author 1: Start typing name and surname', multi = False, id = "author1OptionsDropdown" + SUFFIX, 
-        value = 'Ioannidis, John P.A.', searchable = True)
+        value = default_author, searchable = True)
     generate_es_dropdown_callback("author1OptionsDropdown" + SUFFIX)
     generate_update_carsing_callback('author1OptionsDropdown' + SUFFIX, 'careerORSingleYrA1' + SUFFIX)
     generate_update_years_callback('careerORSingleYrA1' + SUFFIX, 'selectYrRadioA1' + SUFFIX, 'author1OptionsDropdown' + SUFFIX)
@@ -369,7 +377,17 @@ def author_find_layout():
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[3]))], width = 4), dbc.Col([html.Center(dcc.Graph(figure = fig_list[4]))], width = 4),
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[5]))], width = 4)],justify='around')
                 ])
-            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1),dbc.Col(html.Div([dcc.Markdown(auth_info)],style={'text-align':'left','color':'lightseagreen'}))]), dbc.Row(html.Br()), dbc.Row(html.Img(src = 'assets/c_formula.png', style = {'width':1000}))])
+            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1),dbc.Col(html.Div([dcc.Markdown(auth_info)],style={'text-align':'left','color':'lightseagreen'}))]), dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
+                r'''
+$$
+C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
+\;+\; \frac{\log(H_i)}{\mathrm{maxlog}(H)}
+\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)}
+\;+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
+\;+\; \frac{\log(NCSF_i)}{\mathrm{maxlog}(NCSF)}
+\;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
+$$
+''', mathjax=True, className='ev-formula'))])
             return(figures, fig_list[6], c_img)
 
     def main_1_author_figs(df_in, df_in_log, group1_name, ns, logTransf, max_metrics, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue'], author1_metrics = {}, author2_metrics = {}, weights = [1, 1, 1, 1, 1, 1]):
