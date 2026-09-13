@@ -449,58 +449,53 @@ EVIDENCE_URL = "https://evidencepub.io"
 # rather than being spread apart by justify='around' inside a container that
 # CSS was squeezing into the left third of the bar. dark=True so Bootstrap
 # picks light foreground colours to go with the dark ground set in style.css.
+# One row, three groups, one height. The previous version stacked a wordmark
+# over an attribution line inside a Bootstrap grid Row, which made the bar tall
+# and ragged and left the right-hand buttons floating against nothing. Here the
+# brand is a fixed-height lockup, the actions are a single flex group, and
+# every control in the bar is 36px so they share a baseline.
 dede = dbc.Navbar(
     dbc.Container(
         [
-            # Brand lockup: mark, wordmark, attribution. One anchor, so the
-            # whole thing is a single target back to the top.
             html.A(
-                dbc.Row(
-                    [
-                        dbc.Col(html.Img(src=EVIDENCE_LOGO, height="36px"),
-                                width="auto"),
-                        dbc.Col(
-                            [
-                                html.Div("Twopercenters", className="ev-wordmark"),
-                                html.Div(
-                                    [
-                                        "developed and hosted by ",
-                                        html.A("Evidence", href=EVIDENCE_URL,
-                                               target="_blank",
-                                               className="ev-attrib-link"),
-                                    ],
-                                    className="ev-attrib",
-                                ),
-                            ],
-                            width="auto",
-                        ),
-                    ],
-                    align="center",
-                    className="g-2 flex-nowrap",
-                ),
+                [
+                    html.Img(src=EVIDENCE_LOGO, className="ev-mark"),
+                    html.Div(
+                        [
+                            html.Span("Twopercenters", className="ev-wordmark"),
+                            html.Span("Top 2% most-cited researchers",
+                                      className="ev-tagline"),
+                        ],
+                        className="ev-brand-text",
+                    ),
+                ],
                 href="/",
                 className="ev-brand",
             ),
-            # Right side: one button per collapsible section below, plus the
-            # search. These exist because the sections were being missed: the
-            # accordion headers were the only way in, and people did not read
-            # them as controls.
             html.Div(
                 [
-                    dbc.Button("Search", id="spotlight-open",
-                               className="ev-nav-search", n_clicks=0),
-                    dbc.Button("◑", id="theme-toggle", n_clicks=0,
-                               className="ev-theme-toggle",
-                               title="Switch between dark and light"),
+                    dbc.Button(
+                        [html.Span("Search researchers",
+                                   className="ev-search-label"),
+                         html.Kbd("⌘K", className="ev-kbd")],
+                        id="spotlight-open", className="ev-nav-search",
+                        n_clicks=0),
+                    html.Span(className="ev-nav-sep"),
                     dbc.Button("Compare", id="jump-compare",
                                className="ev-nav-btn", n_clicks=0),
                     dbc.Button("Trends", id="jump-trends",
                                className="ev-nav-btn", n_clicks=0),
+                    html.Span(className="ev-nav-sep"),
+                    dbc.Button("◑", id="theme-toggle", n_clicks=0,
+                               className="ev-theme-toggle",
+                               title="Switch between dark and light"),
+                    html.A("Evidence", href=EVIDENCE_URL, target="_blank",
+                           className="ev-by"),
                 ],
                 className="ev-nav-actions",
             ),
         ],
-        className="d-flex justify-content-between align-items-center",
+        className="ev-navbar-inner",
         fluid=True,
     ),
     dark=True,
@@ -532,17 +527,48 @@ def jump_to_section(_compare, _trends):
 info_button = dbc.Button("More info", id='off', n_clicks=0,
                     className='ev-info-btn')
 
-row1 = dbc.Row([
-            dbc.Col(html.Center(careerORSingleYr), width = 2), 
-            dbc.Col(html.Center(zort), width = 4),
-            dbc.Col(html.Center(zortt),width = 2),
-            dbc.Col(info_button, width='auto', className='d-flex align-items-center')
-            # dbc.Col(dcc.Markdown(id='cntrylabel',children="`No country selected`",dangerously_allow_html = True),width=4)
-            ],justify="start",align="center",style={'margin-top':'10px'})
+def _field(label, control, grow=False):
+    """One labelled control in the toolbar.
 
-navigation_row =  dbc.Row([
-        dbc.Col([dbc.Row(row1),dbc.Row([dbc.Col(html.Div(kek),width=8),dbc.Col(zart,width=4)])]),
-    ],justify='start', align='center')
+    The row used to be four bare widgets centred next to each other with no
+    labels and no gaps, so it read as one undifferentiated strip and nothing
+    said what any of them did. A caption above each control costs one line and
+    removes the guessing.
+    """
+    return html.Div(
+        [html.Label(label, className="ev-field-label"), control],
+        className="ev-field" + (" ev-field-grow" if grow else ""),
+    )
+
+
+row1 = html.Div(
+    [
+        _field("Dataset", careerORSingleYr),
+        _field("Year", zort, grow=True),
+        _field("Statistic", zortt),
+        html.Div(info_button, className="ev-toolbar-end"),
+    ],
+    className="ev-toolbar",
+)
+
+# Toolbar over a two-pane body: map on the left, country summary on the right.
+# They are cards now with room around them, rather than two grid columns butted
+# together against the page.
+navigation_row = html.Div(
+    [
+        row1,
+        dbc.Row(
+            [
+                dbc.Col(html.Div(kek, className="ev-card ev-map-card"),
+                        lg=8, md=12),
+                dbc.Col(html.Div(zart, className="ev-card ev-side-card"),
+                        lg=4, md=12),
+            ],
+            className="g-3 ev-panes",
+        ),
+    ],
+    className="ev-stage",
+)
 
 tabs = [
     dbc.Tabs(

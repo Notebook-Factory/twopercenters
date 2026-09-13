@@ -49,6 +49,7 @@ highlight2 = 'cornflowerblue'
   display: inline-block;
   color: var(--ev-accent);
   visibility: visible;
+}
 
 /* ====== Custom tabs ====== 
 .custom-tabs2 .nav-link {
@@ -364,16 +365,6 @@ color: var(--ev-bg);
   font-size: 0.88rem;
   min-width: 190px;
   text-align: left;
-}
-.ev-nav-search::after {
-  content: "⌘K";
-  float: right;
-  opacity: 0.75;
-  font-size: 0.78rem;
-  border: 1px solid var(--ev-surface-2);
-  border-radius: 5px;
-  padding: 0 5px;
-  margin-left: 12px;
 }
 .ev-nav-search:hover {
   border-color: var(--ev-accent);
@@ -725,3 +716,258 @@ color: var(--ev-bg);
 @media (max-width: 860px) {
   .ev-formula mjx-container { font-size: 62% !important; }
 }
+
+/* ==========================================================================
+   Rebuilt top bar and control toolbar.
+   These override the earlier blocks above by coming later in the file; the
+   markup they target was rewritten, so the old rules no longer match
+   anything that exists.
+   ========================================================================== */
+
+/* ====== Top bar ======
+   One row, three groups, one height. Everything is 36px so it shares a
+   baseline, and the bar spans the window with symmetric padding rather than
+   the margin-right:40% that made it look clipped at the sides. */
+.navbar {
+  background-color: var(--ev-bg-deep) !important;
+  border-bottom: 1px solid var(--ev-surface-2);
+  padding: 0;
+  min-height: 64px;
+}
+
+.ev-navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 28px;
+  min-height: 64px;
+}
+
+.ev-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.ev-mark { height: 34px; width: 34px; display: block; }
+
+.ev-brand-text { display: flex; flex-direction: column; line-height: 1.18; }
+
+.ev-wordmark {
+  color: var(--ev-text);
+  font-size: 1.12rem;
+  font-weight: 650;
+  letter-spacing: 0.1px;
+}
+
+.ev-tagline {
+  color: var(--ev-text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.2px;
+}
+
+.ev-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* A hairline between groups, so the right side reads as three things rather
+   than one run of buttons. */
+.ev-nav-sep {
+  width: 1px;
+  height: 22px;
+  background-color: var(--ev-surface-2);
+  margin: 0 4px;
+}
+
+.ev-nav-btn,
+.ev-nav-search,
+.ev-theme-toggle {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9px;
+  font-size: 0.86rem;
+  font-weight: 550;
+  line-height: 1;
+}
+
+.ev-nav-btn {
+  background-color: transparent;
+  border: 1px solid var(--ev-surface-2);
+  color: var(--ev-text);
+  padding: 0 14px;
+}
+.ev-nav-btn:hover {
+  background-color: var(--ev-surface);
+  border-color: var(--ev-accent);
+  color: var(--ev-accent);
+}
+
+/* The search reads as a field rather than a button, because a field is what
+   it opens. */
+.ev-nav-search {
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-surface-2);
+  color: var(--ev-text-muted);
+  padding: 0 10px 0 14px;
+  gap: 14px;
+  min-width: 230px;
+  justify-content: space-between;
+}
+.ev-nav-search:hover {
+  background-color: var(--ev-surface-2);
+  border-color: var(--ev-accent);
+  color: var(--ev-text);
+}
+.ev-search-label { font-weight: 500; }
+
+.ev-kbd {
+  border: 1px solid var(--ev-surface-2);
+  background: transparent;
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  color: inherit;
+}
+
+.ev-theme-toggle {
+  background-color: transparent;
+  border: 1px solid var(--ev-surface-2);
+  color: var(--ev-text);
+  width: 36px;
+  justify-content: center;
+  padding: 0;
+  font-size: 1rem;
+}
+.ev-theme-toggle:hover {
+  border-color: var(--ev-accent);
+  color: var(--ev-accent);
+  background-color: var(--ev-surface);
+}
+
+.ev-by {
+  color: var(--ev-text-muted);
+  font-size: 0.74rem;
+  text-decoration: none;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.ev-by::before { content: "by "; opacity: 0.7; }
+.ev-by:hover { color: var(--ev-accent); }
+
+@media (max-width: 980px) {
+  .ev-navbar-inner { flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
+  .ev-nav-search { min-width: 0; }
+  .ev-search-label, .ev-tagline, .ev-by, .ev-nav-sep { display: none; }
+}
+
+/* ====== Control toolbar ======
+   Four bare widgets centred side by side with no labels and no gaps is why
+   this read as jammed. One card, generous gaps, and a caption over each
+   control so it says what it is. */
+.ev-stage { padding: 18px 24px 0; }
+
+.ev-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 22px;
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-surface-2);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  box-shadow: var(--ev-shadow);
+}
+
+.ev-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.ev-field-grow { flex: 1 1 320px; }
+
+.ev-field-label {
+  color: var(--ev-text-muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.ev-toolbar-end { margin-left: auto; align-self: flex-end; }
+.ev-field #stats2 { min-width: 210px; }
+
+/* ====== Panes ====== */
+.ev-panes { margin: 0; }
+
+.ev-card {
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-surface-2);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: var(--ev-shadow);
+  height: 100%;
+}
+
+.ev-side-card { overflow-y: auto; max-height: 520px; }
+
+/* ====== Charts follow the theme ======
+   Plotly bakes colours into the figure server-side, so a chart cannot follow
+   a switch that happens in the browser, and regenerating every figure on
+   toggle would mean threading a theme input through every callback in every
+   layout module. But Plotly renders SVG, and SVG text takes a CSS fill, so
+   the chrome of a chart is restyled here instead. Backgrounds are already
+   transparent, so the page shows through. Data colours are deliberately left
+   alone: those carry meaning, and a bar that changed colour with the theme
+   would be telling a different story. */
+.js-plotly-plot .xtick text,
+.js-plotly-plot .ytick text,
+.js-plotly-plot .gtitle,
+.js-plotly-plot .g-xtitle text,
+.js-plotly-plot .g-ytitle text,
+.js-plotly-plot .xtitle,
+.js-plotly-plot .ytitle,
+.js-plotly-plot .infolayer .legend text,
+.js-plotly-plot .annotation-text,
+.js-plotly-plot .cbaxis text,
+.js-plotly-plot .colorbar text {
+  fill: var(--ev-text) !important;
+}
+
+.js-plotly-plot .annotation .annotation-text { font-weight: 600; }
+
+.js-plotly-plot .xgrid,
+.js-plotly-plot .ygrid,
+.js-plotly-plot .gridlayer path {
+  stroke: var(--ev-surface-2) !important;
+  stroke-opacity: 0.55 !important;
+}
+
+.js-plotly-plot .xaxislayer-above path,
+.js-plotly-plot .yaxislayer-above path,
+.js-plotly-plot .zerolinelayer path {
+  stroke: var(--ev-surface-2) !important;
+}
+
+.js-plotly-plot .legend .bg,
+.js-plotly-plot .hoverlayer .hovertext rect {
+  fill: var(--ev-surface) !important;
+  stroke: var(--ev-surface-2) !important;
+}
+.js-plotly-plot .hoverlayer .hovertext text,
+.js-plotly-plot .hoverlayer .hovertext .name {
+  fill: var(--ev-text) !important;
+}
+
+.js-plotly-plot .modebar-btn path { fill: var(--ev-text-muted) !important; }
+.js-plotly-plot .modebar-btn:hover path { fill: var(--ev-accent) !important; }
+.js-plotly-plot .modebar-group { background: transparent !important; }
+
+.js-plotly-plot .geo .bg { fill: transparent !important; }
