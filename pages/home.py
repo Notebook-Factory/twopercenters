@@ -385,13 +385,6 @@ explain  =  f'''
                     </details>
                     </div>
                     <br/>
-
-                    #### Twopercenters per country
-
-                    <div class="danger2">
-                    <strong>Click on a country</strong> to take a look at <strong>which institutions and researchers are listed </strong>
-                    for a chosen data type and year within that country.
-                    </div>
                     '''
 zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel',children="No country selected. Click on a country.",dangerously_allow_html = True),
                     tbl,dcc.Markdown(id='worldtitle',
@@ -399,10 +392,62 @@ zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel',children="No country selec
                     highlight_config  = dict(theme='dark'),
                     children = explain,
                     ),
-                    dbc.Row([
-                    html.Br(),
-                    dbc.Nav([dbc.NavLink('Jump to sections: Comparisons and researcher trends', href="#accordion", external_link=True)])]),
                     ]),color="#ECAB4C",width=270)
+
+
+# The instruction that used to sit at the bottom of the right-hand column,
+# lifted into a glass card over the map. It says one thing, once, and then
+# gets out of the way; leaving it in the column meant it occupied space that
+# belongs to the country results for the whole session.
+map_hint = html.Div(
+    [
+        html.Button(
+            html.I(**{"data-lucide": "x"}),
+            id="map-hint-close", n_clicks=0, className="ev-hint-close",
+            title="Dismiss",
+        ),
+        html.Div(
+            [
+                html.I(**{"data-lucide": "mouse-pointer-click"}),
+                html.Div(
+                    [
+                        html.Div("Researchers by country",
+                                 className="ev-hint-title"),
+                        html.Div(
+                            "Click any country on the map to list the "
+                            "institutions and researchers it contributes, "
+                            "for the dataset and year selected above.",
+                            className="ev-hint-body"),
+                        dbc.Button(
+                            [html.Span("Go to comparisons and trends"),
+                             html.I(**{"data-lucide": "arrow-down"})],
+                            id="hint-jump", n_clicks=0, className="ev-hint-jump",
+                        ),
+                    ]
+                ),
+            ],
+            className="ev-hint-row",
+        ),
+    ],
+    id="map-hint",
+    className="ev-hint",
+)
+
+
+@callback(
+    Output("map-hint", "className"),
+    Input("map-hint-close", "n_clicks"),
+    Input("hint-jump", "n_clicks"),
+    Input("nav", "clickData"),
+    prevent_initial_call=True,
+)
+def dismiss_map_hint(_close, _jump, _clicked):
+    """Hide the hint once it has been read, acted on, or made redundant.
+
+    Clicking a country is included deliberately: at that point the user has
+    done the thing the hint asks for, so the card has nothing left to say.
+    """
+    return "ev-hint ev-hint-gone"
 
 
 offcanvas = html.Div(
@@ -425,7 +470,7 @@ offcanvas = html.Div(
                 ---
                 This dashboard and the database is generously hosted by [Evidence](https://evidencepub.io). 
                 
-                Contact us at `info@neurolibre.org` if you are interested in sharing a data application to supplement your research articles. 
+                Contact us at `info@evidencepub.io` if you are interested in sharing a data application to supplement your research articles. 
 
                 Powered by Plotly Dash and Elasticsearch. 
 
@@ -599,7 +644,8 @@ navigation_row = html.Div(
         row1,
         dbc.Row(
             [
-                dbc.Col(html.Div(kek), width=8),
+                dbc.Col(html.Div([kek, map_hint], className="ev-map-pane"),
+                        width=8),
                 dbc.Col(zart, width=4),
             ],
             className="ev-panes",
@@ -706,10 +752,13 @@ footer = html.Footer(
                         # white while the coloured leaves stay as they are. A
                         # filter cannot single it out. CSS shows one or the
                         # other per theme.
-                        html.Img(src="/assets/evidence-mark.svg",
+                        # White body on the dark theme, navy body on the
+                        # light one: the body is the same navy as the dark
+                        # page, so it vanishes there unless it is swapped.
+                        html.Img(src="/assets/evidence-mark-light.svg",
                                  className="ev-foot-mark ev-only-dark",
                                  alt="Evidence"),
-                        html.Img(src="/assets/evidence-mark-light.svg",
+                        html.Img(src="/assets/evidence-mark.svg",
                                  className="ev-foot-mark ev-only-light",
                                  alt="Evidence"),
                     ],
@@ -727,7 +776,7 @@ footer = html.Footer(
                         _footer_link("code", "Source code",
                                      "https://github.com/Notebook-Factory/twopercenters"),
                         _footer_link("mail", "Contact",
-                                     "mailto:info@neurolibre.org"),
+                                     "mailto:info@evidencepub.io"),
                     ],
                     className="ev-foot-links",
                 ),
@@ -903,7 +952,7 @@ dash.clientside_callback(
 # runs in the browser, after the section has had a moment to expand.
 dash.clientside_callback(
     """
-    function (compareClicks, trendsClicks, picked) {
+    function (compareClicks, trendsClicks, picked, hintClicks) {
         setTimeout(function () {
             var el = document.getElementById('accordion-anchor');
             if (el) { el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
@@ -915,6 +964,7 @@ dash.clientside_callback(
     Input("jump-compare", "n_clicks"),
     Input("jump-trends", "n_clicks"),
     Input("spotlight-selection", "data"),
+    Input("hint-jump", "n_clicks"),
     prevent_initial_call=True,
 )
 
