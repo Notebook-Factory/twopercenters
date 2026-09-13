@@ -12,6 +12,10 @@ warnings.simplefilter('ignore', ElasticsearchWarning)
 
 
 app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
+           # Lucide: the icon set the dashboard uses. It replaces any
+           # <i data-lucide="name"> with an inline SVG that inherits
+           # currentColor, so icons follow the theme like text does.
+           external_scripts=["https://unpkg.com/lucide@latest/dist/umd/lucide.js"],
            suppress_callback_exceptions=True)
 server = app.server
 app.title = "Evidence"

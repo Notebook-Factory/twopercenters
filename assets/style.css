@@ -262,10 +262,10 @@ color: var(--ev-bg);
 }
 
 .accordion-button {
-  background-color: var(--ev-accent);
-  color: white;
-  font-size: xx-large;
-  
+  /* Was an accent-filled bar with white xx-large text. The section headers
+     are navigation, not banners. */
+  background-color: var(--ev-surface);
+  color: var(--ev-text);
 }
 
 .accordion-button:not(.collapsed) {
@@ -1753,3 +1753,106 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
   width: fit-content;
   max-width: 100%;
 }
+
+/* ==========================================================================
+   Links, shadows, icons
+   ========================================================================== */
+
+/* Links in the page body took their colour from SLATE, which is tuned for a
+   dark ground, so on the light theme they came out near-white on white. They
+   read from the accent token now, in both themes. */
+.ev-page a,
+#worldtitle a,
+#cntrylabel a,
+.accordion-body a,
+.offcanvas-body a,
+.dash-markdown a,
+p a, li a, td a {
+  color: var(--ev-accent) !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ev-page a:hover,
+#worldtitle a:hover,
+.accordion-body a:hover { color: var(--ev-accent) !important; opacity: 0.82; }
+
+/* No shadowed text anywhere except the top bar. SLATE puts a text-shadow on
+   headings and buttons, which reads as embossing and is the main thing that
+   dates the type. */
+body, body * {
+  text-shadow: none;
+}
+.navbar, .navbar * {
+  text-shadow: revert;
+}
+
+/* Drop shadows on panels stay: those are depth, not embossed type. */
+
+/* ====== Lucide icons ======
+   Lucide is the icon set asked for. It is loaded as a script from a CDN and
+   swaps any <i data-lucide="name"> for an inline SVG, so the icons inherit
+   currentColor and follow the theme like text. The magnifier in the search
+   boxes stays a background-image, because those inputs have no element to
+   hang an icon on. */
+[data-lucide] { width: 18px; height: 18px; vertical-align: -3px; }
+.ev-nav-btn [data-lucide],
+.ev-nav-search [data-lucide],
+.ev-theme-toggle [data-lucide] { width: 17px; height: 17px; }
+.accordion-button [data-lucide] { width: 19px; height: 19px; margin-right: 10px; }
+
+/* Icon and label need air between them inside a button. */
+.ev-nav-btn, .ev-nav-search, .accordion-button > span { gap: 8px; }
+.ev-nav-btn { display: inline-flex; align-items: center; }
+.accordion-button > span { display: inline-flex; align-items: center; }
+
+/* dbc's AccordionItem takes a plain string for `title`, so an icon cannot be
+   put in the markup there. These are the same two Lucide glyphs drawn as CSS
+   masks instead: a mask painted with currentColor inherits the header's text
+   colour, so they follow the theme exactly as an inline SVG would. */
+.accordion-button::before {
+  content: "";
+  width: 19px;
+  height: 19px;
+  margin-right: 11px;
+  flex: 0 0 19px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center;  mask-position: center;
+  -webkit-mask-size: contain;     mask-size: contain;
+}
+
+/* lucide "users" */
+.accordion-item:nth-of-type(1) .accordion-button::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
+}
+
+/* lucide "trending-up" */
+.accordion-item:nth-of-type(2) .accordion-button::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 7 13.5 15.5 8.5 10.5 2 17'/><polyline points='16 7 22 7 22 13'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 7 13.5 15.5 8.5 10.5 2 17'/><polyline points='16 7 22 7 22 13'/></svg>");
+}
+
+/* Inline code came from SLATE as bright pink, which is loud on dark and
+   garish on light. It marks a value the user can pick, so it takes the accent
+   on a recessed ground, the same as the code in the intro panel. */
+code, .ev-page code, #worldtitle code, #cntrylabel code {
+  background-color: var(--ev-bg-deep);
+  color: var(--ev-accent);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 0.88em;
+}
+
+/* The brand is a link but should not look like body prose: no underline, and
+   the wordmark keeps the text colour rather than the accent. */
+.ev-brand a, a.ev-wordmark, .ev-page .ev-brand a {
+  text-decoration: none !important;
+  color: var(--ev-text) !important;
+}
+.ev-brand a:hover, a.ev-wordmark:hover { color: var(--ev-accent) !important; }
+.ev-attrib-link, .ev-page .ev-attrib-link {
+  color: var(--ev-accent) !important;
+  text-decoration: none !important;
+}
+.ev-attrib-link:hover { text-decoration: underline !important; }

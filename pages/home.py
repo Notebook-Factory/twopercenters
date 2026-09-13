@@ -200,16 +200,15 @@ def update_world(yr,sts,career):
                     autosize=True,
                     height = 700,
                     coloraxis_colorbar_thickness=23,
-                    coloraxis_colorbar_tickfont=dict(color='white'),
-                    coloraxis_colorbar_title=dict(font={"color":'white'}),
                     coloraxis_colorbar_orientation = "h",
                     coloraxis_colorbar_y = -0.1,
-                    plot_bgcolor= darkAccent1,
-                    paper_bgcolor= darkAccent1,
+                    plot_bgcolor= bgc,
+                    paper_bgcolor= bgc,
                     )
-        fig.update_layout(geo_bgcolor=darkAccent1,margin={'l':0, 'r':0,'b':0,'t':0})
-        fig.update_layout(sliders=[ dict(font = {'color':'white'},bgcolor = '#ECAB4C')
-                                   ])
+        # geo_bgcolor is the rectangle behind the globe itself, which is what
+        # stayed dark in the light theme.
+        fig.update_layout(geo_bgcolor=bgc,margin={'l':0, 'r':0,'b':0,'t':0})
+        fig.update_layout(sliders=[ dict(bgcolor='rgba(0,0,0,0)')])
         fig.update_geos(projection=dict(scale = 1), center=dict(lat=30),showframe=False)
     return fig
 
@@ -291,18 +290,16 @@ fig.update_layout(#width=900,
                 height = 700,
                 autosize = True,
                 coloraxis_colorbar_thickness=23,
-                coloraxis_colorbar_tickfont=dict(color='white'),
                 coloraxis_colorbar_orientation = "h",
                 coloraxis_colorbar_y = -0.1,
-                coloraxis_colorbar_title=dict(font={"color":'white'}),
-                plot_bgcolor= darkAccent1,
-                paper_bgcolor= darkAccent1)
-fig.update_layout(sliders=[ dict(font = {'color':'white'},bgcolor = '#ECAB4C',
+                plot_bgcolor= bgc,
+                paper_bgcolor= bgc)
+fig.update_layout(sliders=[ dict(bgcolor='rgba(0,0,0,0)',
                                  steps = [{'label':'H-index'}, {'label':'#cites'}, {'label':'#pprs'}, {'label':'Hm-index'}, {'label':'#pprs-s'}, {'label':'#pprs-sf'},{'label':'#pprs-sfl'},{'label':'C'}],
                                  )
                             ],
                 updatemenus = [dict(bgcolor = '#ECAB4C')])
-fig.update_layout(geo_bgcolor=darkAccent1,margin={'l':0, 'r':0,'b':0,'t':0})
+fig.update_layout(geo_bgcolor=bgc,margin={'l':0, 'r':0,'b':0,'t':0})
 fig.update_geos(projection=dict(scale = 1), center=dict(lat=30),showframe=False)
 
 careerORSingleYr = html.Div([
@@ -501,18 +498,23 @@ dede = dbc.Navbar(
             html.Div(
                 [
                     dbc.Button(
-                        [html.Span("Search researchers",
+                        [html.I(**{"data-lucide": "search"}),
+                         html.Span("Search researchers",
                                    className="ev-search-label"),
                          html.Kbd("⌘K", className="ev-kbd")],
                         id="spotlight-open", className="ev-nav-search",
                         n_clicks=0),
                     html.Span(className="ev-nav-sep"),
-                    dbc.Button("Compare", id="jump-compare",
-                               className="ev-nav-btn", n_clicks=0),
-                    dbc.Button("Trends", id="jump-trends",
-                               className="ev-nav-btn", n_clicks=0),
+                    dbc.Button([html.I(**{"data-lucide": "users"}), "Compare"],
+                               id="jump-compare", className="ev-nav-btn",
+                               n_clicks=0),
+                    dbc.Button([html.I(**{"data-lucide": "trending-up"}),
+                                "Trends"],
+                               id="jump-trends", className="ev-nav-btn",
+                               n_clicks=0),
                     html.Span(className="ev-nav-sep"),
-                    dbc.Button("◑", id="theme-toggle", n_clicks=0,
+                    dbc.Button(html.I(**{"data-lucide": "sun-moon"}),
+                               id="theme-toggle", n_clicks=0,
                                className="ev-theme-toggle",
                                title="Switch between dark and light"),
                 ],
@@ -647,10 +649,10 @@ def switch_tab(at, picked):
 # say it, and a title that has to explain its own widget is a sign the widget
 # is not reading as one.
 ACCORDION_SECTIONS = [
-    ("compare", "Taking a closer look",
-     "Compare researchers, fields and countries"),
-    ("trends", "Researcher trends",
-     "How a researcher's metrics change over the years"),
+    ("compare", "Compare researchers, fields and countries",
+     "Put two researchers, or a researcher and a group, side by side"),
+    ("trends", "One researcher, year by year",
+     "How a single researcher's metrics move across editions"),
 ]
 
 accordion = html.Div(
@@ -835,10 +837,24 @@ dash.clientside_callback(
             root.dataset.theme = next;
             try { window.localStorage.setItem('ev-theme', next); } catch (e) {}
         }
-        return root.dataset.theme === 'light' ? '◐' : '◑';
+        // The button holds a Lucide icon, so the glyph is swapped on the
+        // element rather than returned as children: returning a string here
+        // would replace the icon with a character.
+        var button = document.getElementById('theme-toggle');
+        if (button) {
+            var icon = button.querySelector('[data-lucide], svg');
+            var name = root.dataset.theme === 'light' ? 'moon' : 'sun';
+            if (icon) {
+                var fresh = document.createElement('i');
+                fresh.setAttribute('data-lucide', name);
+                icon.replaceWith(fresh);
+                if (window.lucide) { window.lucide.createIcons(); }
+            }
+        }
+        return window.dash_clientside.no_update;
     }
     """,
-    Output("theme-toggle", "children"),
+    Output("theme-toggle", "title"),
     Input("theme-toggle", "n_clicks"),
 )
 

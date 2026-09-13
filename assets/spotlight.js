@@ -110,3 +110,32 @@
     }
   }, 150);
 })();
+
+// Render Lucide icons, and re-render after Dash swaps content in.
+//
+// lucide.createIcons() replaces every <i data-lucide="..."> present at the
+// time it runs. Dash builds tab contents on demand, so icons that arrive
+// later would stay as empty <i> elements. Watching the DOM and re-running is
+// what keeps them appearing in content that was not there at load.
+(function () {
+  function render() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      try { window.lucide.createIcons(); } catch (e) {}
+    }
+  }
+
+  var pending = null;
+  function scheduleRender() {
+    if (pending) { return; }
+    pending = setTimeout(function () { pending = null; render(); }, 120);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render);
+  } else {
+    render();
+  }
+
+  new MutationObserver(scheduleRender)
+    .observe(document.body, {childList: true, subtree: true});
+})();
