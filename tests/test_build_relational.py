@@ -134,9 +134,35 @@ def test_null_country_matches_the_rows_whose_source_country_is_empty(conn):
     # The only rows left without a country are the ones the source leaves
     # empty: 252 of career 2024's 230,333, and 128 of career 2018's 105,000.
     # Not the 22,327 rows that merely have no institution.
-    load_edition(conn, "data_clean/version-8", kind="career")
+    # Ascending data-year order, oldest first. Identity resolution is
+    # incremental (RULING R4), so loading 2024 before 2017 would produce
+    # author ids a real build never produces. _check_load_order now refuses it.
     load_edition(conn, "data_clean/version-1", kind="career")
+    load_edition(conn, "data_clean/version-8", kind="career")
     empty = dict(conn.execute(
         "select edition_id, count(*) from career_metrics "
         "where country_code is null group by 1").fetchall())
     assert empty == {"career-2024": 252, "career-2018": 128, "career-2017": 10067}
+
+
+def test_loading_an_older_edition_after_a_newer_one_is_refused(conn):
+    # RULING R4 makes identity resolution incremental, so descending order
+    # silently produces author ids a real build never produces. The invariant
+    # is enforced rather than only documented.
+    load_edition(conn, "data_clean/version-8", kind="career")
+    with pytest.raises(ValueError, match="ascending data-year order"):
+        load_edition(conn, "data_clean/version-5", kind="career")
+    # The refusal happens before anything is written.
+    assert conn.execute(
+        "select count(*) from career_metrics").fetchone()[0] == 230333
+
+
+def test_career_2018_may_follow_singleyr_2017_because_the_check_is_per_kind(conn):
+    # A real build interleaves kinds: version 1 carries two career years but
+    # only one singleyr year, so career 2018 is loaded before singleyr 2017.
+    # A global order check would reject that; a per-kind one must not.
+    load_edition(conn, "data_clean/version-1", kind="career")   # 2017 then 2018
+    load_edition(conn, "data_clean/version-1", kind="singleyr")  # 2017
+    kinds = dict(conn.execute(
+        "select kind, max(data_year) from editions group by 1").fetchall())
+    assert kinds == {"career": 2018, "singleyr": 2017}

@@ -604,10 +604,12 @@ def _write_facts(conn, frame, edition, assignments):
         "author_id": [a.author_id for a in assignments],
         "edition_id": [edition.edition_id] * length,
         "institution_id": dimension("inst_name", institution_id),
-        # RULING R17: the row's own country, not its institution's. The two
-        # disagree for 33,028 rows, and 695 rows have a country but no
-        # institution at all, so reading it back through institutions would
-        # serve 55,355 rows wrongly or not at all.
+        # RULING R17: the row's own country, not its institution's. Measured
+        # on the loaded data, after NFKC and strip: 39,476 rows have an
+        # institution whose country is not the row's own, and a further 695
+        # have a country but no institution at all. So reading country back
+        # through institutions would serve 40,171 rows (1.47%) a country that
+        # is not theirs or none at all.
         "country_code": dimension("cntry", lambda code: code),
         "field_id": dimension("sm-field", field_id),
         "subfield_1_id": dimension("sm-subfield-1", subfield_id),
@@ -656,7 +658,33 @@ def _write_maxima(conn, frame, edition):
 # per-file load
 # --------------------------------------------------------------------------
 
+def _check_load_order(conn, edition):
+    """Refuse an edition older than one already loaded for the same kind.
+
+    RULING R4 makes identity resolution incremental, so an edition is resolved
+    against what is already in the database. Loading 2017 after 2024 therefore
+    produces different author ids than a real build does, silently. The
+    invariant was documented before it was enforced, which is a trap for
+    whoever adds version 9 next September; this is the enforcement.
+
+    The check is per kind, not global, because a real build interleaves them:
+    career 2018 is loaded before singleyr 2017, since version 1 is the only
+    directory carrying two career years and only one singleyr year. Within a
+    kind the sequence is strictly ascending.
+    """
+    latest = conn.execute(
+        "select max(data_year) from editions where kind = %s",
+        (edition.kind,)).fetchone()[0]
+    if latest is not None and edition.data_year < latest:
+        raise ValueError(
+            f"{edition.edition_id} would be loaded after {edition.kind} "
+            f"{latest}, but identity resolution is incremental (RULING R4) and "
+            "requires ascending data-year order within a kind. Load editions "
+            "oldest first, as build() does, or rebuild from an empty schema.")
+
+
 def _load_file(conn, edition):
+    _check_load_order(conn, edition)
     frame = canonical_frame(pd.read_pickle(edition.path))
     source_filename = edition.key().get("source")
     published_date, sha256 = _manifest_entry(source_filename)
@@ -705,6 +733,9 @@ def load_edition(conn, path, kind):
     loaded in ascending data-year order, which is what `build` does. Within
     `path` the files are ordered by data year too, which is why version 1's
     2017 career edition is loaded before its 2018 one.
+
+    The order is enforced, not merely documented: `_check_load_order` raises if
+    the incoming edition is older than one already loaded for the same kind.
     """
     total = 0
     for edition in edition_files(path):
@@ -718,19 +749,70 @@ def load_edition(conn, path, kind):
 # parquet export
 # --------------------------------------------------------------------------
 
+# Postgres type -> the pandas dtype the Parquet file should carry. Everything
+# not listed here (text, jsonb) becomes pandas "string".
+PARQUET_DTYPES = {
+    "boolean": "boolean",
+    "smallint": "Int64",
+    "integer": "Int64",
+    "bigint": "Int64",
+    "real": "float64",
+    "double precision": "float64",
+    "numeric": "float64",
+}
+
+# COPY writes an unquoted empty field for NULL and a quoted "" for a genuine
+# empty string, a distinction read_csv cannot make. Asking COPY for an explicit
+# NULL marker removes the ambiguity.
+NULL_MARKER = "\\N"
+
+
+def _column_types(conn, table):
+    return dict(conn.execute(
+        "select column_name, data_type from information_schema.columns "
+        "where table_schema = 'public' and table_name = %s "
+        "order by ordinal_position", (table,)).fetchall())
+
+
 def export_parquet(conn, out_dir="data_parquet"):
-    """Write one `<table>.parquet` per table into `out_dir`."""
+    """Write one `<table>.parquet` per table into `out_dir`, keeping types.
+
+    The types matter: these files are the input to a follow-on project that
+    builds a relational graph from them. Left to infer from CSV, pandas reads
+    Postgres booleans back as the strings 't' and 'f', and turns text columns
+    that happen to look numeric into numbers. So every column is cast to the
+    dtype its Postgres type calls for, using nullable extension dtypes
+    (Int64, boolean, string) because most of these columns are nullable.
+    """
     os.makedirs(out_dir, exist_ok=True)
     written = []
     for table in TABLES:
+        types = _column_types(conn, table)
         buffer = io.BytesIO()
         with conn.cursor() as cur:
-            statement = f"copy {table} to stdout (format csv, header true)"
+            statement = (f"copy {table} to stdout "
+                         f"(format csv, header true, null '{NULL_MARKER}')")
             with cur.copy(statement) as copy:
                 for chunk in copy:
                     buffer.write(bytes(chunk))
         buffer.seek(0)
-        frame = pd.read_csv(buffer, low_memory=False)
+        frame = pd.read_csv(buffer, dtype=str, keep_default_na=False,
+                            na_values=[NULL_MARKER], low_memory=False)
+
+        for column in frame.columns:
+            postgres_type = types.get(column, "text")
+            dtype = PARQUET_DTYPES.get(postgres_type)
+            if postgres_type == "boolean":
+                frame[column] = frame[column].map(
+                    {"t": True, "f": False}).astype("boolean")
+            elif postgres_type == "date":
+                frame[column] = pd.to_datetime(frame[column]).dt.date
+            elif dtype is not None:
+                frame[column] = pd.to_numeric(
+                    frame[column], errors="coerce").astype(dtype)
+            else:
+                frame[column] = frame[column].astype("string")
+
         target = os.path.join(out_dir, f"{table}.parquet")
         frame.to_parquet(target, index=False)
         written.append((target, len(frame)))
