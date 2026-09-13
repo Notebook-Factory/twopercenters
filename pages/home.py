@@ -245,22 +245,20 @@ def click_on_map_update(val,is_career,yr,sts):
                 - `Hm-index:` **{int(data[f'{cr}_{yr}']['hm'][st_idx])}**
                 - `Self citation ratio:` **{np.round(data[f'{cr}_{yr}']['self%'][st_idx]*100,2)}%**
                '''
-    query = { "query": { "term": {"cntry":cntry} }, "_source": ['authfull','inst_name','years'] }
     if is_career: 
         nm = 'career'
         txt = f"Career-long up to {yr}"
     else:
         nm = 'singleyr'
         txt = f"Single-year data in {yr}"
-    
-    cur_data = []
-    for total_pages, page_counter, page_items, page_data in es_scroll(nm, query, page_size=page_size):
-         cur_data.append(page_data['hits']['hits'])
-    career_all_c = [{'INSTITUTE':d['_source']['inst_name'],'RESEARCHER':d['_source']['authfull']}
-                        for tmp in cur_data
-                        for d in tmp
-                        if yr in d['_source']['years']]
-    #print(career_all_c)
+
+    # This used to scroll the legacy `career`/`singleyr` Elasticsearch
+    # indices and filter each document on a `years` field. Those indices
+    # stop at 2021 and only survive on this machine as the latency
+    # benchmark's baseline, so selecting 2022, 2023 or 2024 and clicking a
+    # country listed nobody. country_researchers asks Postgres, where the
+    # fact rows actually live, for the same thing.
+    career_all_c = country_researchers(cntry, nm, yr)
     msg = f'<div class="danger"><center><strong>{txt}</strong><br/><strong>{len(career_all_c)}</strong> researchers from <strong>{len(set(get_all_values_by_key(career_all_c,"INSTITUTE")))}</strong> institutions in <strong>{cntry.upper()}</strong><br/> <u>Click on a cell to display respective summaries</u></center></div>'
     return(self_cit,career_all_c, msg, {'height': '400px', 'overflowY': 'auto','display':'block'},[],None)
 

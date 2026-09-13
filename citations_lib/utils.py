@@ -492,12 +492,28 @@ def _requested_kinds(idx_name):
     return kinds or ['career', 'singleyr']
 
 
-def es_result_pick(result,field, nohit = ['']):
+def es_result_pick(result, field, nohit=[''], expect_name=None):
     """Pull one field out of a get_es_results() frame.
 
     field='data' is the interesting case: it no longer decompresses a blob
     out of the search hit, it reads that author's rows from Postgres and
     assembles the same nested dict.
+
+    The 'data' branch used to take `result['_source.authfull'].iloc[0]`
+    outright, and the frame is sorted by edition count across every matched
+    name, so whichever near-match happened to have the most editions won:
+    asking for 'Muller, Markus' returned 'Mullner, Markus', and asking for
+    'Garcia, David' returned 'Garcia, David A.'. Passing exact=True to
+    get_es_results avoids that, but only as long as every caller remembers
+    to, and one omission puts a stranger's citation record back under a real
+    researcher's name.
+
+    So the check lives here instead. get_es_results records the name it was
+    asked for on the frame (`frame.attrs['requested_name']`), and callers can
+    also state it directly with expect_name. When a requested name is known,
+    the rows used are the rows carrying exactly that name, never row 0
+    whatever it says, and if the frame holds no row with that name this
+    raises rather than returning someone else's numbers.
     """
     if result is None or len(result) == 0:
         return nohit
@@ -506,9 +522,28 @@ def es_result_pick(result,field, nohit = ['']):
         # that name appeared, and the layouts still look a name up and expect
         # all of its editions back. Identity resolution can now split one
         # display name across several author_ids, so gather every hit
-        # carrying the top hit's exact name, richest first.
-        wanted = result['_source.authfull'].iloc[0]
-        same_name = result[result['_source.authfull'] == wanted]
+        # carrying the requested name, richest first.
+        names = result['_source.authfull']
+        if expect_name is None:
+            expect_name = result.attrs.get('requested_name')
+        if expect_name is None:
+            # No name was recorded: the frame did not come from a by-name
+            # lookup (get_es_aggregate's country/field frames land here), so
+            # there is nothing to check it against.
+            wanted = names.iloc[0]
+        else:
+            wanted = expect_name
+            if not (names == wanted).any():
+                raise ValueError(
+                    "es_result_pick(result, 'data'): no row in this frame is "
+                    f"{wanted!r}. The frame holds "
+                    f"{list(dict.fromkeys(names))!r}. Returning the top row "
+                    "here would report another author's citation record "
+                    f"under {wanted!r}; if a fuzzy search cannot find the "
+                    "name, the honest answer is no data. Look the name up "
+                    "with get_es_results(..., exact=True)."
+                )
+        same_name = result[names == wanted]
         author_ids = tuple(dict.fromkeys(same_name['_source.author_id']))
         kinds = tuple(dict.fromkeys(same_name['_index']))
         data = _author_data(author_ids, kinds)
@@ -529,6 +564,36 @@ def get_auth_years(data):
         return years
     else:
         return None
+
+def country_researchers(country, kind, year):
+    """[{'INSTITUTE': ..., 'RESEARCHER': ...}] for one country and edition.
+
+    pages/home.py used to answer the map's country click by scrolling the
+    legacy `career`/`singleyr` Elasticsearch indices and filtering on a
+    `years` field in each document. Those indices stop at 2021 and are only
+    still on the machine as the latency benchmark's baseline, so clicking a
+    country with 2022, 2023 or 2024 selected listed nobody at all. This is
+    the same question asked of Postgres, which is where the fact rows live.
+
+    `country` is whatever the choropleth handed back; coco.convert is
+    idempotent on an ISO3 code, so the same conversion get_es_aggregate does
+    is applied here and the two always agree on the country key.
+    """
+    if kind not in _TABLE_BY_KIND:
+        return []
+    table = _TABLE_BY_KIND[kind]
+    code = str(coco.convert(names=country, to='ISO3')).lower()
+    rows = _fetch(
+        f'select a.authfull_display, i.inst_name '
+        f'from {table} m '
+        f'join authors a on a.author_id = m.author_id '
+        f'left join institutions i on i.institution_id = m.institution_id '
+        f'where m.country_code = %s and m.edition_id = %s '
+        f'order by a.authfull_display',
+        (code, f'{kind}-{year}'))
+    return [{'INSTITUTE': inst_name or '', 'RESEARCHER': authfull}
+            for authfull, inst_name in rows]
+
 
 def get_es_aggregate(group,group_name,prefix):
     """Summary vectors for one country, field or institution.
@@ -607,7 +672,7 @@ def _authors_by_exact_name(name):
     purpose. That work was 79% of the fetch cost, because the fuzzy
     multi_match scores candidates across all 818,667 documents in the
     `authors` alias. Postgres answers the same question with one indexed
-    read of `authors_name_normalized_idx`.
+    read of `authors_authfull_display_idx`.
 
     Matching is on `authfull_display`, the exact string the typeahead hands
     back, indexed by migration 006. It deliberately does not go through
@@ -669,7 +734,8 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
     kinds = _requested_kinds(idx_name)
     if exact:
         if search_fields == 'authfull':
-            return _frame_from_hits(_authors_by_exact_name(search_term), kinds)
+            return _frame_from_hits(_authors_by_exact_name(search_term), kinds,
+                                    requested_name=search_term)
         query = {"term": {search_fields: search_term}}
     else:
         query = {
@@ -698,15 +764,28 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
     hits = result.get('hits', {}).get('hits', [])
     if not hits:
         return None
-    return _frame_from_hits(hits, kinds)
+    # A name lookup records the name it was asked for on the frame, so that
+    # es_result_pick(result, 'data') reads that author's rows and not
+    # whichever near-match happens to sort first. Searches on other fields
+    # (cntry, sm-field) record nothing: there is no author name in play.
+    return _frame_from_hits(
+        hits, kinds,
+        requested_name=search_term if search_fields == 'authfull' else None)
 
 
-def _frame_from_hits(hits, kinds):
+def _frame_from_hits(hits, kinds, requested_name=None):
     """One row per (hit, kind) the hit actually has data for.
 
     Shared by the fuzzy Elasticsearch path and the exact Postgres path so
     both hand callers the identical frame; a hit is {'_id', '_score',
     '_source'} from either source.
+
+    `requested_name` is carried on the frame as `attrs['requested_name']`.
+    It is the name the caller asked for, which is not always the name the
+    first row carries: the frame is sorted by edition count across every
+    matched name, so a fuzzy search for 'Garcia, David' puts 'Garcia, David
+    A.' first. es_result_pick reads it to make sure it hands back the
+    requested author's record rather than that one.
     """
     records = []
     for hit in hits:
@@ -746,7 +825,10 @@ def _frame_from_hits(hits, kinds):
     # freshly constructed DataFrame; from_records on an already-ordered list
     # produces the same RangeIndex reset_index(drop=True) produced.
     records.sort(key=lambda record: -record['_editions'])
-    return pd.DataFrame.from_records(records)
+    frame = pd.DataFrame.from_records(records)
+    if requested_name is not None:
+        frame.attrs['requested_name'] = requested_name
+    return frame
 
 def base64_decode_and_decompress(encoded_data,flg=True):
     """Dead as of the Postgres migration: nothing stores compressed blobs.
