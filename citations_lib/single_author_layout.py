@@ -104,7 +104,7 @@ def single_author_layout():
     selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
 
     # # =============== Author Dropdown
-    authorOptions = dcc.Dropdown(options = [], multi = False, id = "authorOptionsDropdown" + SUFFIX, placeholder = 'Start typing (surname name). Hit del to reset.', 
+    authorOptions = dcc.Dropdown(options = [], multi = False, id = "authorOptionsDropdown" + SUFFIX, placeholder = 'Search researchers', 
          value = 'Ioannidis, John P.A.', searchable = True)
     
     # # =============== Author Callback
@@ -170,7 +170,7 @@ def single_author_layout():
             
             
 
-            return(fig_career, fig_singleyr, inst_name, field_name, "Start typing for new search | Displaying: " + author.split(",")[0])
+            return(fig_career, fig_singleyr, inst_name, field_name, str(author))
 
     # =============== Row 1: Author select
     row1 = dbc.Row([dbc.Col(html.Center(authorOptions), width = {'offset':3,'size':4}),

@@ -65,7 +65,6 @@ def group_vs_group_layout():
     # ========================================================================================== 
 
     # =============== Select dataset!
-    selectStep1 = dbc.Card(dbc.CardBody(html.Center("Select dataset", style = {'color':'var(--ev-text)', 'font-size':20})),color = darkAccent2)
 
     # =============== Career vs Singleyr
     careerORSingleYr = html.Div([
@@ -91,9 +90,19 @@ def group_vs_group_layout():
     def update_yr_opts(career):
         return(update_yr_options(career))
 
-    row1 = dbc.Row([dbc.Col(html.Center(selectStep1), width = {'offset':1,'size':3}), 
-            dbc.Col(html.Center(careerORSingleYr), width = 2),
-            dbc.Col(html.Center(selectYr), width = 5)])
+    # The "Select dataset" card that used to sit here was a large bordered box
+    # whose whole content was the words "Select dataset", restating what the
+    # control beside it already said. The two controls carry their own captions
+    # now, in the same labelled-toolbar shape the home page uses.
+    row1 = html.Div(
+        [
+            html.Div([html.Label("Dataset", className="ev-field-label"),
+                      careerORSingleYr], className="ev-field"),
+            html.Div([html.Label("Year", className="ev-field-label"),
+                      selectYr], className="ev-field"),
+        ],
+        className="ev-toolbar ev-panel-toolbar",
+    )
 
     # ========================================================================================== 
     # ========================================================================================== 

@@ -22,7 +22,7 @@ def generate_es_dropdown_callback(element_id):
 
     return dcc.Dropdown(
         options=[],
-        placeholder='Start typing name & surname',
+        placeholder='Search researchers',
         multi=False,
         id=element_id,
         value='Ioannidis, John P.A.',
@@ -115,6 +115,6 @@ def generate_update_cards_callback(input_id, output_ids, auth_dropdown_id, caree
                                 style={'color': color1, 'font-size': 14}, color=color2)
                 card4 = dbc.Card(html.Center(html.Center(txt2)),
                                 style={'color': color1, 'font-size': 14}, color=color2)
-                return card1, card2, card3, card4, "Start typing for new search | Displaying: " + authname.split(",")[0]
+                return card1, card2, card3, card4, str(authname)
 
     return update_cards

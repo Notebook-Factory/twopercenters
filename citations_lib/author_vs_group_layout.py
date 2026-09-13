@@ -74,8 +74,6 @@ def author_vs_group_layout():
     # ========================================================================================== 
     # ========================================================================================== 
 
-    # =============== Card: 'Select dataset'
-    selectStep1 = dbc.Card(dbc.CardBody(html.Center("Select dataset", style = {'color':'var(--ev-text)', 'font-size':20})),color = darkAccent2)
 
     # =============== Career vs Singleyr
     careerORSingleYr = html.Div([
@@ -147,7 +145,7 @@ def author_vs_group_layout():
 
     # =============== Group 1 (author) Dropdown
 
-    group1List = dcc.Dropdown(options = [], placeholder = 'Author 1: Start typing name and surname', multi = False, id = "group1ListDropdown" + SUFFIX, 
+    group1List = dcc.Dropdown(options = [], placeholder = 'Search researchers', multi = False, id = "group1ListDropdown" + SUFFIX, 
     value = 'Ioannidis, John P.A.', searchable = True)
     generate_es_dropdown_callback("group1ListDropdown" + SUFFIX)
     generate_update_carsing_callback('group1ListDropdown' + SUFFIX, 'careerORSingleYrA1' + SUFFIX)

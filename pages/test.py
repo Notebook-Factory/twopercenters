@@ -102,7 +102,7 @@ empty_fig.update_yaxes(visible = False)
 selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
 
 # # =============== Author Dropdown
-authorOptions = dcc.Dropdown(options = [], multi = False, id = "authorOptionsDropdown" + SUFFIX, placeholder = 'Start typing (surname name). Hit del to reset.', 
+authorOptions = dcc.Dropdown(options = [], multi = False, id = "authorOptionsDropdown" + SUFFIX, placeholder = 'Search researchers', 
         value = 'Ioannidis, John P.A.', searchable = True)
 
 # # =============== Author Callback

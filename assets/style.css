@@ -976,7 +976,9 @@ color: var(--ev-bg);
   padding-left: 0 !important;
   padding-right: 0 !important;
   max-width: 100% !important;
-  overflow-x: hidden;
+  /* No overflow here. position:sticky is cancelled by an overflow value on
+     any ancestor, and overflow-x: hidden on this element is what stopped the
+     top bar sticking. Wide content is handled where it occurs instead. */
 }
 
 /* The bar spans the shell edge to edge; only its inner row is inset. */
@@ -1427,7 +1429,7 @@ color: var(--ev-bg);
    Scoped to the author/group pickers by id, so the small statistic dropdown
    in the toolbar keeps its left-aligned label.
    ========================================================================== */
-[id*="OptionsDropdown"] .Select-control {
+.Select.is-searchable .Select-control {
   background-image: url("data:image/svg+xml;utf8,\
 <svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' \
 fill='none' stroke='%23A8B2C4' stroke-width='2' stroke-linecap='round' \
@@ -1441,22 +1443,23 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
    background-image: none on .Select-control, so it has to be re-allowed for
    exactly these. The two rules are adjacent on purpose. */
 
-[id*="OptionsDropdown"] .Select-placeholder,
-[id*="OptionsDropdown"] .Select--single > .Select-control .Select-value {
+.Select.is-searchable .Select-placeholder,
+.Select.is-searchable .Select--single > .Select-control .Select-value,
+.is-searchable.Select--single > .Select-control .Select-value {
   text-align: center !important;
   padding-left: 44px !important;
   padding-right: 44px !important;
 }
 
-[id*="OptionsDropdown"] .Select-input {
+.Select.is-searchable .Select-input {
   padding-left: 44px;
   width: 100%;
 }
-[id*="OptionsDropdown"] .Select-input > input { text-align: center; width: 100%; }
+.Select.is-searchable .Select-input > input { text-align: center; width: 100%; }
 
 /* The menu stays left-aligned: a centred list of names is hard to scan. */
-[id*="OptionsDropdown"] .Select-menu-outer,
-[id*="OptionsDropdown"] .Select-option { text-align: left !important; }
+.Select-menu-outer,
+.Select-option { text-align: left !important; }
 
 /* The spacing above the selection rows is for the panels, where those rows
    sit directly under a search box. In the toolbar the same controls already
@@ -1478,3 +1481,48 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
 
 [id^="careerORSingleYrA"],
 [id^="selectYrRadioA"] { margin-top: 14px; }
+
+/* The statistic select in the home toolbar is a short value list, not a
+   search, so it keeps a plain left-aligned label and no magnifier. */
+#stats2 .Select-control { background-image: none !important; }
+#stats2 .Select-placeholder,
+#stats2 .Select--single > .Select-control .Select-value {
+  text-align: left !important;
+  padding-left: 14px !important;
+  padding-right: 34px !important;
+}
+#stats2 .Select-input { padding-left: 14px; }
+#stats2 .Select-input > input { text-align: left; }
+
+/* The panel toolbars are the same control group as the home one, but they sit
+   inside an already-carded panel, so they carry no second card of their own. */
+.ev-panel-toolbar {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 18px 0 6px;
+  justify-content: center;
+  gap: 28px;
+}
+.ev-panel-toolbar .radio-group { margin-top: 0 !important; }
+
+/* The two halves of the dataset toggle have labels of different lengths, so a
+   shared minimum width still left them unequal whenever one label needed more
+   than the minimum. Splitting the track equally makes them the same width
+   whatever the labels say. */
+[id^="careerORSingleYr"].btn-group,
+[id^="careerORSingle"].btn-group {
+  display: inline-flex;
+  width: auto;
+}
+[id^="careerORSingleYr"].btn-group > .form-check,
+[id^="careerORSingle"].btn-group > .form-check {
+  flex: 1 1 0;
+  min-width: 118px;
+}
+[id^="careerORSingleYr"].btn-group > .form-check > .btn,
+[id^="careerORSingle"].btn-group > .form-check > .btn {
+  width: 100%;
+  min-width: 0;
+}

@@ -168,7 +168,6 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # ========================================================================================== 
 
     # =============== Select dataset!
-    selectStep1 = dbc.Card(dbc.CardBody(html.Center("Select dataset", style = {'color':'var(--ev-text)', 'font-size':20})),color = darkAccent2)
 
     # =============== Career vs Singleyr
     careerORSingleYr = html.Div([
@@ -232,9 +231,19 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     def update_yr_opts(career):
         return(update_yr_options(career))
 
-    row1 = dbc.Row([dbc.Col(html.Center(selectStep1), width = {'offset':1,'size':3}), 
-            dbc.Col(html.Center(careerORSingleYr), width = 2), 
-            dbc.Col(html.Center(selectYr), width = 5)])
+    # The "Select dataset" card that used to sit here was a large bordered box
+    # whose whole content was the words "Select dataset", restating what the
+    # control beside it already said. The two controls carry their own captions
+    # now, in the same labelled-toolbar shape the home page uses.
+    row1 = html.Div(
+        [
+            html.Div([html.Label("Dataset", className="ev-field-label"),
+                      careerORSingleYr], className="ev-field"),
+            html.Div([html.Label("Year", className="ev-field-label"),
+                      selectYr], className="ev-field"),
+        ],
+        className="ev-toolbar ev-panel-toolbar",
+    )
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -242,7 +251,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # ========================================================================================== 
     # ========================================================================================== 
 
-    author1Options = dcc.Dropdown(options = [], placeholder = 'Author 1: Start typing name and surname', multi = False, id = "author1OptionsDropdown" + SUFFIX, 
+    author1Options = dcc.Dropdown(options = [], placeholder = 'Search researchers', multi = False, id = "author1OptionsDropdown" + SUFFIX, 
         value = default_author, searchable = True)
     generate_es_dropdown_callback("author1OptionsDropdown" + SUFFIX)
     generate_update_carsing_callback('author1OptionsDropdown' + SUFFIX, 'careerORSingleYrA1' + SUFFIX)
@@ -517,7 +526,8 @@ $$
 
     row3 = html.Div([
         dbc.Row(html.Br()), 
-        dbc.Row([dbc.Col(selfC, width = {'size':2}),dbc.Col(upper,width={'size':4}),dbc.Col(dbc.Button("ℹ️ More info", id="open-offcanvas22", n_clicks=0),width = {'size':2})],justify='around'), 
+        dbc.Row([dbc.Col(selfC, width = {'size':2}),dbc.Col(upper,width={'size':4}),dbc.Col(dbc.Button("More info", id="open-offcanvas22", n_clicks=0,
+                                   className="ev-info-btn"),width = {'size':2})],justify='around'), 
         dbc.Row(html.Br()), 
         metricsFigAuthor_c,
         dbc.Row(html.Br()), 
