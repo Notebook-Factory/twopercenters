@@ -181,10 +181,52 @@ color: #2C2C2C;
   padding-left: 5px;
 }
 
+/* ====== Main tab bar ======
+   These four tabs are the dashboard's primary navigation, and people were
+   missing them: they did not read as something you could click. Two reasons.
+   The active rule below set background-color and color to the same #ECAB4C,
+   so the selected tab's own label was invisible against its own background.
+   And the inactive tabs had no rule at all, so they rendered as bare text on
+   the page with no edge, no hover and no pointer cursor: nothing that says
+   "toggle". Both are fixed here. */
+
+.nav-tabs {
+  border-bottom: 2px solid #ECAB4C;
+  gap: 4px;
+}
+
+/* Inactive: reads as a real, unselected tab sitting below the active one. */
+.nav-tabs .nav-link {
+  cursor: pointer;
+  color: #CFCFCF;
+  background-color: #2C2C2C;
+  border: 1px solid #5b5959;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+  background-color: #3a3a3a;
+  color: #ECAB4C;
+  border-color: #ECAB4C;
+}
+
+.nav-tabs .nav-link:focus-visible {
+  outline: 2px solid #ECAB4C;
+  outline-offset: 2px;
+}
+
+/* Active: ocre ground with dark text on it, so the label is legible, and
+   joined to the panel below by hiding the bar underneath it. */
 .nav-tabs .nav-link.active {
-  background-color: #ECAB4C!important;
-  color : #ECAB4C;
-  font-weight: bold;
+  background-color: #ECAB4C !important;
+  color: #2C2C2C !important;
+  font-weight: 700;
+  border-color: #ECAB4C;
+  box-shadow: 0 -2px 6px rgba(236, 171, 76, 0.35);
 }
 
 .accordion-button {
@@ -198,14 +240,31 @@ color: #2C2C2C;
   font-size: xx-large;
 }
 
+/* ====== Top bar ======
+   The container rule used to carry margin-right: 40%, which squeezed the
+   brand into the left third and left a large dead gap. The bar spans the
+   width now and the brand sits with the mark. */
+.navbar {
+  background-color: #2C2C2C !important;
+  border-bottom: 2px solid #ECAB4C;
+  padding: 10px 0;
+}
+
 .navbar .container{
-  margin-left: 5px;
-  margin-right: 40%;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 100%;
+  padding-left: 24px;
+  padding-right: 24px;
 }
 
 .navbar-brand{
-  margin-right: 50px;
+  margin-right: 0;
   border-right: 0px;
+  color: #ECAB4C !important;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  font-size: 1.15rem;
 }
 
 .accordion-item:last-of-type .accordion-button.collapsed {
@@ -251,4 +310,68 @@ code {
 p code,
 li code {
   padding: 2px 3px;
+}
+/* ====== Year picker ======
+   The year rows are dbc.RadioItems rendered as a Bootstrap btn-group. With
+   eight editions that bar is long, and on the comparison tabs two of them sit
+   side by side in half-width columns. This turns the same markup into a
+   horizontal snap-scrolling picker: the buttons keep their radio semantics
+   and every existing callback still reads .value, only the presentation
+   changes. Nothing here is Dash-specific, so it applies wherever the
+   year-picker class is put on the wrapper.
+
+   Scroll-snap gives it the detented feel of a wheel picker: the list glides
+   and settles on a year rather than stopping between two. The fade masks at
+   each edge are the affordance that says there is more to scroll, which a
+   plain overflow container does not communicate. */
+
+.year-picker .btn-group {
+  display: flex;
+  flex-wrap: nowrap;               /* override the wrap fallback above */
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;           /* the fades are the affordance */
+  padding: 2px 0;
+  -webkit-overflow-scrolling: touch;
+  /* Fade the first and last few pixels so a clipped year reads as "more
+     this way" instead of as a button that happens to be cut off. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 24px,
+                                      #000 calc(100% - 24px), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 24px,
+                                      #000 calc(100% - 24px), transparent 100%);
+}
+
+.year-picker .btn-group::-webkit-scrollbar {
+  display: none;
+}
+
+.year-picker .btn-group > .form-check {
+  scroll-snap-align: center;
+  flex: 0 0 auto;
+}
+
+.year-picker .btn-group > .form-check > .btn {
+  min-width: 58px;
+  padding: 6px 12px;
+  font-variant-numeric: tabular-nums;  /* years line up, no jitter */
+}
+
+/* The selected year is the one the eye should land on first. */
+.year-picker .btn-group > .form-check > .btn.active {
+  transform: scale(1.06);
+  transition: transform 120ms ease;
+}
+
+/* A disabled year (single-year has no 2018 edition) stays in the run so the
+   spacing between years is honest, but reads as unavailable. */
+.year-picker .btn-group > .form-check > .btn:disabled,
+.year-picker .btn-group > .form-check > .btn.disabled {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .year-picker .btn-group { scroll-behavior: auto; }
+  .year-picker .btn-group > .form-check > .btn.active { transform: none; }
 }

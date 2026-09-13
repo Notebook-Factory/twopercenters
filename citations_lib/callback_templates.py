@@ -42,7 +42,9 @@ def generate_update_carsing_callback(input_id, output_id):
         if value is None:
             raise PreventUpdate
         else:
-            result = get_es_results(value, ['career', 'singleyr'], 'authfull')
+            # exact=True: `value` is a name already chosen in the dropdown.
+            result = get_es_results(value, ['career', 'singleyr'], 'authfull',
+                                    exact=True)
             if result is not None:
                 if 'career' in list(result['_index']) and 'singleyr' in list(result['_index']):
                     opts = 'both'
@@ -75,7 +77,8 @@ def generate_update_years_callback(input_id, output_id, auth_dropdown_id):
             raise PreventUpdate
         else:
             prefix = 'career' if val else 'singleyr'
-            results = get_es_results(authname, prefix, 'authfull')
+            # exact=True: `authname` came from the author dropdown.
+            results = get_es_results(authname, prefix, 'authfull', exact=True)
             data = es_result_pick(results, 'data', None)
             yrs = update_auth_yrs(data.keys(),prefix)
             return yrs, yrs[0]['value']
@@ -95,7 +98,8 @@ def generate_update_cards_callback(input_id, output_ids, auth_dropdown_id, caree
         else:
             prefix = 'career' if is_career else 'singleyr'
             when = 'career-long up to ' if is_career else 'in year '
-            results = get_es_results(authname, prefix, 'authfull')
+            # exact=True: `authname` came from the author dropdown.
+            results = get_es_results(authname, prefix, 'authfull', exact=True)
             if results is not None:
                 data = es_result_pick(results, 'data', None)
                 names = get_inst_field_cntry(data, prefix, year)

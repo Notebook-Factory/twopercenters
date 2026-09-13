@@ -92,7 +92,7 @@ def get_metric_tab_layout(): # DEFAULT_CAREER = None, DEFAULT_YR = None
             id = CURR_METRIC + "selectYrRadio", value = DEFAULT_YR, className = "btn-group", inputClassName = "btn-check", 
             labelClassName = "btn btn-outline-primary", labelCheckedClassName = "active", style = {'size':'sm'}, 
             options = update_yr_options(career = True))
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
     @callback(
         Output(CURR_METRIC + 'selectYrRadio', 'options'), 
         Input(CURR_METRIC + 'careerORSingleYrRadio', 'value'))

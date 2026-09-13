@@ -106,7 +106,7 @@ def author_vs_group_layout():
             value = '2017',
             options = [{"label": "2017", "value": "2017", 'disabled': False}]
         )
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
 
     # =============== Year
 
@@ -127,7 +127,7 @@ def author_vs_group_layout():
     #         value = 3, id = "selectYrRadio" + SUFFIX, className = "btn-group", inputClassName = "btn-check", 
     #         labelClassName = "btn btn-outline-primary", labelCheckedClassName = "active", style = {'size':'sm'}, 
     #         options = update_yr_options(career = True))
-    # ], className = "radio-group")
+    # ], className = "radio-group year-picker")
     # @callback(
     #     Output('selectYrRadio' + SUFFIX, 'options'), 
     #     Input('careerORSingleYrRadio' + SUFFIX, 'value'))
@@ -325,7 +325,8 @@ def author_vs_group_layout():
         else:
 
             prefix1 = 'career' if career1 else 'singleyr'
-            results = get_es_results(group1_name, prefix1, 'authfull')
+            # exact=True: the author name comes from the dropdown.
+            results = get_es_results(group1_name, prefix1, 'authfull', exact=True)
             data1 = {}
             data1_log = {}
             if results is not None:

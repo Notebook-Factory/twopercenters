@@ -200,7 +200,7 @@ def author_find_layout():
             value = 0,
             options = update_yr_options(career = True)
         )
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
     
     selectYrA1 = html.Div(
         [dbc.RadioItems(
@@ -213,7 +213,7 @@ def author_find_layout():
             value = '2017',
             options = [{"label": "2017", "value": "2017", 'disabled': False}]
         )
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
 
 
     @callback(
@@ -308,7 +308,8 @@ def author_find_layout():
         else:
             metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
             prefix1 = 'career' if career1 else 'singleyr'
-            results = get_es_results(group1_name, prefix1, 'authfull')
+            # exact=True: the author name comes from the dropdown.
+            results = get_es_results(group1_name, prefix1, 'authfull', exact=True)
             data1 = {}
             data1_log = {}
             if results is not None:

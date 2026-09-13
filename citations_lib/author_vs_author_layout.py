@@ -213,7 +213,7 @@ def author_vs_author_layout():
             value = 0,
             options = update_yr_options(career = True)
         )
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
     
     selectYrA1 = html.Div(
         [dbc.RadioItems(
@@ -226,7 +226,7 @@ def author_vs_author_layout():
             value = '2017',
             options = [{"label": "2017", "value": "2017", 'disabled': False}]
         )
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
 
     selectYrA2 = html.Div(
         [dbc.RadioItems(
@@ -239,7 +239,7 @@ def author_vs_author_layout():
             value = '2017',
             options = [{"label": "2017", "value": "2017", 'disabled': False}]
         )
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
 
     @callback(
         Output('selectYrRadio' + SUFFIX, 'options'), 
@@ -338,7 +338,8 @@ def author_vs_author_layout():
         else:
 
             prefix1 = 'career' if career1 else 'singleyr'
-            results = get_es_results(group1_name, prefix1, 'authfull')
+            # exact=True: both names come from the author dropdowns.
+            results = get_es_results(group1_name, prefix1, 'authfull', exact=True)
             data1 = {}
             data1_log = {}
             if results is not None:
@@ -347,7 +348,7 @@ def author_vs_author_layout():
                 data1 =  data1[f'{prefix1}_{yr1}']
 
             prefix2 = 'career' if career2 else 'singleyr'
-            results = get_es_results(group2_name, prefix2, 'authfull')
+            results = get_es_results(group2_name, prefix2, 'authfull', exact=True)
             data2 = {}
             data2_log = {}
             if results is not None:

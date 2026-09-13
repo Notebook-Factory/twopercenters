@@ -82,7 +82,7 @@ def group_vs_group_layout():
             id = "selectYrRadio" + SUFFIX, className = "btn-group", inputClassName = "btn-check", 
             labelClassName = "btn btn-outline-primary", labelCheckedClassName = "active", style = {'size':'sm'}, 
             options = update_yr_options(career = True), value = 3)
-    ], className = "radio-group")
+    ], className = "radio-group year-picker")
     @callback(
         Output('selectYrRadio' + SUFFIX, 'options'), 
         Input('careerORSingleYrRadio' + SUFFIX, 'value'))

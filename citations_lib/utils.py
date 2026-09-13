@@ -48,32 +48,15 @@ def read_json(filename):
         return data
 
 
-def es_scroll(index, query_body, page_size=100, debug=False, scroll='2m'):
-    page = es.search(index=index, scroll=scroll, size=page_size, body=query_body)
-    sid = page['_scroll_id']
-    scroll_size = page['hits']['total']['value']
-    total_pages = math.ceil(scroll_size/page_size)
-    page_counter = 0
-    if debug: 
-        print('Total items : {}'.format(scroll_size))
-        print('Total pages : {}'.format( math.ceil(scroll_size/page_size) ) )
-    # Start scrolling
-    while (scroll_size > 0):
-        # Get the number of results that we returned in the last scroll
-        scroll_size = len(page['hits']['hits'])
-        if scroll_size>0:
-            if debug: 
-                print('> Scrolling page {} : {} items'.format(page_counter, scroll_size))
-            yield total_pages, page_counter, scroll_size, page
-        # get next page
-        page = es.scroll(scroll_id = sid, scroll = '2m')
-        page_counter += 1
-        # Update the scroll ID
-        sid = page['_scroll_id']
-
-def get_index_cat(index_name):
-    params = {"bytes":"b","format":"json"}
-    return es.cat.indices(index=index_name,params=params)
+# es_scroll and get_index_cat lived here to page through the old
+# `career`/`singleyr` Elasticsearch indices. Nothing calls them any more:
+# the last live caller was pages/home.py's country click, which now reads
+# Postgres, and every other reference in citations_lib/ is inside
+# commented-out code. They are removed rather than kept, because keeping a
+# working helper that targets indices a fresh deployment will not have is an
+# invitation to reach for it again. Author search goes through
+# get_es_results against the `authors` alias, which is the only
+# Elasticsearch access left.
 
 def get_all_values_by_key(data, target_key):
     result = []
@@ -960,13 +943,24 @@ def get_inst_field_cntry(data, prefix, year):
     cntry = data[f'{prefix}_{year}']['cntry']
     return {'cntry': cntry, 'field': field, 'inst': inst}
 
+
 def try_catch_return(names,prefix,ent1,ent2):
+    """Group summary vectors for one field or institution name.
+
+    The f'{prefix}_{ent1}' argument is vestigial: it used to name an
+    Elasticsearch index ("career_field", "career_inst"). get_es_results reads
+    it as a kind now and _requested_kinds ignores anything that is not
+    'career' or 'singleyr', so it falls through to both kinds, which is what
+    this wants. It is left as-is rather than tidied because get_metric_summary
+    passes the same shape to the cntry lookup two lines above.
+    """
     results = get_es_results(names,f'{prefix}_{ent1}',ent2)
     data = es_result_pick(results,'data', None)
     if data is None:
         results = get_es_results(names,f'{prefix}_{ent1}',ent2,True)
         data = es_result_pick(results,'data', None)
     return data
+
 
 def r2dec(value):
     if isinstance(value, str):
@@ -1081,82 +1075,6 @@ def update_auth_yrs(keys,prefix):
             it = it + 1
     return opts
     
-def load_standardized_data(root_data = 'data/'):
-
-    # =============== Reading in the data
-
-    maxlog_metrics = ['nc', 'h', 'hm',  'ncs', 'ncsf','ncsfl', 'nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)','ncsfl (ns)']
-
-    # === 2017 data
-    data_path = root_data + 'version-1/'
-    df_career_v1_2017 = pd.read_pickle(data_path + 'Table-S1-career-2017.pkl')
-    df_career_v1_2017_log = pd.read_pickle(data_path + 'Table-S1-career-2017_LogTransform.pkl')
-    df_singleyr_v1_2017 = pd.read_pickle(data_path + 'Table-S2-singleyr-2017.pkl')
-    df_singleyr_v1_2017_log = pd.read_pickle(data_path + 'Table-S2-singleyr-2017_LogTransform.pkl')
-    # standardize col names
-    df_career_v1_2017, df_career_v1_2017_text = standardize_col_names(df = df_career_v1_2017, year = 2017, v1_present = True, singleyr = False)
-    df_career_v1_2017_log, _ = standardize_col_names(df = df_career_v1_2017_log, year = 2017, v1_present = True, singleyr = False)
-    df_singleyr_v1_2017, df_singleyr_v1_2017_text = standardize_col_names(df = df_singleyr_v1_2017, year = 2017, v1_present = True, singleyr = True)
-    df_singleyr_v1_2017_log, _ = standardize_col_names(df = df_singleyr_v1_2017_log, year = 2017, v1_present = True, singleyr = True)
-
-    # === 2018 data (only career data available!)
-    df_career_v1_2018 = pd.read_pickle(data_path + 'Table-S4-career-2018.pkl')
-    df_career_v1_2018_log = pd.read_pickle(data_path + 'Table-S4-career-2018_LogTransform.pkl')
-    # standardize col names
-    df_career_v1_2018, df_career_v1_2018_text = standardize_col_names(df = df_career_v1_2018, year = 2018, v1_present = True, singleyr = False)
-    df_career_v1_2018_log, _ = standardize_col_names(df = df_career_v1_2018_log, year = 2018, v1_present = True, singleyr = False)
-
-    # === 2019 data
-    data_path = root_data + 'version-2/'
-    df_career_v2_2019 = pd.read_pickle(data_path + 'Table-S6-career-2019.pkl')
-    df_career_v2_2019_log = pd.read_pickle(data_path + 'Table-S6-career-2019_LogTransform.pkl')
-    df_singleyr_v2_2019 = pd.read_pickle(data_path + 'Table-S7-singleyr-2019.pkl')
-    df_singleyr_v2_2019_log = pd.read_pickle(data_path + 'Table-S7-singleyr-2019_LogTransform.pkl')
-    # standardize col names
-    df_career_v2_2019, df_career_v2_2019_text = standardize_col_names(df = df_career_v2_2019, year = 2019, v1_present = True, singleyr = False)
-    df_career_v2_2019_log, _ = standardize_col_names(df = df_career_v2_2019_log, year = 2019, v1_present = True, singleyr = False)
-    df_singleyr_v2_2019, df_singleyr_v2_2019_text = standardize_col_names(df = df_singleyr_v2_2019, year = 2019, v1_present = True, singleyr = True)
-    df_singleyr_v2_2019_log, _ = standardize_col_names(df = df_singleyr_v2_2019_log, year = 2019, v1_present = True, singleyr = True)
-
-    # === 2020 data
-    data_path = root_data + 'version-3/'
-    df_career_v3_2020 = pd.read_pickle(data_path + 'Table_1_Authors_career_2020_wopp_extracted_202108.pkl')
-    df_career_v3_2020_log = pd.read_pickle(data_path + 'Table_1_Authors_career_2020_wopp_extracted_202108_LogTransform.pkl')
-    df_singleyr_v3_2020 = pd.read_pickle(data_path + 'Table_1_Authors_singleyr_2020_wopp_extracted_202108.pkl')
-    df_singleyr_v3_2020_log = pd.read_pickle(data_path + 'Table_1_Authors_singleyr_2020_wopp_extracted_202108_LogTransform.pkl')
-    # standardize col names
-    df_career_v3_2020, df_career_v3_2020_text = standardize_col_names(df = df_career_v3_2020, year = 2020, v1_present = True, singleyr = False)
-    df_career_v3_2020_log, _ = standardize_col_names(df = df_career_v3_2020_log, year = 2020, v1_present = True, singleyr = False)
-    df_singleyr_v3_2020, df_singleyr_v3_2020_text = standardize_col_names(df = df_singleyr_v3_2020, year = 2020, v1_present = True, singleyr = True)
-    df_singleyr_v3_2020_log, _ = standardize_col_names(df = df_singleyr_v3_2020_log, year = 2020, v1_present = True, singleyr = True)
-
-    # === 2021 data
-    data_path = root_data + 'version-5/'
-    df_career_v5_2021 = pd.read_pickle(data_path + 'Table_1_Authors_career_2021_pubs_since_1788_wopp_extracted_202209b.pkl')
-    df_career_v5_2021_log = pd.read_pickle(data_path + 'Table_1_Authors_career_2021_pubs_since_1788_wopp_extracted_202209b_LogTransform.pkl')
-    df_singleyr_v5_2021 = pd.read_pickle(data_path + 'Table_1_Authors_singleyr_2021_pubs_since_1788_wopp_extracted_202209b.pkl')
-    df_singleyr_v5_2021_log = pd.read_pickle(data_path + 'Table_1_Authors_singleyr_2021_pubs_since_1788_wopp_extracted_202209b_LogTransform.pkl')
-    # standardize col names
-    df_career_v5_2021, df_career_v5_2021_text = standardize_col_names(df = df_career_v5_2021, year = 2021, v1_present = True, singleyr = False)
-    df_career_v5_2021_log, _ = standardize_col_names(df = df_career_v5_2021_log, year = 2021, v1_present = True, singleyr = False)
-    df_singleyr_v5_2021, df_singleyr_v5_2021_text = standardize_col_names(df = df_singleyr_v5_2021, year = 2021, v1_present = True, singleyr = True)
-    df_singleyr_v5_2021_log, _ = standardize_col_names(df = df_singleyr_v5_2021_log, year = 2021, v1_present = True, singleyr = True)
-
-    # =============== Save list of df names and attributes
-    dfs_career = [df_career_v1_2017, df_career_v1_2018, df_career_v2_2019, df_career_v3_2020, df_career_v5_2021] ### DELETE: dfs = [df1,df2,df3,df5,df5_career] 
-    dfs_singleyr = [df_singleyr_v1_2017, df_singleyr_v2_2019, df_singleyr_v3_2020, df_singleyr_v5_2021]
-
-    dfs_career_log = [df_career_v1_2017_log, df_career_v1_2018_log, df_career_v2_2019_log, df_career_v3_2020_log, df_career_v5_2021_log] ### DELETE: dfs_log = [df1_log,df2_log,df3_log,df5_log,df5_career_log]
-    dfs_singleyr_log = [df_singleyr_v1_2017_log, df_singleyr_v2_2019_log, df_singleyr_v3_2020_log, df_singleyr_v5_2021_log]
-
-    dfs_career_text = [df_career_v1_2017_text, df_career_v1_2018_text, df_career_v2_2019_text, df_career_v3_2020_text, df_career_v5_2021_text] ### DELETE: text = [df1_text,df2_text,df3_text,df5_text,df5_career_text]
-    dfs_singleyr_text = [df_singleyr_v1_2017_text, df_singleyr_v2_2019_text, df_singleyr_v3_2020_text, df_singleyr_v5_2021_text]
-    ### DELETE: names = ['df1','df2','df3','df5','df5_career']
-
-    dfs_career_yrs = [2017, 2018, 2019, 2020, 2021]
-    dfs_singleyr_yrs = [2017, 2019, 2020, 2021]
-
-    return(dfs_career, dfs_singleyr, dfs_career_log, dfs_singleyr_log, dfs_career_text, dfs_singleyr_text, dfs_career_yrs, dfs_singleyr_yrs)
 
 # Quickly search a df for an author
 def search_df(df,search_str,datatype = 'author'):

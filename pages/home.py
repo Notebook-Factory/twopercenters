@@ -115,7 +115,9 @@ def update_graphs(val,yr, iscar, sts,dt):
         selection = dt[val['row']][sel_type]
         
         if sel_type == 'RESEARCHER':
-            results = get_es_results(selection,prefix,'authfull')
+            # exact=True: `selection` is a RESEARCHER cell from the country
+            # table, which country_researchers filled from authors.authfull_display.
+            results = get_es_results(selection,prefix,'authfull',exact=True)
             if results is not None:
                 data = es_result_pick(results, 'data', None)
                 data  = data[f'{prefix}_{yr}']
@@ -325,7 +327,7 @@ zort = html.Div([dbc.RadioItems(id='selectYrRadio' + SUFFIX,
                       # the map showed the stale list and stopped at 2021.
                       # Seeding from the same helper fixes the initial render.
                       options = _MAP_YEAR_OPTIONS,
-                      value = _MAP_DEFAULT_YEAR)], className = "radio-group")
+                      value = _MAP_DEFAULT_YEAR)], className = "radio-group year-picker")
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
 explain  =  f'''
                     <h3 style='color:#ECAB4C;'> Bird's eye view of the top 2% </h3>
@@ -438,22 +440,35 @@ def toggle_offcanvas(n1, is_open):
     return is_open
 
 PLOTLY_LOGO = "https://github.com/neurolibre/brand/blob/main/png/neurolibre-icon-red.png?raw=true"
+# The mark and the wordmark sit together on the left as one brand lockup,
+# rather than being spread apart by justify='around' inside a container that
+# CSS was squeezing into the left third of the bar. dark=True so Bootstrap
+# picks light foreground colours to go with the dark ground set in style.css.
 dede = dbc.Navbar(
     dbc.Container(
         [
-                # Use row and col to control vertical alignment of logo / brand
+            html.A(
                 dbc.Row(
                     [
-                        dbc.Col(html.Img(src=PLOTLY_LOGO, height="30px")),
-                        dbc.Col(dbc.NavbarBrand("Twopercenters dashboard by NeuroLibre")),
+                        dbc.Col(html.Img(src=PLOTLY_LOGO, height="34px")),
+                        dbc.Col(dbc.NavbarBrand(
+                            "Twopercenters", className="ms-2 mb-0")),
+                        dbc.Col(html.Span(
+                            "by NeuroLibre",
+                            style={'color': '#CFCFCF', 'fontSize': '0.85rem',
+                                   'whiteSpace': 'nowrap'})),
                     ],
                     align='center',
-                    justify='around'
+                    className='g-2 flex-nowrap',
                 ),
+                href='/',
+                style={'textDecoration': 'none'},
+            ),
             dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
-        ]
+        ],
+        className='d-flex justify-content-between align-items-center',
     ),
-    color="gainsboro"
+    dark=True,
 )
 
 info_button = dbc.Button("ℹ️ MORE INFO", id='off',  n_clicks=0,
@@ -528,8 +543,12 @@ footer = html.Footer(id='footer',
                          html.Hr(),
                          html.Br(),
                          html.Center(html.H3('NeuroLibre DB')),
-                         html.Center(html.Img(src="https://github.com/neurolibre/brand/blob/main/png/dashboards.png?raw=true", height="150px")),
-                         html.Center(html.H4('info@neurolibre.org')),
+                         # Was 150px and dominated the footer. The footer is
+                         # a sign-off, not a second masthead.
+                         html.Center(html.Img(src="https://github.com/neurolibre/brand/blob/main/png/dashboards.png?raw=true", height="72px",
+                                              style={'opacity': '0.85'})),
+                         html.Center(html.H5('info@neurolibre.org',
+                                             style={'marginTop': '12px'})),
                          html.Br(),
                          html.Center(ttt)
                      ])
