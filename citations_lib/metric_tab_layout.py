@@ -46,12 +46,12 @@ def get_metric_tab_layout(): # DEFAULT_CAREER = None, DEFAULT_YR = None
     # world_path = 'aggregate/custom.geo.json'
     # with open(world_path) as f: geo_world = json.load(f)
     
-    darkAccent1 = '#2C2C2C' # dark gray
-    darkAccent2 = '#5b5959' # pale gray
-    darkAccent3 = '#CFCFCF' # almost white
-    lightAccent1 = '#ECAB4C' # ocre
-    highlight1 = 'lightsteelblue'
-    highlight2 = 'cornflowerblue'
+    darkAccent1 = '#394459' # navy ground (Evidence)
+    darkAccent2 = '#4A5670' # raised surface
+    darkAccent3 = '#E8ECF2' # near-white text
+    lightAccent1 = '#00B4D8' # cyan leaf, primary accent
+    highlight1 = '#84B460' # green leaf
+    highlight2 = '#D86CB4' # magenta leaf
     theme =  {'dark': True,'detail': lightAccent1,'primary': darkAccent1,'secondary': lightAccent1}
     g1c = [highlight1,highlight1, darkAccent2, darkAccent2] # bar plot bars 1 & 2
     g2c = [highlight2, highlight2] # bar plot bar 3

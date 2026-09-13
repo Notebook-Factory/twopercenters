@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 # =============== Plotly Dash libraries
 import dash
-from dash import html, dcc, callback, dash_table #, Input, Output
+from dash import html, dcc, callback, dash_table, callback_context #, Input, Output
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
@@ -43,12 +43,12 @@ SUFFIX = "HOME"
 # ========================================================================================== 
 # ========================================================================================== 
 
-darkAccent1 = '#2C2C2C' # dark gray
-darkAccent2 = '#5b5959' # pale gray
-darkAccent3 = '#CFCFCF' # almost white
-lightAccent1 = '#ECAB4C' # ocre
-highlight1 = 'lightsteelblue'
-highlight2 = 'cornflowerblue'
+darkAccent1 = '#394459' # navy ground (Evidence)
+darkAccent2 = '#4A5670' # raised surface
+darkAccent3 = '#E8ECF2' # near-white text
+lightAccent1 = '#00B4D8' # cyan leaf, primary accent
+highlight1 = '#84B460' # green leaf
+highlight2 = '#D86CB4' # magenta leaf
 theme =  {'dark': True, 'detail': lightAccent1, 'primary': darkAccent1, 'secondary': lightAccent1}
 
 g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
@@ -439,7 +439,10 @@ def toggle_offcanvas(n1, is_open):
         return not is_open
     return is_open
 
-PLOTLY_LOGO = "https://github.com/neurolibre/brand/blob/main/png/neurolibre-icon-red.png?raw=true"
+# Served out of assets/ rather than hotlinked from GitHub, so the mark still
+# renders if github.com is unreachable from the deployment.
+EVIDENCE_LOGO = "/assets/evidence-logo.png"
+EVIDENCE_URL = "https://evidencepub.io"
 # The mark and the wordmark sit together on the left as one brand lockup,
 # rather than being spread apart by justify='around' inside a container that
 # CSS was squeezing into the left third of the bar. dark=True so Bootstrap
@@ -447,29 +450,79 @@ PLOTLY_LOGO = "https://github.com/neurolibre/brand/blob/main/png/neurolibre-icon
 dede = dbc.Navbar(
     dbc.Container(
         [
+            # Brand lockup: mark, wordmark, attribution. One anchor, so the
+            # whole thing is a single target back to the top.
             html.A(
                 dbc.Row(
                     [
-                        dbc.Col(html.Img(src=PLOTLY_LOGO, height="34px")),
-                        dbc.Col(dbc.NavbarBrand(
-                            "Twopercenters", className="ms-2 mb-0")),
-                        dbc.Col(html.Span(
-                            "by NeuroLibre",
-                            style={'color': '#CFCFCF', 'fontSize': '0.85rem',
-                                   'whiteSpace': 'nowrap'})),
+                        dbc.Col(html.Img(src=EVIDENCE_LOGO, height="36px"),
+                                width="auto"),
+                        dbc.Col(
+                            [
+                                html.Div("Twopercenters", className="ev-wordmark"),
+                                html.Div(
+                                    [
+                                        "developed and hosted by ",
+                                        html.A("Evidence", href=EVIDENCE_URL,
+                                               target="_blank",
+                                               className="ev-attrib-link"),
+                                    ],
+                                    className="ev-attrib",
+                                ),
+                            ],
+                            width="auto",
+                        ),
                     ],
-                    align='center',
-                    className='g-2 flex-nowrap',
+                    align="center",
+                    className="g-2 flex-nowrap",
                 ),
-                href='/',
-                style={'textDecoration': 'none'},
+                href="/",
+                className="ev-brand",
             ),
-            dbc.NavbarToggler(id="navbar-toggler", n_clicks=0),
+            # Right side: one button per collapsible section below, plus the
+            # search. These exist because the sections were being missed: the
+            # accordion headers were the only way in, and people did not read
+            # them as controls.
+            html.Div(
+                [
+                    dbc.Button("Search", id="spotlight-open",
+                               className="ev-nav-search", n_clicks=0),
+                    dbc.Button("Compare", id="jump-compare",
+                               className="ev-nav-btn", n_clicks=0),
+                    dbc.Button("Trends", id="jump-trends",
+                               className="ev-nav-btn", n_clicks=0),
+                ],
+                className="ev-nav-actions",
+            ),
         ],
-        className='d-flex justify-content-between align-items-center',
+        className="d-flex justify-content-between align-items-center",
+        fluid=True,
     ),
     dark=True,
+    sticky="top",
 )
+
+
+@callback(
+    Output("accordion", "active_item"),
+    Input("jump-compare", "n_clicks"),
+    Input("jump-trends", "n_clicks"),
+    prevent_initial_call=True,
+)
+def jump_to_section(_compare, _trends):
+    """Open the section whose navbar button was pressed.
+
+    Which button fired is read from the trigger rather than from the click
+    counts, because comparing counts breaks as soon as one button is pressed
+    twice in a row.
+    """
+    triggered = callback_context.triggered_id
+    if triggered == "jump-compare":
+        return ACCORDION_SECTIONS[0][0]
+    if triggered == "jump-trends":
+        return ACCORDION_SECTIONS[1][0]
+    raise PreventUpdate
+
 
 info_button = dbc.Button("ℹ️ MORE INFO", id='off',  n_clicks=0,
                     className='lel2')
@@ -513,6 +566,17 @@ def switch_tab(at):
     return html.P("This shouldn't ever be displayed...")
 
 
+# item_id lets the navbar's jump buttons open a section directly. The
+# "(toggle)" the titles used to carry is gone: the chevron and the hover state
+# say it, and a title that has to explain its own widget is a sign the widget
+# is not reading as one.
+ACCORDION_SECTIONS = [
+    ("compare", "Taking a closer look",
+     "Compare researchers, fields and countries"),
+    ("trends", "Researcher trends",
+     "How a researcher's metrics change over the years"),
+]
+
 accordion = html.Div(
     dbc.Accordion(
         [
@@ -520,18 +584,22 @@ accordion = html.Div(
                 [
                     html.Div(tabs),
                 ],
-                title = "Taking a closer look: Comparing researchers, fields, and countries (toggle)",
+                title = ACCORDION_SECTIONS[0][1],
+                item_id = ACCORDION_SECTIONS[0][0],
             ),
             dbc.AccordionItem(
                 [
                     single_author_layout(),
                 ],
-                title="Researcher trends: How metrics change for a researcher over the years (toggle)",
+                title = ACCORDION_SECTIONS[1][1],
+                item_id = ACCORDION_SECTIONS[1][0],
             )
         ],
         flush = False,
-        id='accordion'
-    )
+        id='accordion',
+        active_item = ACCORDION_SECTIONS[0][0],
+    ),
+    id='accordion-anchor',
 )
 
 
@@ -553,8 +621,98 @@ footer = html.Footer(id='footer',
                          html.Center(ttt)
                      ])
 
+
+# ============================================================================
+# Spotlight search
+# ----------------------------------------------------------------------------
+# The author typeahead used to live only inside a tab inside a collapsed
+# accordion, so the dashboard's main verb was three clicks down. This lifts it
+# to a command-palette overlay: Cmd-K / Ctrl-K anywhere, or the Search button
+# in the navbar. It reuses get_es_results against the `authors` alias, which is
+# the same fuzzy search the in-tab dropdown uses, so a typo still finds the
+# author. Picking a result opens the trends section for that author.
+# ============================================================================
+
+spotlight = dbc.Modal(
+    [
+        dbc.ModalBody(
+            [
+                dcc.Dropdown(
+                    id="spotlight-input",
+                    options=[],
+                    placeholder="Search researchers by name…",
+                    searchable=True,
+                    className="ev-spotlight-input",
+                ),
+                html.Div(
+                    "Type a name. Misspellings are fine.",
+                    className="ev-spotlight-hint",
+                ),
+            ],
+            className="ev-spotlight-body",
+        ),
+    ],
+    id="spotlight",
+    is_open=False,
+    centered=False,
+    size="lg",
+    contentClassName="ev-spotlight",
+    backdrop=True,
+)
+
+
+@callback(
+    Output("spotlight-input", "options"),
+    Input("spotlight-input", "search_value"),
+)
+def spotlight_options(search_value):
+    """Same fuzzy author search the in-tab dropdown runs."""
+    if not search_value:
+        raise PreventUpdate
+    return es_result_pick(
+        get_es_results(search_value, ['career', 'singleyr'], 'authfull'),
+        'authfull')
+
+
+@callback(
+    Output("spotlight", "is_open"),
+    Input("spotlight-open", "n_clicks"),
+    Input("spotlight-input", "value"),
+    State("spotlight", "is_open"),
+    prevent_initial_call=True,
+)
+def toggle_spotlight(_clicks, chosen, is_open):
+    """Open on the navbar button, close once a name has been chosen."""
+    triggered = callback_context.triggered_id
+    if triggered == "spotlight-open":
+        return not is_open
+    if triggered == "spotlight-input" and chosen:
+        return False
+    raise PreventUpdate
+
+
+@callback(
+    Output("accordion", "active_item", allow_duplicate=True),
+    Output("authorOptionsDropdown_single_author", "value"),
+    Input("spotlight-input", "value"),
+    prevent_initial_call=True,
+)
+def spotlight_pick(chosen):
+    """Send the chosen author to the trends section and open it.
+
+    The target is single_author_layout's own dropdown
+    ("authorOptionsDropdown" + SUFFIX, SUFFIX = "_single_author"), so setting
+    its value drives every callback that section already has.
+    """
+    if not chosen:
+        raise PreventUpdate
+    return ACCORDION_SECTIONS[1][0], chosen
+
+
 layout = dbc.Container(fluid = True, children = [
         offcanvas,
+        spotlight,
+        dcc.Store(id="spotlight-hotkey"),
         dede,
         html.Div(navigation_row),
         html.Br(),

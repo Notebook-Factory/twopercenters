@@ -139,12 +139,12 @@ def author_vs_author_layout():
     # Color formatting
     # ========================================================================================== 
     # ========================================================================================== 
-    darkAccent1 = '#2C2C2C' # dark gray
-    darkAccent2 = '#5b5959' # pale gray
-    darkAccent3 = '#CFCFCF' # almost white
-    lightAccent1 = '#ECAB4C' # ocre
-    highlight1 = 'lightsteelblue'
-    highlight2 = 'cornflowerblue'
+    darkAccent1 = '#394459' # navy ground (Evidence)
+    darkAccent2 = '#4A5670' # raised surface
+    darkAccent3 = '#E8ECF2' # near-white text
+    lightAccent1 = '#00B4D8' # cyan leaf, primary accent
+    highlight1 = '#84B460' # green leaf
+    highlight2 = '#D86CB4' # magenta leaf
 
     g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
     g2c = [highlight2, darkAccent3] # bar plot bar 3

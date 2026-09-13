@@ -1,11 +1,42 @@
 /*
+  Evidence palette. Sampled from assets/evidence-logo.png: the mark is four
+  leaves (cyan, green, orange, magenta) turning around a navy ground, so the
+  navy carries the page and the leaves are the accents. Every colour below is
+  defined once here; nothing else in this file names a hex value, so
+  rebranding again means editing this block alone.
+*/
+:root {
+  --ev-bg:          #394459;  /* navy ground */
+  --ev-bg-deep:     #303C54;  /* the logo's own navy, for recessed areas */
+  --ev-surface:     #424E66;  /* cards, bars, raised panels */
+  --ev-surface-2:   #4A5670;  /* hover, borders, muted fills */
+  --ev-text:        #E8ECF2;  /* primary text */
+  --ev-text-muted:  #A8B2C4;  /* secondary text */
+
+  --ev-accent:      #00B4D8;  /* cyan leaf: primary action / selection */
+  --ev-accent-soft: #1B5E72;  /* cyan at low intensity, for fills */
+  --ev-green:       #84B460;
+  --ev-orange:      #F09048;
+  --ev-magenta:     #D86CB4;
+
+  --ev-radius:      10px;
+  --ev-shadow:      0 2px 10px rgba(0, 0, 0, 0.28);
+}
+
+/* The page itself, so panels read as raised against a consistent ground. */
+body, .dash-app-content {
+  background-color: var(--ev-bg) !important;
+  color: var(--ev-text);
+}
+
+/*
 ORIGINAL CSS FILE FOR SLATE: https://cdn.jsdelivr.net/npm/bootswatch@5.2.3/dist/slate/bootstrap.min.css
 
 COLOUR LIST
-darkAccent1 = '#2C2C2C' # dark gray, bgc (bar plot background)
-darkAccent2 = '#5b5959' # pale gray
-darkAccent3 = '#CFCFCF' # almost white
-lightAccent1 = '#ECAB4C' # ocre
+darkAccent1 = 'var(--ev-bg)' # dark gray, bgc (bar plot background)
+darkAccent2 = 'var(--ev-surface-2)' # pale gray
+darkAccent3 = 'var(--ev-text)' # almost white
+lightAccent1 = 'var(--ev-accent)' # ocre
 highlight1 = 'lightsteelblue'
 highlight2 = 'cornflowerblue'
 
@@ -16,7 +47,7 @@ highlight2 = 'cornflowerblue'
 *[data-dash-is-loading="true"]::before{
   content: "Loading...";
   display: inline-block;
-  color: #ECAB4C;
+  color: var(--ev-accent);
   visibility: visible;
 
 /* ====== Custom tabs ====== 
@@ -26,8 +57,8 @@ highlight2 = 'cornflowerblue'
 } */
 
 .custom-label{
-  background-color:#2C2C2C;
-  border: 3px solid #CFCFCF;
+  background-color:var(--ev-bg);
+  border: 3px solid var(--ev-text);
 }
 .custom-tabs .nav-link {
   white-space: normal; /* allow the text to wrap */
@@ -38,15 +69,15 @@ highlight2 = 'cornflowerblue'
 }
 .tab-content {
   border-radius: 8 px;
-  border: 2px solid #ECAB4C;
+  border: 2px solid var(--ev-accent);
 }
 
 /* ====== Dropdown ====== */
 .Select-control{
-  background-color: #CFCFCF;
+  background-color: var(--ev-text);
   border-radius: 4px;
-  border: 2px solid #ECAB4C;
-  color: #2C2C2C;
+  border: 2px solid var(--ev-accent);
+  color: var(--ev-bg);
   display: table;
   border-spacing: 0;
   border-collapse: separate;
@@ -56,19 +87,19 @@ highlight2 = 'cornflowerblue'
 }
 
 .is-open>.Select-control{
-  background: #CFCFCF;
-  border: 1px solid #ECAB4C;
+  background: var(--ev-text);
+  border: 1px solid var(--ev-accent);
 }
 
 .Select-menu-outer{
-  background-color: #CFCFCF;
-  color: #2C2C2C;
-  border: 2px solid #ECAB4C;
+  background-color: var(--ev-text);
+  color: var(--ev-bg);
+  border: 2px solid var(--ev-accent);
   text-align: left;
 }
 
 .Select-value-label{
-  color: #2C2C2C;
+  color: var(--ev-bg);
 }
 
 .Select-placeholder{
@@ -77,14 +108,14 @@ highlight2 = 'cornflowerblue'
 
 .is-focused .Select-input > input {
   cursor: text;
-  color: #ECAB4C!important;
+  color: var(--ev-accent)!important;
 }
 
 .Select--multi .Select-value {
-  background-color: #CFCFCF;
+  background-color: var(--ev-text);
   border-radius: 2px;
-  border: 1px solid #2C2C2C;
-  color: #ECAB4C;
+  border: 1px solid var(--ev-bg);
+  color: var(--ev-accent);
   display: inline-block;
   font-size: .9em;
   line-height: 1.4;
@@ -94,12 +125,12 @@ highlight2 = 'cornflowerblue'
 }
 
 .has-value.Select--single>.Select-control .Select-value .Select-value-label{
-color: #2C2C2C;
+color: var(--ev-bg);
 }
 
 /* ====== Headers ====== */
 .header2 {
-  background-color:#2C2C2C;
+  background-color:var(--ev-bg);
   height: 60px;
   display: flex;
   flex-direction: column;
@@ -107,7 +138,7 @@ color: #2C2C2C;
 }
 
 .header-title2 {
-  color: #ECAB4C;
+  color: var(--ev-accent);
   font-size: 30px;
   font-weight: bold;
   text-align: center;
@@ -121,7 +152,7 @@ color: #2C2C2C;
 }
 
 .header-title {
-    color: #ECAB4C;
+    color: var(--ev-accent);
     font-size: 48px;
     font-weight: bold;
     text-align: center;
@@ -129,7 +160,7 @@ color: #2C2C2C;
 }
 
 .header-description {
-    color: #CFCFCF;
+    color: var(--ev-text);
     margin: 4px auto;
     text-align: center;
     max-width: 600px;
@@ -141,7 +172,7 @@ color: #2C2C2C;
 }
 
 .btn-group .btn.active {
-  background-color: #ECAB4C;
+  background-color: var(--ev-accent);
 }
 
 .radio-group .btn-group > .form-check:not(:last-child) > .btn {
@@ -173,10 +204,10 @@ color: #2C2C2C;
 }
 
 .danger {
-  background-color: #ebd4b0;
+  background-color: var(--ev-accent-soft);
   color: black;
-  border-left: 6px solid #ECAB4C;
-  border-right: 6px solid #ECAB4C;
+  border-left: 6px solid var(--ev-accent);
+  border-right: 6px solid var(--ev-accent);
   border-radius: 5px;
   padding-left: 5px;
 }
@@ -184,23 +215,23 @@ color: #2C2C2C;
 /* ====== Main tab bar ======
    These four tabs are the dashboard's primary navigation, and people were
    missing them: they did not read as something you could click. Two reasons.
-   The active rule below set background-color and color to the same #ECAB4C,
+   The active rule below set background-color and color to the same var(--ev-accent),
    so the selected tab's own label was invisible against its own background.
    And the inactive tabs had no rule at all, so they rendered as bare text on
    the page with no edge, no hover and no pointer cursor: nothing that says
    "toggle". Both are fixed here. */
 
 .nav-tabs {
-  border-bottom: 2px solid #ECAB4C;
+  border-bottom: 2px solid var(--ev-accent);
   gap: 4px;
 }
 
 /* Inactive: reads as a real, unselected tab sitting below the active one. */
 .nav-tabs .nav-link {
   cursor: pointer;
-  color: #CFCFCF;
-  background-color: #2C2C2C;
-  border: 1px solid #5b5959;
+  color: var(--ev-text);
+  background-color: var(--ev-bg);
+  border: 1px solid var(--ev-surface-2);
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   padding: 8px 16px;
@@ -209,28 +240,28 @@ color: #2C2C2C;
 }
 
 .nav-tabs .nav-link:hover:not(.active) {
-  background-color: #3a3a3a;
-  color: #ECAB4C;
-  border-color: #ECAB4C;
+  background-color: var(--ev-surface-2);
+  color: var(--ev-accent);
+  border-color: var(--ev-accent);
 }
 
 .nav-tabs .nav-link:focus-visible {
-  outline: 2px solid #ECAB4C;
+  outline: 2px solid var(--ev-accent);
   outline-offset: 2px;
 }
 
 /* Active: ocre ground with dark text on it, so the label is legible, and
    joined to the panel below by hiding the bar underneath it. */
 .nav-tabs .nav-link.active {
-  background-color: #ECAB4C !important;
-  color: #2C2C2C !important;
+  background-color: var(--ev-accent) !important;
+  color: var(--ev-bg) !important;
   font-weight: 700;
-  border-color: #ECAB4C;
-  box-shadow: 0 -2px 6px rgba(236, 171, 76, 0.35);
+  border-color: var(--ev-accent);
+  box-shadow: 0 -2px 6px rgba(0, 180, 216, 0.35);
 }
 
 .accordion-button {
-  background-color: #ECAB4C;
+  background-color: var(--ev-accent);
   color: white;
   font-size: xx-large;
   
@@ -245,8 +276,8 @@ color: #2C2C2C;
    brand into the left third and left a large dead gap. The bar spans the
    width now and the brand sits with the mark. */
 .navbar {
-  background-color: #2C2C2C !important;
-  border-bottom: 2px solid #ECAB4C;
+  background-color: var(--ev-bg) !important;
+  border-bottom: 2px solid var(--ev-accent);
   padding: 10px 0;
 }
 
@@ -261,7 +292,7 @@ color: #2C2C2C;
 .navbar-brand{
   margin-right: 0;
   border-right: 0px;
-  color: #ECAB4C !important;
+  color: var(--ev-accent) !important;
   font-weight: 600;
   letter-spacing: 0.2px;
   font-size: 1.15rem;
@@ -297,12 +328,12 @@ color: #2C2C2C;
 }
 
 .offcanvas-header .btn-close {
-  background-color: #ECAB4C;
+  background-color: var(--ev-accent);
 }
 code {
   font-family: 'Courier New', Courier, monospace;
   font-size: 14px;
-  color: #ECAB4C;
+  color: var(--ev-accent);
   padding: 2px 4px;
 }
 
@@ -375,3 +406,138 @@ li code {
   .year-picker .btn-group { scroll-behavior: auto; }
   .year-picker .btn-group > .form-check > .btn.active { transform: none; }
 }
+
+/* ====== Top bar: brand lockup and actions ====== */
+.ev-brand {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ev-wordmark {
+  color: var(--ev-text);
+  font-size: 1.2rem;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: 0.2px;
+}
+
+.ev-attrib {
+  color: var(--ev-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.15;
+}
+
+.ev-attrib-link {
+  color: var(--ev-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.ev-attrib-link:hover { text-decoration: underline; }
+
+.ev-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Section jump buttons. Quiet by default so they do not compete with the
+   content, but clearly buttons: border, hover, pointer. */
+.ev-nav-btn {
+  background-color: transparent;
+  border: 1px solid var(--ev-surface-2);
+  color: var(--ev-text);
+  border-radius: var(--ev-radius);
+  padding: 6px 14px;
+  font-size: 0.88rem;
+  font-weight: 550;
+}
+.ev-nav-btn:hover {
+  background-color: var(--ev-surface);
+  border-color: var(--ev-accent);
+  color: var(--ev-accent);
+}
+
+/* The search button carries the shortcut, because a shortcut nobody can see
+   is a shortcut nobody uses. */
+.ev-nav-search {
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-surface-2);
+  color: var(--ev-text-muted);
+  border-radius: var(--ev-radius);
+  padding: 6px 14px;
+  font-size: 0.88rem;
+  min-width: 190px;
+  text-align: left;
+}
+.ev-nav-search::after {
+  content: "⌘K";
+  float: right;
+  opacity: 0.75;
+  font-size: 0.78rem;
+  border: 1px solid var(--ev-surface-2);
+  border-radius: 5px;
+  padding: 0 5px;
+  margin-left: 12px;
+}
+.ev-nav-search:hover {
+  border-color: var(--ev-accent);
+  color: var(--ev-text);
+  background-color: var(--ev-surface-2);
+}
+
+/* ====== Spotlight overlay ====== */
+/* Sits high on the screen rather than centred: a command palette is something
+   you type into immediately, so it should not move the eye to the middle of
+   the page and back. */
+#spotlight .modal-dialog {
+  margin-top: 12vh;
+}
+
+.ev-spotlight {
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-surface-2);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.ev-spotlight-body { padding: 16px 18px; }
+
+.ev-spotlight-hint {
+  color: var(--ev-text-muted);
+  font-size: 0.78rem;
+  margin-top: 10px;
+}
+
+/* ====== Accordion section headers ====== */
+/* These are the way into the two main sections, so they have to read as
+   controls. The old rule set xx-large ocre text with no edge, which looked
+   like a heading rather than something you open. */
+.accordion-item {
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-surface-2);
+  border-radius: var(--ev-radius) !important;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.accordion-button,
+.accordion-button:not(.collapsed),
+.accordion-item:last-of-type .accordion-button.collapsed {
+  background-color: var(--ev-surface);
+  color: var(--ev-text);
+  font-size: 1.15rem;
+  font-weight: 620;
+  box-shadow: none;
+}
+
+.accordion-button:not(.collapsed) {
+  color: var(--ev-accent);
+  border-bottom: 1px solid var(--ev-surface-2);
+}
+
+.accordion-button:hover { background-color: var(--ev-surface-2); }
+
+.accordion-button::after { filter: brightness(2.2); }
+
+.accordion-body { background-color: var(--ev-bg); }
