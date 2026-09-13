@@ -232,3 +232,76 @@ def test_world_map_covers_the_new_editions():
     assert new["median"].sum() > 0
     assert set(new["metric"]) == {"h", "nc", "hm", "ncs", "ncsf", "ncsfl", "c"}
     assert new.loc[new["code"] == "USA", "median"].notna().all()
+
+
+# --------------------------------------------------- group dropdown options
+
+def test_dropdown_opts_covers_every_edition_in_postgres():
+    """The two group pages used to build this from aggregate/info_*.pkl,
+    nine files covering radio indices career 0-4 and singleyr 0-3. Selecting
+    2022 asked for 'career 5' and raised KeyError."""
+    from citations_lib.utils import edition_years, load_dropdown_opts
+
+    opts = load_dropdown_opts()
+    for kind in ("career", "singleyr"):
+        years = edition_years(kind)
+        for index in range(len(years)):
+            assert f"{kind} {index}" in opts, f"{kind} {index}"
+    # The three editions this project adds, at the indices the year radio
+    # hands the callback.
+    career = edition_years("career")
+    for year in (2022, 2023, 2024):
+        assert f"career {career.index(year)}" in opts
+    singleyr = edition_years("singleyr")
+    for year in (2022, 2023, 2024):
+        assert f"singleyr {singleyr.index(year)}" in opts
+
+
+def test_dropdown_opts_entries_have_the_pickles_shape():
+    from citations_lib.utils import load_dropdown_opts
+
+    entry = load_dropdown_opts()["career 7"]
+    for metric in ("nc", "h", "hm", "ncs", "ncsf", "ncsfl",
+                   "nc (ns)", "h (ns)", "hm (ns)", "ncs (ns)",
+                   "ncsf (ns)", "ncsfl (ns)"):
+        for stat in ("min", "max", "mean", "std"):
+            assert f"{metric} {stat}" in entry, f"{metric} {stat}"
+    for listkey in ("cntry", "cntry_full", "inst_name", "sm-field"):
+        assert entry[listkey], listkey
+    # The group dropdown zips these two together to label the countries.
+    assert len(entry["cntry"]) == len(entry["cntry_full"])
+
+
+def test_dropdown_opts_drops_country_codes_with_no_name():
+    """csk, scg and sux are defunct states country_converter cannot resolve.
+    They would show as 'not found' in the dropdown and then fail the same
+    conversion inside get_es_aggregate."""
+    from citations_lib.utils import load_dropdown_opts
+
+    for entry in load_dropdown_opts().values():
+        assert not ({"csk", "scg", "sux"} & set(entry["cntry"]))
+        assert "not found" not in entry["cntry_full"]
+
+
+def test_dropdown_opts_matches_the_pickles_where_they_exist():
+    """The nine pickles are a cross-check, not the truth: the notebook that
+    wrote them floored the fractional hm-index for min and max. Everything
+    else agrees exactly."""
+    import math
+    import pickle
+
+    from citations_lib.utils import load_dropdown_opts
+
+    computed = load_dropdown_opts()
+    for kind, count in (("career", 5), ("singleyr", 4)):
+        for i in range(count):
+            with open(f"aggregate/info_{kind}_{i}.pkl", "rb") as fp:
+                old = pickle.load(fp)
+            new = computed[f"{kind} {i}"]
+            for key, value in old.items():
+                if isinstance(value, list):
+                    continue
+                if key.startswith("hm") and key.rsplit(" ", 1)[1] in ("min", "max"):
+                    assert math.floor(new[key]) == value, (kind, i, key)
+                else:
+                    assert float(new[key]) == float(value), (kind, i, key)

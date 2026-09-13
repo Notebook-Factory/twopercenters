@@ -36,13 +36,11 @@ def author_vs_group_layout():
     # ========================================================================================== 
     # ========================================================================================== 
     #dfs_career, dfs_singleyr, dfs_career_log, dfs_singleyr_log, dfs_career_text, dfs_singleyr_text, dfs_career_yrs, dfs_singleyr_yrs = load_standardized_data()
-    dropdown_opts = dict()
-    for i in range(5):
-        with open(f'aggregate/info_career_{i}.pkl', 'rb') as fp: info = pickle.load(fp)
-        dropdown_opts['career ' + str(i)] = info
-    for i in range(4):
-        with open(f'aggregate/info_singleyr_{i}.pkl', 'rb') as fp: info = pickle.load(fp)
-        dropdown_opts['singleyr ' + str(i)] = info
+    # Was nine aggregate/info_*.pkl files, one per edition, which only covered
+    # radio indices career 0-4 and singleyr 0-3; selecting 2022 or later
+    # raised KeyError('career 5') when filling a group dropdown. Same dict,
+    # computed from every edition actually loaded.
+    dropdown_opts = load_dropdown_opts()
 
     # ========================================================================================== 
     # ========================================================================================== 

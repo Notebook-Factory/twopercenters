@@ -208,6 +208,129 @@ def edition_years(kind):
     return [year for _, k, year in _editions() if k == kind]
 
 
+def edition_ids(kind):
+    """Edition ids for one kind, in the same ascending-year order as the
+    radio indices."""
+    return [edition_id for edition_id, k, _ in _editions() if k == kind]
+
+
+# The twelve metrics the aggregate/info_*.pkl files carry statistics for,
+# named as the dashboard names them, paired with their database column.
+_DROPDOWN_METRICS = [
+    ('nc', 'nc'), ('h', 'h'), ('hm', 'hm'),
+    ('ncs', 'ncs'), ('ncsf', 'ncsf'), ('ncsfl', 'ncsfl'),
+    ('nc (ns)', 'nc_ns'), ('h (ns)', 'h_ns'), ('hm (ns)', 'hm_ns'),
+    ('ncs (ns)', 'ncs_ns'), ('ncsf (ns)', 'ncsf_ns'),
+    ('ncsfl (ns)', 'ncsfl_ns'),
+]
+
+_COUNTRY_NAMES = {}
+
+
+def _country_full_name(code):
+    """The display name for an ISO3 code, or None if there isn't one.
+
+    Three codes in the data are defunct states that country_converter cannot
+    resolve: csk (Czechoslovakia), scg (Serbia and Montenegro) and sux (the
+    Soviet Union). The pickles left them out of the country dropdown and so
+    does this, since the label would read 'not found' and selecting one would
+    fail the same conversion in get_es_aggregate.
+    """
+    if code not in _COUNTRY_NAMES:
+        name = coco.convert(names=code, to='name_short')
+        _COUNTRY_NAMES[code] = None if name == 'not found' else name
+    return _COUNTRY_NAMES[code]
+
+
+def _dropdown_lists(kind):
+    """{edition_id: {'cntry': [...], 'cntry_full': [...], 'inst_name': [...],
+    'sm-field': [...]}}: the option lists the group dropdowns offer."""
+    table = _TABLE_BY_KIND[kind]
+    out = {}
+
+    def collect(key, rows):
+        for edition_id, value in rows:
+            out.setdefault(edition_id, {}).setdefault(key, []).append(value)
+
+    collect('cntry', _fetch(
+        f'select edition_id, country_code from {table} '
+        f'where country_code is not null group by 1, 2 order by 1, 2'))
+    collect('inst_name', _fetch(
+        f'select m.edition_id, i.inst_name from {table} m '
+        f'join institutions i on i.institution_id = m.institution_id '
+        f'group by 1, 2 order by 1, 2'))
+    collect('sm-field', _fetch(
+        f'select m.edition_id, f.name from {table} m '
+        f'join fields f on f.field_id = m.field_id '
+        f'group by 1, 2 order by 1, 2'))
+    for lists in out.values():
+        pairs = [(code, _country_full_name(code))
+                 for code in lists.get('cntry', [])]
+        pairs = [(code, name) for code, name in pairs if name is not None]
+        # The two lists are zipped together to label the country dropdown, so
+        # they have to stay aligned.
+        lists['cntry'] = [code for code, _ in pairs]
+        lists['cntry_full'] = [name for _, name in pairs]
+    return out
+
+
+def _dropdown_stats(kind):
+    """{edition_id: {'nc min': ..., 'nc max': ..., 'nc mean': ...,
+    'nc std': ...}}, one entry per metric, as the pickles held them."""
+    table = _TABLE_BY_KIND[kind]
+    selects = []
+    for _, column in _DROPDOWN_METRICS:
+        selects += [f'min({column})', f'max({column})', f'avg({column})',
+                    f'stddev_samp({column})']
+    rows = _fetch(f'select edition_id, {", ".join(selects)} '
+                  f'from {table} group by edition_id')
+    out = {}
+    for row in rows:
+        stats = {}
+        for i, (name, _) in enumerate(_DROPDOWN_METRICS):
+            minimum, maximum, mean, std = row[1 + i * 4:5 + i * 4]
+            stats[f'{name} min'] = minimum
+            stats[f'{name} max'] = maximum
+            # The pickles stored these rounded to two decimals.
+            stats[f'{name} mean'] = None if mean is None else round(float(mean), 2)
+            stats[f'{name} std'] = None if std is None else round(float(std), 2)
+        out[row[0]] = stats
+    return out
+
+
+@lru_cache(maxsize=1)
+def load_dropdown_opts():
+    """The dict the two group pages used to build from aggregate/info_*.pkl.
+
+    Those pickles are one file per edition and only nine of them were ever
+    generated, so they cover radio indices career 0-4 and singleyr 0-3. Once
+    the year radio started offering 2022, 2023 and 2024, filling a group
+    dropdown asked for 'career 5' and raised KeyError (RULING R25). This
+    computes the same dict for every edition actually loaded.
+
+    The shape is the pickles' shape: outer keys '<kind> <radio index>' in
+    ascending data-year order, and inside each, '<metric> min' / ' max' /
+    ' mean' / ' std' for the twelve metrics, plus the 'cntry', 'cntry_full',
+    'inst_name' and 'sm-field' option lists.
+
+    One pickle key is deliberately not reproduced: 'authfull', the full list
+    of author names in that edition. Nothing reads it (the one reference, at
+    author_vs_group_layout.py:173, is commented out), and it is by far the
+    most expensive part: about 200,000 names per edition, so 15 editions
+    would be roughly three million strings built at page-construction time,
+    in each of the two layouts that call this.
+    """
+    opts = {}
+    for kind in ('career', 'singleyr'):
+        lists = _dropdown_lists(kind)
+        stats = _dropdown_stats(kind)
+        for index, edition_id in enumerate(edition_ids(kind)):
+            entry = dict(stats.get(edition_id, {}))
+            entry.update(lists.get(edition_id, {}))
+            opts[f'{kind} {index}'] = entry
+    return opts
+
+
 def yr_convention_map(career):
     """{"0": "2017", "1": "2018", ...}: radio index -> year, as a string.
 
