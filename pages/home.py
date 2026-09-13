@@ -342,7 +342,7 @@ explain  =  f'''
 
                     ---
 
-                    This dashboard section provides a zommed-out look at the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
+                    This dashboard section provides a zoomed-out look at the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
                     You can explore the researchers and institutions that made the cut in each country.
 
                     #### Global distribution of performance metrics
@@ -352,7 +352,7 @@ explain  =  f'''
                     
                     <div class="danger">
                     <details>
-                    <summary>❓ <strong>Career vs single-year</strong></summary>
+                    <summary><i data-lucide="help-circle"></i><strong>Career vs single-year</strong></summary>
                     <p>The Elsevier database includes <strong>career-long</strong> and <strong>single-year</strong> records per researcher. For instance, the <strong>career &amp; {_MAP_DEFAULT_YEAR}</strong> selection for H-index shows the score
                     a researcher accumulated up to 2021, while the <strong>single-year & 2021</strong> displays H-index obtained in that year only.</p>
                     </details>
@@ -360,7 +360,7 @@ explain  =  f'''
                     <br/>
                     <div class="danger">
                     <details>
-                    <summary>💡 <strong>Click to see interaction tips</strong></summary>
+                    <summary><i data-lucide="lightbulb"></i><strong>How to use this map</strong></summary>
                     <ul>
                     <li>Switch between <strong>career</strong> and <strong>single year</strong> datasets using the toolbar above the world map and select a year.</li>
                     <li>Use the <strong>slider</strong> below the map to switch between the performance metrics that went into the ranking of the researchers.</li>
@@ -372,7 +372,7 @@ explain  =  f'''
                     <br/>
                     <div class="danger">
                     <details>
-                    <summary>🔡 <strong>Click to see metric abbreviations</strong></summary>
+                    <summary><i data-lucide="list"></i><strong>What the metric abbreviations mean</strong></summary>
                     <ul>
                     <li><b>h:</b> <a href='https://en.wikipedia.org/wiki/H-index' target='_blank' style='color:blue;'>H-index</a></li>
                     <li><b>nc:</b> Number of citations (#cites)</li>
@@ -681,23 +681,61 @@ accordion = html.Div(
 )
 
 
-ttt = dcc.Markdown('''
-                    | [Source Code](https://github.com/Notebook-Factory/twopercenters) | [NoteBook Factory](https://github.com/Notebook-Factory) | [Twitter](https://twitter.com/NeuroLibre) | 
-                    ''')
-footer = html.Footer(id='footer',
-                     children = [
-                         html.Hr(),
-                         html.Br(),
-                         html.Center(html.H3('NeuroLibre DB')),
-                         # Was 150px and dominated the footer. The footer is
-                         # a sign-off, not a second masthead.
-                         html.Center(html.Img(src="https://github.com/neurolibre/brand/blob/main/png/dashboards.png?raw=true", height="72px",
-                                              style={'opacity': '0.85'})),
-                         html.Center(html.H5('info@neurolibre.org',
-                                             style={'marginTop': '12px'})),
-                         html.Br(),
-                         html.Center(ttt)
-                     ])
+def _footer_link(icon, label, href):
+    """One labelled link with a Lucide glyph in front of it."""
+    return html.A(
+        [html.I(**{"data-lucide": icon}), html.Span(label)],
+        href=href, target="_blank", className="ev-foot-link",
+    )
+
+
+# A sign-off, not a second masthead: the mark on the left, the links beside it,
+# the wordmark bottom-right. Both marks are served from assets/ rather than
+# hotlinked, so the footer still renders if evidencepub.io is unreachable from
+# the deployment.
+footer = html.Footer(
+    id='footer',
+    className='ev-footer',
+    children=[
+        html.Div(
+            [
+                html.A(
+                    html.Img(src="/assets/evidence-mark.svg",
+                             className="ev-foot-mark", alt="Evidence"),
+                    href="https://evidencepub.io", target="_blank",
+                ),
+                html.Div(
+                    [
+                        _footer_link("book-open", "Preprint",
+                                     "https://journals.plos.org/plosbiology/"
+                                     "article?id=10.1371/journal.pbio.3000384"),
+                        _footer_link("database", "Elsevier data",
+                                     "https://elsevier.digitalcommonsdata.com/"
+                                     "datasets/btchxktzyw/5"),
+                        _footer_link("code", "Source code",
+                                     "https://github.com/Notebook-Factory/twopercenters"),
+                        _footer_link("mail", "Contact",
+                                     "mailto:info@neurolibre.org"),
+                    ],
+                    className="ev-foot-links",
+                ),
+            ],
+            className="ev-foot-top",
+        ),
+        html.Div(
+            [
+                html.Span("Top 2% most-cited researchers",
+                          className="ev-foot-note"),
+                html.A(
+                    html.Img(src="/assets/evidence-label.svg",
+                             className="ev-foot-label", alt="Evidence"),
+                    href="https://evidencepub.io", target="_blank",
+                ),
+            ],
+            className="ev-foot-bottom",
+        ),
+    ],
+)
 
 
 # ============================================================================

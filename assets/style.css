@@ -1769,8 +1769,7 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
 .dash-markdown a,
 p a, li a, td a {
   color: var(--ev-accent) !important;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
 }
 .ev-page a:hover,
 #worldtitle a:hover,
@@ -1856,3 +1855,149 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   text-decoration: none !important;
 }
 .ev-attrib-link:hover { text-decoration: underline !important; }
+
+/* ==========================================================================
+   Footer
+   The mark on the left, the links beside it, the wordmark bottom-right, on a
+   recessed ground separated by a hairline. It replaces a centred stack of a
+   heading, a large raster logo, an email address and a pipe-separated row of
+   bare links.
+   ========================================================================== */
+.ev-footer {
+  margin-top: 48px;
+  padding: 34px 32px 26px;
+  background-color: var(--ev-bg-deep);
+  border-top: 1px solid var(--ev-surface-2);
+}
+
+.ev-foot-top {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  flex-wrap: wrap;
+}
+
+.ev-foot-mark {
+  height: 48px;
+  width: 48px;
+  display: block;
+}
+
+.ev-foot-links {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  flex-wrap: wrap;
+}
+
+.ev-foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ev-text-muted) !important;
+  text-decoration: none !important;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.ev-foot-link:hover { color: var(--ev-accent) !important; }
+.ev-foot-link [data-lucide] { width: 17px; height: 17px; }
+
+.ev-foot-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ev-surface-2);
+}
+
+.ev-foot-note {
+  color: var(--ev-text-muted);
+  font-size: 0.78rem;
+}
+
+/* The wordmark is dark artwork, so it needs inverting on the dark theme and
+   not on the light one. */
+.ev-foot-label { height: 26px; display: block; opacity: 0.9; }
+:root:not([data-theme="light"]) .ev-foot-label { filter: invert(1) brightness(1.6); }
+
+@media (max-width: 720px) {
+  .ev-foot-top { gap: 20px; }
+  .ev-foot-bottom { flex-direction: column; align-items: flex-start; }
+}
+
+/* ==========================================================================
+   Disclosures in the summary column
+   The class is called "danger" for historical reasons, but these three are
+   explanations, not warnings. A thick crimson-reading edge on a navy ground
+   says error; they are information, so they take the cyan accent and read as
+   something to open.
+   ========================================================================== */
+.danger {
+  background-color: var(--ev-surface);
+  color: var(--ev-text);
+  border: 1px solid var(--ev-surface-2);
+  border-left: 3px solid var(--ev-accent);
+  border-radius: var(--ev-radius);
+  padding: 0;
+  box-shadow: none;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.danger details { margin: 0; }
+
+.danger summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 12px 14px;
+  color: var(--ev-text);
+  font-size: 0.92rem;
+  list-style: none;
+}
+.danger summary::-webkit-details-marker { display: none; }
+.danger summary::marker { content: ""; }
+.danger summary:hover { background-color: var(--ev-surface-2); }
+.danger summary [data-lucide] {
+  width: 17px; height: 17px;
+  color: var(--ev-accent);
+  flex: 0 0 17px;
+}
+
+/* A chevron that turns, so the row reads as openable. */
+.danger summary::after {
+  content: "";
+  margin-left: auto;
+  width: 15px; height: 15px;
+  flex: 0 0 15px;
+  background-color: var(--ev-text-muted);
+  transition: transform 140ms ease;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center;  mask-position: center;
+  -webkit-mask-size: contain;     mask-size: contain;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+}
+.danger details[open] summary::after { transform: rotate(180deg); }
+
+.danger details > *:not(summary) {
+  padding: 0 14px 14px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ev-text-muted);
+}
+
+/* The global body-link rule uses !important, so the footer links have to be
+   at least as specific to keep their muted resting colour; without this they
+   all sit at full accent and the row reads as four calls to action. */
+.ev-footer .ev-foot-link,
+.ev-page .ev-footer .ev-foot-link {
+  color: var(--ev-text-muted) !important;
+}
+.ev-footer .ev-foot-link:hover,
+.ev-page .ev-footer .ev-foot-link:hover {
+  color: var(--ev-accent) !important;
+}
