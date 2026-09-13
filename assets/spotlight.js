@@ -19,8 +19,8 @@
 
     if (key === 'escape') {
       // Only steal Escape when the overlay is actually showing.
-      var modal = document.getElementById('spotlight');
-      if (modal && modal.classList.contains('show')) {
+      var field = document.getElementById('spotlight-input');
+      if (field && field.offsetParent !== null) {
         var close = document.getElementById('spotlight-open');
         if (close) { close.click(); }
       }
@@ -40,10 +40,8 @@
   // animation, and only gives up once the field has held focus across
   // consecutive checks.
   function focusSearch() {
-    var modal = document.getElementById('spotlight');
-    if (!modal || !modal.classList.contains('show')) { return false; }
     var input = document.getElementById('spotlight-input');
-    if (!input) { return false; }
+    if (!input || input.offsetParent === null) { return false; }
     if (document.activeElement !== input) {
       input.focus({preventScroll: true});
       var len = (input.value || '').length;
@@ -54,8 +52,8 @@
 
   var wasOpen = false;
   var observer = new MutationObserver(function () {
-    var modal = document.getElementById('spotlight');
-    var open = !!(modal && modal.classList.contains('show'));
+    var field = document.getElementById('spotlight-input');
+    var open = !!(field && field.offsetParent !== null);
 
     if (open && !wasOpen) {
       var held = 0;
@@ -138,4 +136,73 @@
 
   new MutationObserver(scheduleRender)
     .observe(document.body, {childList: true, subtree: true});
+})();
+
+// Arrow keys through the spotlight results.
+//
+// This tracks a highlighted row explicitly rather than moving DOM focus.
+// Focus was the obvious approach and it did not survive: the field keeps
+// focus while you type, which is what you want in a palette, and the focus
+// this handler moved onto a row was taken straight back, so Down appeared to
+// do nothing. An explicit marker is also what lets typing continue while a
+// row is highlighted.
+(function () {
+  var HILITE = 'ev-spotlight-hit--active';
+
+  function results() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('#spotlight-results .ev-spotlight-hit'));
+  }
+
+  function isOpen() {
+    // dbc.Modal puts the component id on the inner .modal-dialog, not on the
+    // outer .modal that carries .show, so asking the id'd element whether it
+    // has .show is always false. Whether the field is laid out is the honest
+    // question: offsetParent is null while the overlay is closed.
+    var input = document.getElementById('spotlight-input');
+    return !!(input && input.offsetParent !== null);
+  }
+
+  function highlighted(hits) {
+    for (var i = 0; i < hits.length; i++) {
+      if (hits[i].classList.contains(HILITE)) { return i; }
+    }
+    return -1;
+  }
+
+  function highlight(hits, index) {
+    hits.forEach(function (el, i) { el.classList.toggle(HILITE, i === index); });
+    if (hits[index]) { hits[index].scrollIntoView({block: 'nearest'}); }
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!isOpen()) { return; }
+    var key = e.key;
+    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Enter') { return; }
+
+    var hits = results();
+    if (!hits.length) { return; }
+    var index = highlighted(hits);
+
+    if (key === 'Enter') {
+      e.preventDefault();
+      (index === -1 ? hits[0] : hits[index]).click();
+      return;
+    }
+
+    e.preventDefault();   // keep the caret still while arrowing the list
+    if (key === 'ArrowDown') {
+      index = (index === -1) ? 0 : Math.min(index + 1, hits.length - 1);
+    } else {
+      index = (index <= 0) ? 0 : index - 1;
+    }
+    highlight(hits, index);
+  });
+
+  // A fresh set of results starts unhighlighted, so Down always begins at the
+  // top rather than at wherever the previous list happened to be.
+  new MutationObserver(function () {
+    var box = document.getElementById('spotlight-results');
+    if (box && !box.querySelector('.' + HILITE)) { return; }
+  }).observe(document.body, {childList: true, subtree: true});
 })();

@@ -522,18 +522,24 @@ map_hint = html.Div(
 
 
 @callback(
-    Output("map-hint", "className"),
+    Output("map-hint", "style"),
     Input("map-hint-close", "n_clicks"),
     Input("nav", "clickData"),
     prevent_initial_call=True,
 )
 def dismiss_map_hint(_close, _clicked):
-    """Hide the hint once it has been read, acted on, or made redundant.
+    """Hide the hint once it has been read, or made redundant.
 
     Clicking a country is included deliberately: at that point the user has
     done the thing the hint asks for, so the card has nothing left to say.
+
+    This sets an inline style rather than swapping in a class that sets
+    opacity: 0. The class was being applied correctly, and pointer-events from
+    it took effect, but the computed opacity stayed at 1, so the card went
+    inert while still being visible, which looked like a close button that did
+    nothing. An inline display:none cannot be out-ranked by a stylesheet rule.
     """
-    return "ev-hint ev-hint-gone"
+    return {"display": "none"}
 
 
 offcanvas = html.Div(

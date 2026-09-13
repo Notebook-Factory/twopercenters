@@ -2382,3 +2382,39 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 }
 
 .ev-formula { overflow-x: auto; }
+
+/* ==========================================================================
+   Disabled years
+   dbc puts `disabled` on the <input class="btn-check">, while the thing you
+   see is the <label class="btn"> next to it. A label can never match
+   :disabled, so every rule written as .btn:disabled silently did nothing and
+   years an author has no data for looked exactly like years they do. This is
+   Bootstrap's own pattern: style the label that follows a disabled input.
+   ========================================================================== */
+.btn-check:disabled + .btn,
+.btn-check[disabled] + .btn,
+.ev-picker .btn-check:disabled + .btn,
+.year-picker .btn-check:disabled + .btn,
+[id^="selectYrRadio"] .btn-check:disabled + .btn {
+  color: var(--ev-text-muted) !important;
+  background-color: transparent !important;
+  opacity: 0.32 !important;
+  cursor: not-allowed !important;
+  text-decoration: line-through;
+  pointer-events: none;
+}
+
+/* A disabled year must not pick up the hover treatment either. */
+.ev-picker .btn-check:disabled + .btn:hover,
+.year-picker .btn-check:disabled + .btn:hover {
+  background-color: transparent !important;
+  color: var(--ev-text-muted) !important;
+}
+
+/* The keyboard-highlighted row in the spotlight. Same treatment as hover, so
+   arrowing and pointing look identical; the field keeps focus throughout, so
+   typing can continue with a row highlighted. */
+.ev-spotlight-hit--active {
+  background-color: var(--ev-accent) !important;
+  color: #10151D !important;
+}
