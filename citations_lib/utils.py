@@ -622,7 +622,18 @@ def edition_author_count(kind, year):
     return rows[0][0] if rows else None
 
 
-def country_researchers(country, kind, year):
+def country_researcher_count(country, kind, year):
+    """How many researchers one country contributes to one edition."""
+    if kind not in _TABLE_BY_KIND:
+        return 0
+    code = str(coco.convert(names=country, to='ISO3')).lower()
+    rows = _fetch(f'select count(*) from {_TABLE_BY_KIND[kind]} '
+                  f'where country_code = %s and edition_id = %s',
+                  (code, f'{kind}-{year}'))
+    return rows[0][0] if rows else 0
+
+
+def country_researchers(country, kind, year, limit=None):
     """[{'INSTITUTE': ..., 'RESEARCHER': ...}] for one country and edition.
 
     pages/home.py used to answer the map's country click by scrolling the
@@ -635,6 +646,12 @@ def country_researchers(country, kind, year):
     `country` is whatever the choropleth handed back; coco.convert is
     idempotent on an ISO3 code, so the same conversion get_es_aggregate does
     is applied here and the two always agree on the country key.
+
+    `limit` caps the rows returned. The United States contributes 87,859
+    researchers to career-2024; handing all of them to a DataTable made a
+    7.2 MB response that the browser then had to parse and render, which is
+    why clicking the biggest countries looked like nothing happening. The
+    caller asks for a page's worth and reports the true total separately.
     """
     if kind not in _TABLE_BY_KIND:
         return []
@@ -646,8 +663,9 @@ def country_researchers(country, kind, year):
         f'join authors a on a.author_id = m.author_id '
         f'left join institutions i on i.institution_id = m.institution_id '
         f'where m.country_code = %s and m.edition_id = %s '
-        f'order by a.authfull_display',
-        (code, f'{kind}-{year}'))
+        f'order by a.authfull_display'
+        + (' limit %s' if limit else ''),
+        (code, f'{kind}-{year}') + ((limit,) if limit else ()))
     return [{'INSTITUTE': inst_name or '', 'RESEARCHER': authfull}
             for authfull, inst_name in rows]
 

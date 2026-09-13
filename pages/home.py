@@ -61,6 +61,13 @@ g2c = [highlight2, darkAccent3] # bar plot bar 3
 # a chart follows the light/dark switch without being redrawn.
 bgc = 'rgba(0,0,0,0)' # chart background: inherit the page
 
+# The United States contributes 87,859 researchers to career-2024. Sending
+# all of them made a 7.2 MB response that the browser had to parse and render,
+# which is why clicking a large country looked like nothing happening. A page
+# of names is what this table is for; the true total is shown beside it, and
+# the spotlight search is the way to reach a specific person.
+COUNTRY_ROW_LIMIT = 500
+
 tbl  = dash_table.DataTable(
     id = 'instnametable',
     #filter_action="native",
@@ -85,6 +92,9 @@ tbl  = dash_table.DataTable(
         'borderBottom': '1px solid var(--ev-surface-2)',
     },
     style_table={'height': '300px', 'overflowY': 'auto','display':'none'},
+    page_action='native',
+    page_size=20,
+    sort_action='native',
     style_cell={
         'height': 'auto',
         'textAlign': 'left',
@@ -274,18 +284,25 @@ def click_on_map_update(val,is_career,yr,sts):
     # benchmark's baseline, so selecting 2022, 2023 or 2024 and clicking a
     # country listed nobody. country_researchers asks Postgres, where the
     # fact rows actually live, for the same thing.
-    career_all_c = country_researchers(cntry, nm, yr)
+    # The table gets a page's worth, not the whole country. The count below
+    # is the true total, queried separately.
+    total_in_country = country_researcher_count(cntry, nm, yr)
+    career_all_c = country_researchers(cntry, nm, yr, limit=COUNTRY_ROW_LIMIT)
     # The code is what the lookups key on; the name is what a reader wants.
     cntry_full = str(coco.convert(names=cntry, to='name_short'))
     if cntry_full in ('not found', 'None'):
         cntry_full = cntry.upper()
     total_authors = edition_author_count(nm, yr)
-    institutions = len(set(get_all_values_by_key(career_all_c, "INSTITUTE")))
+    shown = len(career_all_c)
+    if total_in_country > shown:
+        listing = (f'<strong>{shown:,}</strong> of '
+                   f'<strong>{total_in_country:,}</strong> researchers, '
+                   f'alphabetically')
+    else:
+        listing = f'<strong>{total_in_country:,}</strong> researchers'
     msg = (f'<div class="danger"><center><strong>{txt}</strong><br/>'
-           f'<strong>{len(career_all_c):,}</strong> researchers from '
-           f'<strong>{institutions:,}</strong> institutions in '
-           f'<strong>{cntry_full}</strong>'
-           f'<br/><span class="ev-of-total">of {total_authors:,} worldwide '
+           f'{listing} in <strong>{cntry_full}</strong>'
+           f'<br/><span class="ev-of-total">{total_authors:,} worldwide '
            f'in this selection</span>'
            f'<br/><u>Click a row to see that researcher</u></center></div>')
     return(self_cit,career_all_c, msg, {'height': '400px', 'overflowY': 'auto','display':'block'},[],None)
@@ -332,7 +349,11 @@ def update_yr_opts(career):
     return(update_yr_options2(career)[0],update_yr_options2(career)[1])
 
 kek = dls.Ring(
-        dcc.Graph(id="nav",figure = fig),
+        # scrollZoom off: the wheel over the map used to zoom it, so the page
+        # could not be scrolled past the map at all. Zoom stays available
+        # through the modebar's box-zoom and double-click to reset.
+        dcc.Graph(id="nav", figure=fig,
+                  config={'scrollZoom': False, 'displaylogo': False}),
         color="#ECAB4C",
         #speed_multiplier=2,
         width=270)
