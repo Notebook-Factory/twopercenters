@@ -52,6 +52,7 @@ then deletes the old concrete index.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from elasticsearch.helpers import bulk
@@ -117,9 +118,37 @@ left join years y on y.author_id = a.author_id
 """
 
 
-def _new_index_name():
+def _new_index_name(alias):
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-    return f"authors_{stamp}"
+    return f"{alias}_{stamp}"
+
+
+def _sibling_pattern(alias):
+    """Regex matching only this alias's own concrete indices.
+
+    A build for `alias` names its indices `f"{alias}_<digits>"`. Matching
+    naively on `startswith(f"{alias}_")` would make an `authors` build's
+    cleanup sweep pick up `authors_test_<digits>` too, since that string does
+    start with `"authors_"`. Anchoring the suffix to digits-only rules that
+    out: `authors_test_20260913...` fails `^authors_\\d+$` (its suffix is
+    `test_20260913...`, not all digits), so an `authors` sweep can never touch
+    an `authors_test` index or vice versa.
+    """
+    return re.compile(rf"^{re.escape(alias)}_\d+$")
+
+
+def _orphans(es, alias, keep):
+    """Every concrete index belonging to `alias`'s naming scheme except `keep`.
+
+    This is independent of what the alias currently points at, on purpose:
+    an index left behind by a run that crashed or was superseded before it
+    ever reached the `update_aliases` call is never referenced by the alias,
+    so a cleanup step that only looks at `indices.get_alias` can never see it
+    and it leaks forever. Enumerating by name pattern instead finds those too.
+    """
+    pattern = _sibling_pattern(alias)
+    all_indices = es.indices.get(index="*")
+    return [name for name in all_indices if name != keep and pattern.match(name)]
 
 
 def _rows(conn):
@@ -152,14 +181,22 @@ def build(es, conn, alias="authors"):
     """Build a new slim author index and atomically point `alias` at it.
 
     Returns the concrete index name created. Creates
-    `authors_<utc timestamp>`, bulk-indexes one document per author (no
+    `<alias>_<utc timestamp>`, bulk-indexes one document per author (no
     `data` blob), refreshes it, then repoints `alias` with a single
     `indices.update_aliases` call that removes the alias from whatever index
     it previously named and adds it to the new one in the same request, so
-    there is no window where the alias resolves to no index. The old
-    concrete index is deleted only after the swap succeeds.
+    there is no window where the alias resolves to no index.
+
+    Only after that swap succeeds does it sweep away every OTHER concrete
+    index matching this alias's own naming scheme (`<alias>_<digits>`), not
+    just the one the alias used to point at. That sweep is what reclaims an
+    index a previous run built and populated but never got to alias -- a
+    crash, an OOM, an interrupted session, a superseded concurrent run --
+    which would otherwise never be referenced by anything and leak forever.
+    Doing the sweep after, not before, the swap means a failure mid-build
+    can never delete the index currently serving traffic.
     """
-    new_index = _new_index_name()
+    new_index = _new_index_name(alias)
 
     es.indices.create(index=new_index, body={"mappings": MAPPING})
     bulk(es, _actions(conn, new_index))
@@ -173,9 +210,8 @@ def build(es, conn, alias="authors"):
         actions.insert(0, {"remove": {"index": old_index, "alias": alias}})
     es.indices.update_aliases(body={"actions": actions})
 
-    for old_index in old_indices:
-        if old_index != new_index:
-            es.indices.delete(index=old_index)
+    for orphan in _orphans(es, alias, new_index):
+        es.indices.delete(index=orphan)
 
     return new_index
 
