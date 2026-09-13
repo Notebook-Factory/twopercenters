@@ -138,13 +138,45 @@ def _db():
     return _conn
 
 
-def _fetch(sql, params=()):
+def close_db():
+    """Close this process's connection, if it has one.
+
+    Called at the end of importing app.py, and again from the gunicorn
+    post_fork hook in cfg.py. Both exist because of one deployment hazard:
+    the Procfile runs gunicorn with --preload, so the master process imports
+    the app and then forks the workers. pages/home.py runs two queries at
+    import time (the year options and the world map's first frame), which
+    opens the module-global connection below in the MASTER. Without this,
+    every worker would inherit the same libpq socket and their requests would
+    interleave on one connection: protocol errors, and in the bad case one
+    request reading another request's result set.
+
+    _db() reopens on demand, so closing here costs one connect per worker on
+    its first query and nothing after that.
+    """
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        except Exception:
+            pass
+        _conn = None
+
+
+def _with_reconnect(run):
+    """Call run(conn), and if the connection has gone away, drop it and try
+    once more on a fresh one.
+
+    Everything that reads the database goes through here. It used to be
+    inlined in _fetch, which meant the one caller that does not build its own
+    SQL -- _group_rows' institution lookup, which hands the live connection
+    to pipeline.institution_aggregate -- was the single query in the
+    dashboard that did not self-heal after an idle disconnect.
+    """
     global _conn
     for attempt in (1, 2):
         try:
-            with _db().cursor() as cur:
-                cur.execute(sql, params)
-                return cur.fetchall()
+            return run(_db())
         except psycopg.Error:
             try:
                 _conn.close()
@@ -153,6 +185,14 @@ def _fetch(sql, params=()):
             _conn = None
             if attempt == 2:
                 raise
+
+
+def _fetch(sql, params=()):
+    def run(conn):
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+    return _with_reconnect(run)
 
 
 def _edition_key(edition_id):
@@ -213,11 +253,13 @@ _COUNTRY_NAMES = {}
 def _country_full_name(code):
     """The display name for an ISO3 code, or None if there isn't one.
 
-    Three codes in the data are defunct states that country_converter cannot
-    resolve: csk (Czechoslovakia), scg (Serbia and Montenegro) and sux (the
-    Soviet Union). The pickles left them out of the country dropdown and so
-    does this, since the label would read 'not found' and selecting one would
-    fail the same conversion in get_es_aggregate.
+    Four codes in the data are defunct states that country_converter cannot
+    resolve: csk (Czechoslovakia), scg (Serbia and Montenegro), sux (the
+    Soviet Union) and ant (the Netherlands Antilles). The pickles left them
+    out of the country dropdown and so does this, since the label would read
+    'not found' and selecting one would fail the same conversion in
+    get_es_aggregate. get_world_df excludes the same four for the same
+    reason (FINDING 5).
     """
     if code not in _COUNTRY_NAMES:
         name = coco.convert(names=code, to='name_short')
@@ -227,25 +269,23 @@ def _country_full_name(code):
 
 def _dropdown_lists(kind):
     """{edition_id: {'cntry': [...], 'cntry_full': [...], 'inst_name': [...],
-    'sm-field': [...]}}: the option lists the group dropdowns offer."""
-    table = _TABLE_BY_KIND[kind]
+    'sm-field': [...]}}: the option lists the group dropdowns offer.
+
+    Read from the dropdown_options materialized view (migration 007) rather
+    than by scanning both fact tables. The distinct values do not change
+    between builds, and scanning 2.7M rows for them inside a page-building
+    callback was the bulk of load_dropdown_opts()'s cost. The view is
+    refreshed at the end of a build, next to group_metrics.
+    """
     out = {}
-
-    def collect(key, rows):
-        for edition_id, value in rows:
-            out.setdefault(edition_id, {}).setdefault(key, []).append(value)
-
-    collect('cntry', _fetch(
-        f'select edition_id, country_code from {table} '
-        f'where country_code is not null group by 1, 2 order by 1, 2'))
-    collect('inst_name', _fetch(
-        f'select m.edition_id, i.inst_name from {table} m '
-        f'join institutions i on i.institution_id = m.institution_id '
-        f'group by 1, 2 order by 1, 2'))
-    collect('sm-field', _fetch(
-        f'select m.edition_id, f.name from {table} m '
-        f'join fields f on f.field_id = m.field_id '
-        f'group by 1, 2 order by 1, 2'))
+    for edition_id, option_kind, value in _fetch(
+            'select o.edition_id, o.option_kind, o.option_value '
+            'from dropdown_options o '
+            'join editions e on e.edition_id = o.edition_id '
+            'where e.kind = %s '
+            'order by o.edition_id, o.option_kind, o.option_value',
+            (kind,)):
+        out.setdefault(edition_id, {}).setdefault(option_kind, []).append(value)
     for lists in out.values():
         pairs = [(code, _country_full_name(code))
                  for code in lists.get('cntry', [])]
@@ -257,27 +297,44 @@ def _dropdown_lists(kind):
     return out
 
 
+def _int_if_whole(value):
+    """Keep the type the fact-table column had.
+
+    h, nc, ncs and friends are integer columns, so before migration 007 their
+    min and max came back as Python ints. dropdown_stats stores every
+    statistic as double precision for one uniform column type, so whole
+    values are handed back as ints here and fractional ones (hm) are left
+    alone.
+    """
+    if value is None:
+        return None
+    number = float(value)
+    return int(number) if number.is_integer() else number
+
+
 def _dropdown_stats(kind):
     """{edition_id: {'nc min': ..., 'nc max': ..., 'nc mean': ...,
-    'nc std': ...}}, one entry per metric, as the pickles held them."""
-    table = _TABLE_BY_KIND[kind]
-    selects = []
-    for _, column in _DROPDOWN_METRICS:
-        selects += [f'min({column})', f'max({column})', f'avg({column})',
-                    f'stddev_samp({column})']
-    rows = _fetch(f'select edition_id, {", ".join(selects)} '
-                  f'from {table} group by edition_id')
+    'nc std': ...}}, one entry per metric, as the pickles held them.
+
+    Read from the dropdown_stats materialized view (migration 007); see
+    _dropdown_lists for why.
+    """
+    wanted = {column: name for name, column in _DROPDOWN_METRICS}
     out = {}
-    for row in rows:
-        stats = {}
-        for i, (name, _) in enumerate(_DROPDOWN_METRICS):
-            minimum, maximum, mean, std = row[1 + i * 4:5 + i * 4]
-            stats[f'{name} min'] = minimum
-            stats[f'{name} max'] = maximum
-            # The pickles stored these rounded to two decimals.
-            stats[f'{name} mean'] = None if mean is None else round(float(mean), 2)
-            stats[f'{name} std'] = None if std is None else round(float(std), 2)
-        out[row[0]] = stats
+    for edition_id, metric, minimum, maximum, mean, std in _fetch(
+            'select s.edition_id, s.metric, s.min_value, s.max_value, '
+            's.mean_value, s.std_value from dropdown_stats s '
+            'join editions e on e.edition_id = s.edition_id '
+            'where e.kind = %s', (kind,)):
+        name = wanted.get(metric)
+        if name is None:
+            continue
+        stats = out.setdefault(edition_id, {})
+        stats[f'{name} min'] = _int_if_whole(minimum)
+        stats[f'{name} max'] = _int_if_whole(maximum)
+        # The pickles stored these rounded to two decimals.
+        stats[f'{name} mean'] = None if mean is None else round(float(mean), 2)
+        stats[f'{name} std'] = None if std is None else round(float(std), 2)
     return out
 
 
@@ -434,7 +491,8 @@ def _group_rows(group, group_value, kind):
     lookup answers in milliseconds. See pipeline/institution_aggregate.py.
     """
     if group == 'inst_name':
-        live = institution_aggregate_by_name(_db(), group_value, kind)
+        live = _with_reconnect(
+            lambda conn: institution_aggregate_by_name(conn, group_value, kind))
         return [(edition_id, metric, mn, q1, median, q3, mx, n)
                 for edition_id, _, _, metric, mn, q1, median, q3, mx, n
                 in live]
@@ -1202,7 +1260,6 @@ def get_world_df(year,sts,prefix):
         st_idx = 1
     elif sts == '75':
         st_idx = 3
-    cc = coco.CountryConverter()
     # The country summaries used to come from aggregate/cntry_{prefix}.pkl,
     # which only ever held 2017 to 2021. Reading group_metrics instead is what
     # makes the world map work for 2022, 2023 and 2024; without it the map
@@ -1222,15 +1279,19 @@ def get_world_df(year,sts,prefix):
     kk = 0
     for idxx, metric in enumerate(metrics):
         for code in codes:
-            if code != 'csk' and code != 'nan':
-                if code == 'sux':
-                    cur_name = "Russia"
-                elif code == 'ant':
-                    cur_name = "Netherlands"
-                elif code == 'scg':
-                    cur_name = 'Czech Republic'
-                else:
-                    cur_name = cc.convert(code, to = 'name_short')
+            # Four codes in the data are defunct states that
+            # country_converter cannot resolve: csk (Czechoslovakia), scg
+            # (Serbia and Montenegro), sux (the Soviet Union) and ant (the
+            # Netherlands Antilles). This function used to hand three of them
+            # a name anyway, and two of those names were simply a different
+            # country: scg was drawn as the Czech Republic and ant as the
+            # Netherlands. Labelling a country as another country is worse
+            # than leaving it off the map, and there is nothing correct to
+            # put there either, since none of the four is a country plotly
+            # can draw today. So all four are excluded, which is also what
+            # the group dropdowns do with them (_country_full_name).
+            cur_name = _country_full_name(code) if code != 'nan' else None
+            if cur_name is not None:
                 vector = summary.get((code, metric))
                 if vector is not None and vector[st_idx] is not None:
                     df.loc[kk] = ([code.upper()]) + [cur_name] + [vector[st_idx]]  + [''] + [str(metric)] + [str(metrics_name[idxx])]

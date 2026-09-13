@@ -14,7 +14,7 @@ warnings.simplefilter('ignore', ElasticsearchWarning)
 app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
            suppress_callback_exceptions=True)
 server = app.server
-app.title = "2%ers"
+app.title = "Evidence"
 app.layout = html.Div([
         html.Div([dcc.Store(id="df-store", storage_type='local'),
             dcc.Interval(
@@ -24,6 +24,20 @@ app.layout = html.Div([
             interval=1)]),
 	dash.page_container
 ])
+
+# Importing the pages above ran two queries at import time (pages/home.py's
+# year options and the world map's first frame), which left
+# citations_lib.utils._conn open. The Procfile runs gunicorn with
+# preload_app, so this module is imported in the MASTER process and the
+# workers are forked from it -- and a forked child inherits the same libpq
+# socket, so two workers would interleave their requests on one connection.
+# Closing here means nothing is inherited; each worker opens its own on its
+# first query. cfg.py's post_fork hook is the second guard, and
+# tests/test_no_shared_connection.py asserts this line has not been lost.
+from citations_lib.utils import close_db as _close_db
+
+_close_db()
+
 
 
 if __name__ == '__main__':

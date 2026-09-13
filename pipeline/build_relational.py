@@ -848,6 +848,29 @@ def refresh_group_metrics(conn):
     print(f"refreshed group_metrics in {time.time() - started:.1f}s", flush=True)
 
 
+def refresh_dropdown_views(conn):
+    """Refresh dropdown_options and dropdown_stats (migration 007).
+
+    Same contract as refresh_group_metrics and for the same reason: a
+    materialized view does not follow its underlying tables, so leaving these
+    unrefreshed after a load means the Compare and Author-vs-group tabs offer
+    the previous build's option lists. Guarded per view, because a database
+    that has not applied migration 007 yet should not fail the build.
+    """
+    for name in ("dropdown_options", "dropdown_stats"):
+        exists = conn.execute(
+            "select 1 from pg_matviews where schemaname = 'public' "
+            "and matviewname = %s", (name,)
+        ).fetchone()
+        if not exists:
+            print(f"{name} does not exist yet; skipping refresh", flush=True)
+            continue
+        started = time.time()
+        conn.execute(f"refresh materialized view {name}")
+        conn.commit()
+        print(f"refreshed {name} in {time.time() - started:.1f}s", flush=True)
+
+
 def build(conn, root="data_clean", out_dir="data_parquet"):
     """Load every edition under `root` in ascending data-year order.
 
@@ -860,6 +883,23 @@ def build(conn, root="data_clean", out_dir="data_parquet"):
         editions.extend(edition_files(directory))
     editions.sort(key=lambda f: (f.data_year, f.kind))
 
+    # RULING R24, applied to the first command anyone runs on a fresh host.
+    # Without this, a missing or empty data_clean/ made the whole build a
+    # no-op that still exited 0: no editions loaded, empty Parquet written,
+    # group_metrics and the dropdown views refreshed down to zero rows, and
+    # "total 0 rows" printed. That is a silent empty build, and it is most
+    # likely to happen exactly where it does the most damage, since
+    # data_clean/ is gitignored and so is absent from a fresh git push.
+    if not editions:
+        raise SystemExit(
+            f"no editions found under {root!r}: expected one or more "
+            f"{os.path.join(root, 'version-N')} directories containing "
+            "<stem>.pkl files. Nothing was loaded and nothing was "
+            "refreshed. If this is a fresh deployment, the data has to get "
+            "onto the host first: see the 'Getting the data onto the host' "
+            "section of README.md."
+        )
+
     counts = []
     for edition in editions:
         started = time.time()
@@ -870,6 +910,7 @@ def build(conn, root="data_clean", out_dir="data_parquet"):
     for target, rows in export_parquet(conn, out_dir):
         print(f"wrote {target} ({rows:,} rows)", flush=True)
     refresh_group_metrics(conn)
+    refresh_dropdown_views(conn)
     return counts
 
 

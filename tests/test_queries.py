@@ -305,3 +305,92 @@ def test_dropdown_opts_matches_the_pickles_where_they_exist():
                     assert math.floor(new[key]) == value, (kind, i, key)
                 else:
                     assert float(new[key]) == float(value), (kind, i, key)
+
+
+def test_dropdown_opts_reads_the_materialized_views_not_the_fact_tables():
+    """Review FINDING 4.
+
+    load_dropdown_opts builds both group pages, so it runs inside a callback,
+    once per worker process. It used to answer four `group by` scans over
+    both fact tables (2,730,673 rows) and measured about 3 seconds warm here,
+    7.2 on the reviewer's machine. Migration 007 precomputes both halves, the
+    same trade group_metrics already makes.
+
+    This asserts the reader actually goes to the views. A regression to
+    scanning the fact tables would still return the right answer, just
+    slowly, and slowly is the thing being fixed.
+    """
+    import citations_lib.utils as utils
+
+    seen = []
+    real = utils._fetch
+    utils._fetch = lambda sql, params=(): (seen.append(sql), real(sql, params))[1]
+    try:
+        utils.load_dropdown_opts.cache_clear()
+        utils.load_dropdown_opts()
+    finally:
+        utils._fetch = real
+        utils.load_dropdown_opts.cache_clear()
+
+    joined = " ".join(seen)
+    assert "dropdown_options" in joined
+    assert "dropdown_stats" in joined
+    for table in ("career_metrics", "singleyr_metrics"):
+        assert table not in joined, (
+            f"load_dropdown_opts scanned {table} again: "
+            "that is the 3-to-7 second callback FINDING 4 removed"
+        )
+
+
+def test_dropdown_opts_is_fast_enough_to_sit_in_a_callback():
+    """A loose ceiling, not a benchmark.
+
+    The point is to fail if someone puts a fact-table scan back on this path,
+    not to police tenths of a second, so the bound is set well above the
+    measured 0.57s and well below the 3s this replaced.
+    """
+    import time
+
+    from citations_lib.utils import load_dropdown_opts
+
+    load_dropdown_opts()  # let the connection and the OS page cache settle
+    load_dropdown_opts.cache_clear()
+    started = time.time()
+    load_dropdown_opts()
+    elapsed = time.time() - started
+    load_dropdown_opts.cache_clear()
+    assert elapsed < 2.0, f"load_dropdown_opts took {elapsed:.2f}s"
+
+
+# --------------------------------------------------------- world map labels
+
+def test_world_map_never_labels_a_country_as_a_different_country():
+    """Review FINDING 5.
+
+    get_world_df used to hand three unresolvable codes a hardcoded name, and
+    two of those names belonged to somewhere else: scg (Serbia and
+    Montenegro) was drawn as the Czech Republic and ant (the Netherlands
+    Antilles) as the Netherlands. All four unresolvable codes are excluded
+    now, which is what the group dropdowns already did with them.
+    """
+    from citations_lib.utils import edition_years, get_world_df
+
+    year = edition_years("career")[-1]
+    df = get_world_df(year, "median", "career")
+    codes = set(df["code"])
+    assert not ({"CSK", "SCG", "SUX", "ANT"} & codes), codes
+    assert "Czech Republic" not in set(
+        df[df["code"] == "SCG"]["country"]), "scg is still labelled"
+    # The real countries are all still there.
+    assert {"USA", "DEU", "TUR"} <= codes
+    assert not df.empty
+
+
+def test_world_map_names_match_the_dropdown_names():
+    """One rule for what a country code is called, not two."""
+    from citations_lib.utils import _country_full_name, edition_years, get_world_df
+
+    year = edition_years("career")[-1]
+    df = get_world_df(year, "median", "career")
+    for code, name in zip(df["code"], df["country"]):
+        assert name == _country_full_name(code.lower()), code

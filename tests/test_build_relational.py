@@ -5,7 +5,9 @@ import psycopg
 import pytest
 
 from db.migrate import apply_all
-from pipeline.build_relational import build, load_edition, refresh_group_metrics
+from pipeline.build_relational import (build, load_edition,
+                                       refresh_dropdown_views,
+                                       refresh_group_metrics)
 
 from conftest import assert_distinct_urls
 
@@ -187,13 +189,101 @@ def test_refresh_group_metrics_is_a_no_op_if_the_view_does_not_exist_yet(conn):
     refresh_group_metrics(conn)  # must not raise
 
 
-def test_build_refreshes_group_metrics_as_its_final_step(conn, tmp_path, monkeypatch):
+@pytest.fixture
+def one_edition_root(tmp_path):
+    """A data_clean/ containing exactly one version directory.
+
+    build() now refuses to run with no editions (review FINDING 3), so the
+    tests below that only care about what build() calls at the end need a
+    root it will accept. The directory is a symlink to the real
+    data_clean/version-8 and the loader is stubbed out, so nothing is
+    actually read from it.
+    """
+    root = tmp_path / "data_clean"
+    root.mkdir()
+    (root / "version-8").symlink_to(
+        os.path.abspath("data_clean/version-8"), target_is_directory=True)
+    return root
+
+
+def test_build_refuses_to_run_with_no_editions(conn, tmp_path):
+    """R24, on the first command anyone runs on a fresh host.
+
+    data_clean/ is gitignored, so a fresh `git push dokku` carries no data at
+    all. Before this, build() globbed an empty directory, loaded nothing,
+    wrote empty Parquet, refreshed group_metrics down to zero rows, printed
+    "total 0 rows" and exited 0 -- a silent empty build on the code path
+    where it is most likely to happen.
+    """
+    empty_root = tmp_path / "data_clean"
+    empty_root.mkdir()
+    with pytest.raises(SystemExit) as caught:
+        build(conn, root=str(empty_root), out_dir=str(tmp_path / "out"))
+    assert "no editions found" in str(caught.value)
+
+
+def test_build_refuses_to_run_when_the_root_does_not_exist_at_all(conn, tmp_path):
+    with pytest.raises(SystemExit):
+        build(conn, root=str(tmp_path / "absent"),
+              out_dir=str(tmp_path / "out"))
+
+
+def test_nothing_is_refreshed_when_the_build_refuses(conn, tmp_path, monkeypatch):
+    """The refusal has to come before the refreshes, or an empty build still
+    empties the views on its way out."""
     calls = []
+    monkeypatch.setattr("pipeline.build_relational.refresh_group_metrics",
+                        lambda c: calls.append("group_metrics"))
+    monkeypatch.setattr("pipeline.build_relational.refresh_dropdown_views",
+                        lambda c: calls.append("dropdown_views"))
+    empty_root = tmp_path / "data_clean"
+    empty_root.mkdir()
+    with pytest.raises(SystemExit):
+        build(conn, root=str(empty_root), out_dir=str(tmp_path / "out"))
+    assert calls == []
+
+
+def test_build_refreshes_group_metrics_as_its_final_step(
+        conn, tmp_path, monkeypatch, one_edition_root):
+    calls = []
+    monkeypatch.setattr("pipeline.build_relational._load_file",
+                        lambda c, e: 0)
     monkeypatch.setattr(
         "pipeline.build_relational.refresh_group_metrics",
         lambda c: calls.append(c),
     )
-    empty_root = tmp_path / "data_clean"
-    empty_root.mkdir()
-    build(conn, root=str(empty_root), out_dir=str(tmp_path / "data_parquet"))
+    build(conn, root=str(one_edition_root),
+          out_dir=str(tmp_path / "data_parquet"))
     assert calls == [conn]
+
+
+def test_build_refreshes_the_dropdown_views_too(
+        conn, tmp_path, monkeypatch, one_edition_root):
+    """dropdown_options and dropdown_stats (migration 007) are materialized
+    views like group_metrics, so they are just as stale after a load unless
+    the build refreshes them."""
+    calls = []
+    monkeypatch.setattr("pipeline.build_relational._load_file",
+                        lambda c, e: 0)
+    monkeypatch.setattr(
+        "pipeline.build_relational.refresh_dropdown_views",
+        lambda c: calls.append(c),
+    )
+    build(conn, root=str(one_edition_root),
+          out_dir=str(tmp_path / "data_parquet"))
+    assert calls == [conn]
+
+
+def test_refresh_dropdown_views_populates_both_views(conn):
+    load_edition(conn, "data_clean/version-8", kind="career")
+    refresh_dropdown_views(conn)
+    for view in ("dropdown_options", "dropdown_stats"):
+        rows = conn.execute(f"select count(*) from {view}").fetchone()[0]
+        assert rows > 0, view
+
+
+def test_refresh_dropdown_views_is_a_no_op_if_they_do_not_exist_yet(conn):
+    conn.execute("drop materialized view dropdown_options")
+    conn.execute("drop materialized view dropdown_stats")
+    conn.commit()
+    refresh_dropdown_views(conn)  # must not raise
