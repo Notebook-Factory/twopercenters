@@ -23,7 +23,22 @@ import statistics
 import time
 
 
-DEFAULT_TERMS = ["ioa", "ioan", "ioann", "ioannidis", "smi", "smith"]
+# RULING R14: the original 6-term x 5-repeat sample made p95 effectively a
+# single observation (repeat runs of identical legacy code against identical
+# data swung p95 by 2x in both directions). This set raises sampling to 12
+# terms and mixes in the query shapes that behave differently at the ES
+# layer: short 2-3 char prefixes that match thousands of authors ("an",
+# "jo", "smi", "wan"), full surnames ("smith", "johnson", "chen", "garcia",
+# "ioannidis"), one name carrying a diacritic ("müller"), and two deliberate
+# typos so the fuzzy-matching path (fuzziness "auto") is actually exercised
+# ("smtih", "ionnidis").
+DEFAULT_TERMS = [
+    "an", "jo", "smi", "wan",
+    "smith", "johnson", "chen", "garcia", "ioannidis",
+    "müller",
+    "smtih", "ionnidis",
+]
+DEFAULT_REPEATS = 20
 
 
 def _percentile(values, pct):
@@ -58,10 +73,20 @@ def measure(typeahead_fn, fetch_fn, terms, repeats=5):
 
 def _legacy_fns():
     """The blob-era path: authfull typeahead and per-author fetch, exactly as
-    citations_lib/single_author_layout.py and callback_templates.py call them
-    against the career/singleyr Elasticsearch indices.
+    citations_lib/single_author_layout.py and callback_templates.py called
+    them against the career/singleyr Elasticsearch indices, before
+    citations_lib.utils was migrated onto Postgres.
+
+    This deliberately does NOT import from citations_lib.utils: that module
+    has since been migrated (get_es_results now queries the `authors` alias
+    with a filtered _source, and es_result_pick('data', ...) now reads
+    Postgres). Importing the current module here would measure the new
+    stack twice under two different labels instead of comparing it to the
+    old one. bench/_legacy_es.py pins the pre-migration implementation
+    (commit 9261573) so this mode still exercises the real old code path
+    against the untouched career/singleyr indices.
     """
-    from citations_lib.utils import get_es_results, es_result_pick
+    from bench._legacy_es import get_es_results, es_result_pick
 
     def typeahead(term):
         result = get_es_results(term, ["career", "singleyr"], "authfull")
@@ -135,7 +160,7 @@ def main():
         default=DEFAULT_TERMS,
         help="typeahead search terms to measure (default: a fixed small set)",
     )
-    parser.add_argument("--repeats", type=int, default=5)
+    parser.add_argument("--repeats", type=int, default=DEFAULT_REPEATS)
     args = parser.parse_args()
 
     if args.mode == "legacy":
