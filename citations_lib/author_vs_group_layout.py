@@ -202,7 +202,7 @@ def author_vs_group_layout():
     group2List = dcc.Dropdown(id = "group2ListDropdown" + SUFFIX, 
         placeholder = 'Step 3: Select Group 2', multi = False, searchable = True, value = 'sm-field', style = {'background-color':'var(--ev-surface)'},
         options = [{'label':'Country', 'value': 'cntry'}, {'label':'Field', 'value': 'sm-field'}, {'label':'Institution', 'value': 'inst_name'}])
-    group2ListOptions = dcc.Dropdown(id = "group2ListOptionsDropdown" + SUFFIX,value = 'Clinical Medicine', searchable = True, style = {'background-color':'var(--ev-surface)'})
+    group2ListOptions = dcc.Dropdown(id = "group2ListOptionsDropdown" + SUFFIX,value = 'Clinical Medicine', searchable = True)
     # =============== Group 2 Callbacks
     @callback(
         Output('group2ListOptionsDropdown' + SUFFIX, 'options'), Output('group2ListOptionsDropdown'+ SUFFIX, 'placeholder'), 

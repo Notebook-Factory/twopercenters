@@ -1020,3 +1020,169 @@ color: var(--ev-bg);
 .ev-panes { margin: 0; }
 .ev-panes > [class*="col"] { padding-left: 0; padding-right: 14px; }
 .ev-panes > [class*="col"]:last-child { padding-right: 0; padding-left: 14px; }
+
+/* ==========================================================================
+   Controls, rebuilt.
+   The dropdowns were a near-white box with a 2px cyan border, centred text,
+   a 4px radius and a black placeholder: a light-theme control dropped into a
+   dark page. That is the whole reason they read as dated. They are surfaces
+   now, like every other panel, with a hairline border, a generous radius,
+   left-aligned text and the accent reserved for focus.
+   ========================================================================== */
+
+.Select, .Select div, .Select input, .Select span { outline: none; }
+
+.Select-control {
+  background-color: var(--ev-bg-deep) !important;
+  border: 1px solid var(--ev-surface-2) !important;
+  border-radius: 10px !important;
+  color: var(--ev-text) !important;
+  height: 44px !important;
+  display: flex !important;
+  align-items: center;
+  padding: 0 10px 0 14px;
+  text-align: left !important;
+  overflow: visible;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.Select-control:hover { border-color: var(--ev-text-muted) !important; }
+
+/* Focus is the one place the accent appears, with a soft ring instead of a
+   heavy border, so the control does not jump in weight when you click it. */
+.is-focused:not(.is-open) > .Select-control,
+.is-open > .Select-control {
+  background-color: var(--ev-bg-deep) !important;
+  border-color: var(--ev-accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev-accent) 22%, transparent) !important;
+}
+
+.Select-placeholder,
+.Select--single > .Select-control .Select-value {
+  display: flex !important;
+  align-items: center;
+  padding-left: 0 !important;
+  padding-right: 30px !important;
+  line-height: normal !important;
+  text-align: left;
+}
+
+.Select-placeholder { color: var(--ev-text-muted) !important; }
+
+.Select-value-label,
+.has-value.Select--single > .Select-control .Select-value .Select-value-label {
+  color: var(--ev-text) !important;
+  font-weight: 500;
+}
+
+.Select-input { height: 42px; padding-left: 0; }
+.Select-input > input {
+  color: var(--ev-text) !important;
+  line-height: 26px;
+  padding: 8px 0;
+}
+.is-focused .Select-input > input { color: var(--ev-text) !important; }
+
+.Select-arrow {
+  border-color: var(--ev-text-muted) transparent transparent;
+  border-width: 6px 5px 0;
+}
+.is-open .Select-arrow { border-color: transparent transparent var(--ev-accent); }
+
+.Select-clear-zone { color: var(--ev-text-muted); }
+.Select-clear-zone:hover { color: var(--ev-magenta); }
+
+/* The menu is a floating panel, so it gets the panel treatment: its own
+   surface, a real shadow, rounded corners, and room between rows. */
+.Select-menu-outer {
+  background-color: var(--ev-surface) !important;
+  color: var(--ev-text) !important;
+  border: 1px solid var(--ev-surface-2) !important;
+  border-radius: 12px !important;
+  margin-top: 6px;
+  padding: 6px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.38);
+  text-align: left;
+  overflow: hidden;
+}
+
+.Select-menu { max-height: 300px; }
+
+.Select-option {
+  background-color: transparent !important;
+  color: var(--ev-text) !important;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.94rem;
+}
+.Select-option.is-focused {
+  background-color: var(--ev-surface-2) !important;
+  color: var(--ev-text) !important;
+}
+.Select-option.is-selected {
+  background-color: var(--ev-accent) !important;
+  color: #10151D !important;
+  font-weight: 600;
+}
+.Select-noresults { color: var(--ev-text-muted) !important; padding: 10px 12px; }
+
+.Select--multi .Select-value {
+  background-color: color-mix(in srgb, var(--ev-accent) 18%, transparent) !important;
+  border: 1px solid var(--ev-accent) !important;
+  border-radius: 7px !important;
+  color: var(--ev-text) !important;
+  font-size: 0.86em;
+  line-height: 1.6;
+  margin: 4px 4px 0 0;
+}
+.Select--multi .Select-value-icon {
+  border-right: 1px solid var(--ev-accent) !important;
+  color: var(--ev-text);
+}
+.Select--multi .Select-value-icon:hover {
+  background-color: var(--ev-magenta) !important;
+  color: #10151D;
+}
+
+/* ==========================================================================
+   Breathing room.
+   The complaint was density, and density here came from controls sitting
+   directly against each other and against the panel edges. These are the
+   gaps, not new structure.
+   ========================================================================== */
+.ev-shell > .ev-stage { padding: 24px 32px 0; }
+
+.ev-toolbar {
+  gap: 28px;
+  padding: 18px 22px;
+  margin-bottom: 22px;
+}
+
+.ev-field { gap: 9px; }
+.ev-field-label { font-size: 0.7rem; letter-spacing: 0.1em; }
+
+.ev-panes > [class*="col"] { padding-right: 22px; }
+.ev-panes > [class*="col"]:last-child { padding-left: 22px; padding-right: 0; }
+
+/* The summary column is prose; it was set at the body default and ran tight. */
+#cntrylabel, #worldtitle { line-height: 1.62; font-size: 0.95rem; }
+#worldtitle h3, #worldtitle h4 { margin-top: 1.1em; margin-bottom: 0.5em; }
+#worldtitle p { margin-bottom: 0.9em; }
+
+.ev-shell > hr {
+  margin-top: 28px;
+  margin-bottom: 28px;
+  border-color: var(--ev-surface-2);
+  opacity: 1;
+}
+
+.accordion-item { margin-bottom: 16px; }
+.accordion-button { padding: 18px 22px; }
+.accordion-body { padding: 22px; }
+
+.nav-tabs { gap: 12px; padding: 6px 0 18px; }
+.nav-tabs .nav-link { padding: 14px 18px; }
+
+/* The year picker sat flush against the labels above and below it. */
+.year-picker .btn-group { padding: 4px 0; }
+.year-picker .btn-group > .form-check > .btn { padding: 8px 14px; }

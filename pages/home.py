@@ -63,23 +63,32 @@ tbl  = dash_table.DataTable(
     fixed_rows={'headers': True},
     #filter_options={"placeholder_text": "Filter column..."},
     #style_table={'overflowX': 'auto'},
-        style_header={
-        'backgroundColor': '#ECAB4C',
-        'color': 'white'
+        # These two were still the old ocre and a hardcoded rgb(50,50,50):
+    # literals, so the palette sweep did not reach them, and they ignored the
+    # theme. Inline styles take var(), so they follow it now.
+    style_header={
+        'backgroundColor': 'var(--ev-surface-2)',
+        'color': 'var(--ev-text)',
+        'fontWeight': '600',
+        'border': 'none',
+        'borderBottom': '1px solid var(--ev-surface-2)',
+        'padding': '10px 12px',
     },
     style_data={
-        'backgroundColor': 'rgb(50, 50, 50)',
-        'color': 'white'
+        'backgroundColor': 'transparent',
+        'color': 'var(--ev-text)',
+        'border': 'none',
+        'borderBottom': '1px solid var(--ev-surface-2)',
     },
     style_table={'height': '300px', 'overflowY': 'auto','display':'none'},
     style_cell={
         'height': 'auto',
-        # all three widths are needed
-        #'minWidth': '180px', 
-        #'width': '180px', 
         'textAlign': 'left',
         'maxWidth': '0',
-        'whiteSpace': 'normal'
+        'whiteSpace': 'normal',
+        'padding': '10px 12px',
+        'fontSize': '0.9rem',
+        'fontFamily': 'inherit',
     }
 )
 
