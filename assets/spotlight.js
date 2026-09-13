@@ -206,3 +206,20 @@
     if (box && !box.querySelector('.' + HILITE)) { return; }
   }).observe(document.body, {childList: true, subtree: true});
 })();
+
+
+// Close the map hint on the first click, without waiting for the server.
+//
+// The Dash callback that hides it still runs and is what keeps it hidden, but
+// a round trip is a visible delay on a button whose whole job is to get out of
+// the way. Hiding it here makes the first click take effect at once; the
+// callback then sets the same inline style and nothing fights.
+(function () {
+  document.addEventListener('click', function (e) {
+    var button = e.target && e.target.closest
+      ? e.target.closest('#map-hint-close') : null;
+    if (!button) { return; }
+    var hint = document.getElementById('map-hint');
+    if (hint) { hint.style.display = 'none'; }
+  }, true);
+})();

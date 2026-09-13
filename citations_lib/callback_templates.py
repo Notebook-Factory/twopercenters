@@ -110,13 +110,13 @@ def generate_update_cards_callback(input_id, output_ids, auth_dropdown_id, caree
                 txt2 = dcc.Markdown(f"| **{int(data[f'{prefix}_{year}']['self%']*100)}% self citation** |  **{int(data[f'{prefix}_{year}']['h'])} [H-index](https://en.wikipedia.org/wiki/H-index)** | **{int(data[f'{prefix}_{year}']['hm'])} [Hm-index](https://arxiv.org/abs/0805.2000)** |",className = "lel")
                 lnk = urllib.parse.quote(str(authname))
                 cntry_full = coco.convert(names=names['cntry'], to='name_short')
-                card1 = dbc.Card([dbc.CardLink(authname, href=f'https://scholar.google.ca/scholar?hl=en&as_sdt=0%2C5&q={lnk}&btnG=',target='_blank',style={"color":"black"})],
+                card1 = dbc.Card(className='ev-fact-card', children=[dbc.CardLink(authname, href=f'https://scholar.google.ca/scholar?hl=en&as_sdt=0%2C5&q={lnk}&btnG=',target='_blank',style={"color":"black"})],
                                 style={'color': color1, 'font-size': 18}, color=color2)
-                card2 = dbc.Card(html.Center(names['inst'] + ', ' + names['field'] +  ', ' + cntry_full),
+                card2 = dbc.Card(className='ev-fact-card', children=html.Center(names['inst'] + ', ' + names['field'] +  ', ' + cntry_full),
                                 style={'color': color1, 'font-size': 14}, color=color2)
-                card3 = dbc.Card([html.Center(txt1)],
+                card3 = dbc.Card(className='ev-fact-card', children=[html.Center(txt1)],
                                 style={'color': color1, 'font-size': 14}, color=color2)
-                card4 = dbc.Card(html.Center(html.Center(txt2)),
+                card4 = dbc.Card(className='ev-fact-card', children=html.Center(html.Center(txt2)),
                                 style={'color': color1, 'font-size': 14}, color=color2)
                 return card1, card2, card3, card4, str(authname)
 

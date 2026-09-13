@@ -2424,3 +2424,34 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    so it takes the theme's text colour and the arc keeps the accent. */
 .js-plotly-plot .number { fill: var(--ev-text) !important; }
 .js-plotly-plot .delta { font-weight: 600; }
+
+/* ==========================================================================
+   Fact cards
+   These are filled with the green or magenta leaf, so everything on them has
+   to be dark to be legible. The global body-link rule carries !important and
+   was painting the author link and the h-index links cyan on green, which is
+   two mid-tones at the same lightness: the worst possible pairing. Inside
+   these cards a link is dark, and underlined so it still reads as a link
+   without needing a colour to say so.
+   ========================================================================== */
+.ev-fact-card,
+.ev-fact-card * {
+  color: #10151D !important;
+}
+
+.ev-fact-card a,
+.ev-page .ev-fact-card a,
+.ev-fact-card .lel a {
+  color: #10151D !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+}
+.ev-fact-card a:hover { opacity: 0.72; }
+
+/* Inline code on a leaf ground needs the same treatment: the recessed navy
+   fill it gets elsewhere is invisible against green. */
+.ev-fact-card code {
+  background-color: rgba(16, 21, 29, 0.14);
+  color: #10151D !important;
+}
