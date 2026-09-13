@@ -69,6 +69,18 @@ def warm(typeahead_fn, fetch_fn, terms, passes=1):
                 fetch_fn(hits[0])
 
 
+def _unpack(stack):
+    """(typeahead, fetch) or (typeahead, fetch, reset) -> all three.
+
+    A stack that has nothing to reset between fetches says so by leaving the
+    third element out; the legacy stack is one of those.
+    """
+    if len(stack) == 3:
+        return stack
+    typeahead_fn, fetch_fn = stack
+    return typeahead_fn, fetch_fn, lambda: None
+
+
 def measure_both(legacy, current, terms, repeats=5, warmup=1):
     """Measure both stacks in one process, interleaved term by term.
 
@@ -77,44 +89,82 @@ def measure_both(legacy, current, terms, repeats=5, warmup=1):
     over those minutes landed entirely on one side of the comparison. Here
     each term's legacy and current samples are taken microseconds apart and
     see the same machine.
+
+    The fetch phase is measured twice on the current stack, because the two
+    answer different questions and only one of them is the gate.
+
+    `current_fetch` is the **cold** figure: `reset()` runs before each
+    recorded fetch, clearing the per-author memoisation
+    (`citations_lib.utils._author_rows`), so every sample does the work a
+    user picking an author they have not viewed before causes. This is the
+    figure comparable to legacy, because the legacy stack has no per-author
+    memo at all: it makes an HTTP round trip and a base64+zlib decompress on
+    every single call, whether or not it has just answered for that same
+    author. Measuring a memo hit against that is measuring two different
+    things.
+
+    `current_fetch_warm` is the same fetch taken immediately afterwards,
+    without a reset, so it is a memo hit. That is what a user re-viewing an
+    author they just looked at experiences. It is a real number and worth
+    reporting; it is not the number the gate is decided on.
+
+    Nothing is cleared on the legacy side. The point is to remove an
+    advantage the current stack has and legacy does not, not to invent a
+    handicap. Elasticsearch's filesystem cache and the OS page cache stay
+    warm for both, equally, through warm().
     """
-    legacy_typeahead, legacy_fetch = legacy
-    current_typeahead, current_fetch = current
+    legacy_typeahead, legacy_fetch, legacy_reset = _unpack(legacy)
+    current_typeahead, current_fetch, current_reset = _unpack(current)
 
     warm(legacy_typeahead, legacy_fetch, terms, passes=warmup)
     warm(current_typeahead, current_fetch, terms, passes=warmup)
 
     samples = {'legacy_typeahead': [], 'legacy_fetch': [],
-               'current_typeahead': [], 'current_fetch': []}
+               'current_typeahead': [], 'current_fetch': [],
+               'current_fetch_warm': []}
 
     for term in terms:
         for _ in range(repeats):
-            for label, typeahead_fn, fetch_fn in (
-                    ('legacy', legacy_typeahead, legacy_fetch),
-                    ('current', current_typeahead, current_fetch)):
+            started = time.perf_counter()
+            hits = legacy_typeahead(term)
+            samples['legacy_typeahead'].append(
+                (time.perf_counter() - started) * 1000)
+            if hits:
+                legacy_reset()
                 started = time.perf_counter()
-                hits = typeahead_fn(term)
-                samples[f'{label}_typeahead'].append(
+                legacy_fetch(hits[0])
+                samples['legacy_fetch'].append(
                     (time.perf_counter() - started) * 1000)
-                if hits:
-                    started = time.perf_counter()
-                    fetch_fn(hits[0])
-                    samples[f'{label}_fetch'].append(
-                        (time.perf_counter() - started) * 1000)
+
+            started = time.perf_counter()
+            hits = current_typeahead(term)
+            samples['current_typeahead'].append(
+                (time.perf_counter() - started) * 1000)
+            if hits:
+                # Cold: this author has not been fetched in this process.
+                current_reset()
+                started = time.perf_counter()
+                current_fetch(hits[0])
+                samples['current_fetch'].append(
+                    (time.perf_counter() - started) * 1000)
+                # Warm: the same author again, memo intact.
+                started = time.perf_counter()
+                current_fetch(hits[0])
+                samples['current_fetch_warm'].append(
+                    (time.perf_counter() - started) * 1000)
 
     out = {"n": len(terms), "repeats": repeats, "warmup_passes": warmup,
            "mode": "both", "terms": list(terms)}
-    for label in ('legacy', 'current'):
-        for phase in ('typeahead', 'fetch'):
-            values = samples[f'{label}_{phase}']
-            out[f'{label}_{phase}_p50_ms'] = round(
-                statistics.median(values), 2)
-            out[f'{label}_{phase}_p95_ms'] = round(
-                _percentile(values, 95), 2)
+    for key, values in samples.items():
+        out[f'{key}_p50_ms'] = round(statistics.median(values), 2)
+        out[f'{key}_p95_ms'] = round(_percentile(values, 95), 2)
     return out
 
 
-def measure(typeahead_fn, fetch_fn, terms, repeats=5):
+def measure(typeahead_fn, fetch_fn, terms, repeats=5, reset_fn=None):
+    """Single-stack measurement. `reset_fn`, if given, runs before each
+    recorded fetch and outside the timed region, so the fetch figure is the
+    cold one (see measure_both)."""
     typeahead_ms, fetch_ms = [], []
 
     for term in terms:
@@ -124,6 +174,8 @@ def measure(typeahead_fn, fetch_fn, terms, repeats=5):
             typeahead_ms.append((time.perf_counter() - started) * 1000)
 
             if hits:
+                if reset_fn is not None:
+                    reset_fn()
                 started = time.perf_counter()
                 fetch_fn(hits[0])
                 fetch_ms.append((time.perf_counter() - started) * 1000)
@@ -178,7 +230,8 @@ def _current_fns():
     ``--mode legacy`` is required to work for this task.
     """
     try:
-        from citations_lib.utils import get_es_results, es_result_pick
+        from citations_lib.utils import (get_es_results, es_result_pick,
+                                         _author_rows)
     except ImportError as exc:
         raise SystemExit(
             "bench/latency.py --mode current: citations_lib.utils does not "
@@ -224,7 +277,26 @@ def _current_fns():
                 "to work yet; use --mode legacy."
             )
 
-    return typeahead, fetch
+    def reset():
+        """Forget which authors have already been fetched in this process.
+
+        `_author_rows` is an lru_cache(maxsize=2048) keyed by (author_ids,
+        kind), so the second fetch of an author returns rows Python already
+        holds and touches neither Postgres nor the network. A measurement
+        that warms the cache with the same authors it then measures 20 times
+        each is measuring a dictionary lookup. The legacy stack has no
+        equivalent: it does an HTTP round trip and a base64+zlib decompress
+        on every call, always.
+
+        Only the per-author memo is cleared. `_maxima`, `_editions` and
+        `_column_names` are cached once per process for the whole dataset,
+        not per author, so a real user pays them once at the first fetch
+        ever; clearing them before every fetch would invent a cost the
+        dashboard does not have.
+        """
+        _author_rows.cache_clear()
+
+    return typeahead, fetch, reset
 
 
 def main():
@@ -252,12 +324,12 @@ def main():
                               repeats=args.repeats, warmup=args.warmup)
     else:
         if args.mode == "legacy":
-            typeahead_fn, fetch_fn = _legacy_fns()
+            typeahead_fn, fetch_fn, reset_fn = _unpack(_legacy_fns())
         else:
-            typeahead_fn, fetch_fn = _current_fns()
+            typeahead_fn, fetch_fn, reset_fn = _unpack(_current_fns())
 
         result = measure(typeahead_fn, fetch_fn, args.terms,
-                         repeats=args.repeats)
+                         repeats=args.repeats, reset_fn=reset_fn)
         result["mode"] = args.mode
         result["terms"] = args.terms
 

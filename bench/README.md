@@ -217,3 +217,62 @@ Measured latency (`bench/baseline.json`, `--mode legacy`, 6 typeahead terms x
 | fetch p95             | 30.96 |
 
 These are the numbers the relational-core redesign must match or beat.
+
+## The paired run, and why the fetch figure is measured twice
+
+`--mode both --warmup N` measures both stacks in one process, interleaved
+term by term, after warming each with the same terms and the same number of
+passes. That removes the drift that made the legacy baseline fall on every
+re-measurement (Elasticsearch's filesystem cache and the OS page cache held
+more of the indices each time), and it means machine load over the run lands
+on both sides equally instead of on whichever was measured second.
+
+Warming both stacks equally is right for the filesystem caches. It was
+**wrong** for the current stack's per-author memoisation, and for a while the
+harness got that wrong without saying so. `warm()` calls `fetch_fn(hits[0])`
+for every term, which fills `citations_lib.utils._author_rows`
+(`lru_cache(maxsize=2048)`) with exactly the authors the measurement loop
+then fetches, 20 times each. Every recorded current-stack fetch was a Python
+dictionary hit. The legacy stack has no equivalent memo: it makes an HTTP
+round trip and a base64+zlib decompress on every single call, always. The
+reported 2.49ms "fetch p50" was a cache-hit number being compared against
+legacy's real work.
+
+So `measure_both` now records the current fetch twice per iteration:
+
+- **`current_fetch_*` (cold).** `_author_rows.cache_clear()` runs before each
+  recorded fetch, outside the timed region, so every sample does the work a
+  user picking a previously-unviewed author causes. **This is the gate**, and
+  it is the only figure comparable to legacy.
+- **`current_fetch_warm_*` (warm).** The same fetch immediately afterwards
+  with the memo intact: what a user re-viewing the author they just looked at
+  experiences. True, useful, not the gate.
+
+Only the per-author memo is cleared. `_maxima`, `_editions` and
+`_column_names` are cached once per process for the whole dataset rather than
+per author, so a real user pays them once at the first fetch ever; clearing
+them each time would invent a cost the dashboard does not have. Nothing is
+cleared on the legacy side, because the legacy code has nothing of the kind
+to clear: the point is to remove an advantage, not to add a handicap.
+
+### Final gate (12 terms x 20 repeats, `--warmup 2`, `bench/paired.json`)
+
+| metric | legacy | current (cold) | delta | gate | verdict |
+|---|---:|---:|---:|---|---|
+| typeahead p50 | 6.64 ms | 5.62 ms | -15% | match or beat | **PASS** |
+| typeahead p95 | 10.61 ms | 9.51 ms | -10% | <=25% | **PASS** |
+| fetch p50 | 9.81 ms | 5.62 ms | -43% | match or beat | **PASS** |
+| fetch p95 | 27.52 ms | 9.92 ms | -64% | <=25% | **PASS** |
+
+Three consecutive runs, so the cold figure can be judged against its own
+spread rather than one sample:
+
+| run | legacy fetch p50 | current fetch p50 (cold) | current fetch p50 (warm) | legacy ta p50 | current ta p50 |
+|---|---:|---:|---:|---:|---:|
+| 1 | 13.07 | 5.77 | 3.45 | 7.83 | 6.22 |
+| 2 | 10.89 | 6.18 | 3.81 | 7.19 | 5.64 |
+| 3 | 9.81 | 5.62 | 3.46 | 6.64 | 5.62 |
+
+The cold fetch beats legacy in all three, by 43-56%. The warm figure, 3.5ms,
+is roughly 40% faster again than cold; it is reported for what it is and
+nothing is decided on it.

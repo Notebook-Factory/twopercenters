@@ -17,12 +17,14 @@
     "smtih",
     "ionnidis"
   ],
-  "legacy_typeahead_p50_ms": 4.74,
-  "legacy_typeahead_p95_ms": 6.67,
-  "legacy_fetch_p50_ms": 6.88,
-  "legacy_fetch_p95_ms": 14.82,
-  "current_typeahead_p50_ms": 4.5,
-  "current_typeahead_p95_ms": 5.88,
-  "current_fetch_p50_ms": 2.49,
-  "current_fetch_p95_ms": 4.53
+  "legacy_typeahead_p50_ms": 6.64,
+  "legacy_typeahead_p95_ms": 10.61,
+  "legacy_fetch_p50_ms": 9.81,
+  "legacy_fetch_p95_ms": 27.52,
+  "current_typeahead_p50_ms": 5.62,
+  "current_typeahead_p95_ms": 9.51,
+  "current_fetch_p50_ms": 5.62,
+  "current_fetch_p95_ms": 9.92,
+  "current_fetch_warm_p50_ms": 3.46,
+  "current_fetch_warm_p95_ms": 7.05
 }
