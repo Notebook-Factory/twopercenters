@@ -412,9 +412,12 @@ offcanvas = html.Div(
     [
         dbc.Offcanvas(
             dcc.Markdown(
-                '''
+                dangerously_allow_html=True,
+                children='''
                 #### Top 2% researchers
-                #### `Nadia Blostein, Agah Karakuzu, and Nikola Stikov`
+
+                <div class="ev-byline">Nadia Blostein, Agah Karakuzu, and Nikola Stikov</div>
+
                 ---
 
                 This dashboard provides an intuitive interface to explore top 2% researchers database [(Ioannidis et al. 2019)](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&), 
@@ -423,7 +426,7 @@ offcanvas = html.Div(
                 Citation and publication data of the top-ranking authors (based on their respective composite scores) are openly available on the [Elsevier Data Repository](https://elsevier.digitalcommonsdata.com/datasets/btchxktzyw/5).
                 
                 ---
-                This dashboard and the database is generously hosted by [NeuroLibre](https://neurolibre.org). 
+                This dashboard and the database is generously hosted by [Evidence](https://evidencepub.io). 
                 
                 Contact us at `info@neurolibre.org` if you are interested in sharing a data application to supplement your research articles. 
 
@@ -434,7 +437,13 @@ offcanvas = html.Div(
             ),
             id="offcanvas",
             title="Twopercenters dashboard",
-            is_open=True,
+            # Starts closed. zz/spotlight.js opens it once per browser on a
+            # first visit and records that it has been seen; after that the
+            # More info button is the way back to it. Opening it over the page
+            # on every single load, with a backdrop dimming everything behind
+            # it, made the dashboard unusable until dismissed.
+            is_open=False,
+            className="ev-intro",
         ),
     ]
 )

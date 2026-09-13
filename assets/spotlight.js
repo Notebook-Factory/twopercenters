@@ -73,3 +73,31 @@
     if (saved) { document.documentElement.dataset.theme = saved; }
   } catch (e) { /* private mode: fall through to the dark default */ }
 })();
+
+// Show the intro panel on a first visit only.
+//
+// It used to open on every load, with a backdrop dimming the whole dashboard
+// until it was dismissed. An introduction is worth reading once; after that
+// the More info button is the way back to it. The "seen" flag lives in
+// localStorage, so it is per browser and survives reloads. If storage is
+// unavailable (private mode), the catch leaves the panel closed rather than
+// showing it every time, which is the failure people would find least
+// annoying.
+(function () {
+  var KEY = 'ev-intro-seen';
+  var seen;
+  try { seen = window.localStorage.getItem(KEY); } catch (e) { seen = '1'; }
+  if (seen) { return; }
+
+  var tries = 0;
+  var timer = setInterval(function () {
+    var button = document.getElementById('off');   // the More info button
+    if (button) {
+      clearInterval(timer);
+      try { window.localStorage.setItem(KEY, '1'); } catch (e) {}
+      button.click();                              // one code path opens it
+    } else if (++tries > 40) {
+      clearInterval(timer);
+    }
+  }, 150);
+})();
