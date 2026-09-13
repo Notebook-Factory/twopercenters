@@ -2418,3 +2418,9 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   background-color: var(--ev-accent) !important;
   color: #10151D !important;
 }
+
+/* The gauge's big number is Plotly's ".number"; it was inheriting the figure
+   font colour, which put a cyan value on top of a cyan arc. The value is text,
+   so it takes the theme's text colour and the arc keeps the accent. */
+.js-plotly-plot .number { fill: var(--ev-text) !important; }
+.js-plotly-plot .delta { font-weight: 600; }

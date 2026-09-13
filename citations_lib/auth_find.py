@@ -389,7 +389,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
 
             # =============== Author 1 LEDD Display
             rankAuthor1_label = 'Rank of ' + group1_name if group1_name != None else 'No author selected'
-            rankAuthor1 = daq.LEDDisplay(label = {"label":rankAuthor1_label, "style":{"color":'lightseagreen', "font-size":"16px"}}, value = new_rank_1, backgroundColor = darkAccent1, color = 'lightseagreen', size = 60)
+            rankAuthor1 = daq.LEDDisplay(label = {"label":rankAuthor1_label, "style":{"color":'#A8B2C4', "font-size":"16px"}}, value = new_rank_1, backgroundColor = darkAccent1, color = '#00B4D8', size = 60)
             
             # =============== Author 2 LEDD Display
             # =============== N authors display
@@ -405,7 +405,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[3]))], width = 4), dbc.Col([html.Center(dcc.Graph(figure = fig_list[4]))], width = 4),
                 dbc.Col([html.Center(dcc.Graph(figure = fig_list[5]))], width = 4)],justify='around')
                 ])
-            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1),dbc.Col(html.Div([dcc.Markdown(auth_info)],style={'text-align':'left','color':'lightseagreen'}))]), dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
+            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row([dbc.Col(rankAuthor1),dbc.Col(html.Div([dcc.Markdown(auth_info)],style={'text-align':'left','color':'var(--ev-text)'}))]), dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
                 r'''
 $$
 C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
@@ -469,8 +469,8 @@ $$
             logTransf = False
             
             #if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Bar(name = name, x = [metric], y = [y_in_log], text = [y_in], textposition = 'auto',marker_color = colors[0], marker_line_width = 0), row = 1, col = group_num)
-            if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Indicator(mode = "gauge+number+delta",value = y_in, delta = {'reference': max_metric[0], 'increasing': {'color': "limegreen"},'decreasing': {'color': "indianred"}},gauge = {'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': max_metric[0]}, 'axis': {'tickmode':'auto','range': [None, max_metric[1]],'tickwidth': 2, 'tickcolor': "#aaa"},'bar': {'color': 'lightseagreen'}}), row = 1, col = group_num)
-            else: fig.add_trace(go.Indicator(mode = "gauge+number+delta", value = y_in, delta = {'reference': max_metric[0], 'increasing': {'color': "limegreen"},'decreasing': {'color': "indianred"}}, gauge = {'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': max_metric[0]},'axis': {'tickmode':'auto', 'range': [None, max_metric[1]],'tickwidth': 2, 'tickcolor': "#aaa"},'bar': {'color': 'lightseagreen'}}), row = 1, col = group_num)
+            if logTransf and metric != 'c' and metric != 'c (ns)': fig.add_trace(go.Indicator(mode = "gauge+number+delta",value = y_in, delta = {'reference': max_metric[0], 'increasing': {'color': '#84B460'},'decreasing': {'color': '#D86CB4'}},gauge = {'threshold' : {'line': {'color': '#F09048', 'width': 3}, 'thickness': 0.75, 'value': max_metric[0]}, 'axis': {'tickmode':'auto','range': [None, max_metric[1]],'tickwidth': 1, 'tickcolor': '#A8B2C4'},'bar': {'color': '#00B4D8'}}), row = 1, col = group_num)
+            else: fig.add_trace(go.Indicator(mode = "gauge+number+delta", value = y_in, delta = {'reference': max_metric[0], 'increasing': {'color': '#84B460'},'decreasing': {'color': '#D86CB4'}}, gauge = {'threshold' : {'line': {'color': '#F09048', 'width': 3}, 'thickness': 0.75, 'value': max_metric[0]},'axis': {'tickmode':'auto', 'range': [None, max_metric[1]],'tickwidth': 1, 'tickcolor': '#A8B2C4'},'bar': {'color': '#00B4D8'}}), row = 1, col = group_num)
             #hovertemp = 'count: %{text:.4s}<extra></extra> '
             #fig.update_traces(texttemplate = '%{text:.2s}', hovertemplate = hovertemp)
             #fig.update_layout(showlegend=False)
@@ -488,7 +488,7 @@ $$
                 #fig = go.Figure()
                 fig = make_bar_traces(fig, y_in = new_y_values_1[i], y_in_log = new_y_values_1_log[i], colors = g1c, metric = m, max_metric=max_metrics[m], name = group1_name, logTransf = logTransf, group_num = 1)
                 #fig = make_bar_traces(fig, y_in = new_y_values_2[i], y_in_log = new_y_values_2_log[i], colors = g2c, metric = m, name = group2_name, logTransf = logTransf, group_num = 2)
-            fig.update_layout(height = 200, title_x = 0.5, title_y = 0.85, title = {'text':subplot_titles[i], 'font':{'size':14,'color':'#aaa'}}, font = {'size':12, 'color': 'lightseagreen'},
+            fig.update_layout(height = 200, title_x = 0.5, title_y = 0.85, title = {'text':subplot_titles[i], 'font':{'size':14,'color':'#E8ECF2'}}, font = {'size':12, 'color': '#A8B2C4'},
                 plot_bgcolor = bgc, paper_bgcolor = bgc, margin = {'l':10, 'r':5, 'b':10, 't':100})
             # if logTransf and m != 'c' and m != 'c (ns)':
             #     max_m_log = max([df_in_log[m].max(), new_y_values_1_log[i], new_y_values_2_log[i]])
