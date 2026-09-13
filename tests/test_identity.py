@@ -1,3 +1,5 @@
+import random
+
 from pipeline.identity import normalize, block_key, resolve
 
 
@@ -53,6 +55,35 @@ def test_two_people_in_one_edition_are_never_merged():
     assert not any(r.is_confident for r in resolutions)
 
 
+def test_same_edition_collision_with_identical_institution_still_splits():
+    # Two rows, same edition, same surname/initial/firstyr AND same inst_name.
+    # Rule 1 is absolute: they must still get distinct author_ids.
+    observations = [
+        {"edition_id": "career_2021", "authfull": "Abraham, Edward",
+         "firstyr": 1975, "inst_name": "University of Miami", "cntry": "usa"},
+        {"edition_id": "career_2021", "authfull": "Abraham, Edward",
+         "firstyr": 1975, "inst_name": "University of Miami", "cntry": "usa"},
+    ]
+    resolutions = resolve(observations)
+    assert len({r.author_id for r in resolutions}) == 2
+    assert not any(r.is_confident for r in resolutions)
+
+
+def test_same_edition_collision_with_missing_institution_still_splits():
+    # Two rows, same edition, same surname/initial/firstyr, inst_name missing
+    # on both. The naive discriminator normalize(None or "") == "" for both,
+    # which would collide; the ordinal-based fallback must still split them.
+    observations = [
+        {"edition_id": "career_2021", "authfull": "Abraham, Edward",
+         "firstyr": 1975, "inst_name": None, "cntry": None},
+        {"edition_id": "career_2021", "authfull": "Abraham, Edward",
+         "firstyr": 1975, "inst_name": None, "cntry": None},
+    ]
+    resolutions = resolve(observations)
+    assert len({r.author_id for r in resolutions}) == 2
+    assert not any(r.is_confident for r in resolutions)
+
+
 def test_nothing_is_dropped():
     observations = [
         {"edition_id": "career_2021", "authfull": "Abe, Hiroshi",
@@ -66,6 +97,35 @@ def test_nothing_is_dropped():
 
 
 def test_author_ids_are_deterministic():
-    observations = [{"edition_id": "career_2024", "authfull": "Wang, Zhong Lin",
-                     "firstyr": 1986, "inst_name": "Georgia Tech", "cntry": "usa"}]
-    assert resolve(observations)[0].author_id == resolve(observations)[0].author_id
+    # A pure function trivially returns the same thing twice on the same
+    # input; that proves nothing. Determinism means the input's ORDER must
+    # not matter. Build a batch that mixes confident and ambiguous groups,
+    # resolve it, shuffle it with a fixed seed, resolve it again, and check
+    # that the mapping from (edition_id, authfull) to author_id is identical.
+    observations = [
+        {"edition_id": "career_2024", "authfull": "Wang, Zhong Lin",
+         "firstyr": 1986, "inst_name": "Georgia Tech", "cntry": "usa"},
+        {"edition_id": "career_2023", "authfull": "Wang, Z. L.",
+         "firstyr": 1986, "inst_name": "Georgia Tech", "cntry": "usa"},
+        {"edition_id": "career_2021", "authfull": "Abraham, Edward",
+         "firstyr": 1975, "inst_name": "University of Miami", "cntry": "usa"},
+        {"edition_id": "career_2021", "authfull": "Abraham, Ed",
+         "firstyr": 1975, "inst_name": "Dragonfly Data Science", "cntry": "nzl"},
+        {"edition_id": "career_2021", "authfull": "Abraham, E.",
+         "firstyr": 1975, "inst_name": None, "cntry": None},
+    ]
+    # The three "Abraham" rows share a block key (surname "abraham", initial
+    # "e") and firstyr, so they land in the same ambiguous group, but each has
+    # a distinct authfull, so (edition_id, authfull) is still a unique key to
+    # check the mapping against.
+
+    def mapping(obs_list):
+        return {(r.edition_id, r.authfull): r.author_id for r in resolve(obs_list)}
+
+    first = mapping(observations)
+
+    shuffled = observations[:]
+    random.Random(42).shuffle(shuffled)
+    second = mapping(shuffled)
+
+    assert first == second

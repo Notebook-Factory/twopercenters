@@ -64,6 +64,11 @@ def _author_id(surname, initial, firstyr, discriminator):
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def _ambiguous_author_id(surname, initial, firstyr, edition_id, ordinal):
+    raw = f"{surname}|{initial}|{firstyr}|{edition_id}|{ordinal}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
 def resolve(observations):
     blocks = {}
     for obs in observations:
@@ -94,16 +99,30 @@ def resolve(observations):
                     ))
                 continue
 
-            # Fall back to institution as a tiebreaker, and keep every row as its
-            # own author when even that fails. Never merge, never drop.
+            # The firstyr block did not disambiguate this group: it contains
+            # more than one row from at least one edition. Rule 1 (two rows in
+            # the same edition are two different people) is absolute, so every
+            # observation here gets its own author_id, one per edition. Order
+            # is decided by content, not input position, so the result is
+            # deterministic regardless of how observations were passed in.
+            by_edition = {}
             for obs in group:
-                discriminator = normalize(obs.get("inst_name") or "")
-                resolutions.append(Resolution(
-                    author_id=_author_id(surname, initial, firstyr, discriminator),
-                    edition_id=obs["edition_id"],
-                    authfull=obs["authfull"],
-                    method="surname_initial_firstyr_institution",
-                    is_confident=False,
+                by_edition.setdefault(obs["edition_id"], []).append(obs)
+
+            for edition_id, edition_group in by_edition.items():
+                edition_group.sort(key=lambda o: (
+                    normalize(o.get("inst_name") or ""),
+                    normalize(o.get("cntry") or ""),
+                    o["authfull"],
                 ))
+                for ordinal, obs in enumerate(edition_group):
+                    resolutions.append(Resolution(
+                        author_id=_ambiguous_author_id(
+                            surname, initial, firstyr, edition_id, ordinal),
+                        edition_id=obs["edition_id"],
+                        authfull=obs["authfull"],
+                        method="surname_initial_firstyr_institution",
+                        is_confident=False,
+                    ))
 
     return resolutions
