@@ -112,10 +112,14 @@ def get_metric_tab_layout(): # DEFAULT_CAREER = None, DEFAULT_YR = None
     # now, in the same labelled-toolbar shape the home page uses.
     row0 = html.Div(
         [
-            html.Div([html.Label("Dataset", className="ev-field-label"),
-                      careerORSingleYr], className="ev-field"),
-            html.Div([html.Label("Year", className="ev-field-label"),
-                      selectYr], className="ev-field"),
+            html.Div(
+                [
+                    html.Div(careerORSingleYr, className="ev-picker-left"),
+                    html.Span(className="ev-picker-sep"),
+                    html.Div(selectYr, className="ev-picker-right"),
+                ],
+                className="ev-picker",
+            ),
         ],
         className="ev-toolbar ev-panel-toolbar",
     )

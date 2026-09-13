@@ -565,10 +565,25 @@ def _field(label, control, grow=False):
     )
 
 
+# Dataset and year are one choice made in two parts: which series, then which
+# edition of it. Presenting them as two separate labelled controls made the
+# user read them as unrelated. They share a single track now, dataset on the
+# left, years on the right, with a divider between: the shape of a picker
+# rather than of two toolbars that happen to be adjacent.
+def _picker(dataset_control, year_control):
+    return html.Div(
+        [
+            html.Div(dataset_control, className="ev-picker-left"),
+            html.Span(className="ev-picker-sep"),
+            html.Div(year_control, className="ev-picker-right"),
+        ],
+        className="ev-picker",
+    )
+
+
 row1 = html.Div(
     [
-        _field("Dataset", careerORSingleYr),
-        _field("Year", zort, grow=True),
+        _field("Dataset and year", _picker(careerORSingleYr, zort), grow=True),
         _field("Statistic", zortt),
         html.Div(info_button, className="ev-toolbar-end"),
     ],
@@ -711,6 +726,7 @@ spotlight = dbc.Modal(
                     placeholder="Search researchers…",
                     autoComplete="off",
                     debounce=False,
+                    autoFocus=True,
                     className="ev-spotlight-input",
                 ),
                 html.Div(id="spotlight-results",

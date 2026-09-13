@@ -266,7 +266,7 @@ def author_vs_group_layout():
     row2 = dbc.Container([
         dbc.Row([
             #dbc.Col([html.Center(group1List),html.Center(group1ListOptions)], width = {'size':6}), 
-            dbc.Col([html.Center(group1List), dbc.Row([dbc.Col([careerORSingleA1],width=4),dbc.Col([selectYrA1],width=8)],justify='around') ], width = {'size':6}), 
+            dbc.Col([html.Center(group1List), html.Div([html.Div(careerORSingleA1, className="ev-picker-left"), html.Span(className="ev-picker-sep"), html.Div(selectYrA1, className="ev-picker-right")], className="ev-picker ev-picker-inline") ], width = {'size':6}), 
             dbc.Col([html.Center(group2List),html.Center(group2ListOptions)], width = {'size':6}), 
         ]), dbc.Row([
             dbc.Col(html.Center(id = 'InfoAuthor1' + SUFFIX), width = {'size':6}), 

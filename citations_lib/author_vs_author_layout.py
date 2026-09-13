@@ -254,10 +254,14 @@ def author_vs_author_layout():
     # now, in the same labelled-toolbar shape the home page uses.
     row1 = html.Div(
         [
-            html.Div([html.Label("Dataset", className="ev-field-label"),
-                      careerORSingleYr], className="ev-field"),
-            html.Div([html.Label("Year", className="ev-field-label"),
-                      selectYr], className="ev-field"),
+            html.Div(
+                [
+                    html.Div(careerORSingleYr, className="ev-picker-left"),
+                    html.Span(className="ev-picker-sep"),
+                    html.Div(selectYr, className="ev-picker-right"),
+                ],
+                className="ev-picker",
+            ),
         ],
         className="ev-toolbar ev-panel-toolbar",
     )
@@ -287,8 +291,8 @@ def author_vs_author_layout():
    
     row2 = dbc.Container([
         dbc.Row([
-            dbc.Col([author1Options, dbc.Row([ dbc.Col([careerORSingleA1],width=4),dbc.Col([selectYrA1],width=8)],justify='around') ], width = {'size':6}), 
-            dbc.Col([author2Options, dbc.Row([dbc.Col([careerORSingleA2],width=4),dbc.Col([selectYrA2],width=8)],justify='around') ], width = {'size':6}), 
+            dbc.Col([author1Options, html.Div([html.Div(careerORSingleA1, className="ev-picker-left"), html.Span(className="ev-picker-sep"), html.Div(selectYrA1, className="ev-picker-right")], className="ev-picker ev-picker-inline") ], width = {'size':6}), 
+            dbc.Col([author2Options, html.Div([html.Div(careerORSingleA2, className="ev-picker-left"), html.Span(className="ev-picker-sep"), html.Div(selectYrA2, className="ev-picker-right")], className="ev-picker ev-picker-inline") ], width = {'size':6}), 
         ]), dbc.Row([
             dbc.Col(html.Center(id = 'InfoAuthor1' + SUFFIX), width = {'size':6}), dbc.Col(html.Center(id = 'InfoAuthor2' + SUFFIX), width = {'size':6})
         ]), dbc.Row([

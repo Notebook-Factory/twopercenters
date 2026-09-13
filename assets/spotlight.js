@@ -30,19 +30,25 @@
   document.addEventListener('keydown', onKeyDown);
 
   // Focus the field the moment the overlay appears, so you can type straight
-  // away. The modal mounts asynchronously and Bootstrap animates it in, so a
-  // single focus() on open lands before the element is focusable. This retries
-  // briefly instead, and stops as soon as the field has focus.
+  // away.
+  //
+  // A single focus() on open is not enough, and neither is stopping at the
+  // first success. The modal mounts asynchronously, Bootstrap animates it in,
+  // and react-bootstrap's own focus management then moves focus to the dialog
+  // element AFTER the transition. So an early focus lands and is immediately
+  // taken away again. This keeps putting focus back for the length of the
+  // animation, and only gives up once the field has held focus across
+  // consecutive checks.
   function focusSearch() {
     var modal = document.getElementById('spotlight');
     if (!modal || !modal.classList.contains('show')) { return false; }
     var input = document.getElementById('spotlight-input');
     if (!input) { return false; }
-    if (document.activeElement === input) { return true; }
-    input.focus();
-    // Put the caret after any existing text rather than selecting it.
-    var len = (input.value || '').length;
-    try { input.setSelectionRange(len, len); } catch (e) {}
+    if (document.activeElement !== input) {
+      input.focus({preventScroll: true});
+      var len = (input.value || '').length;
+      try { input.setSelectionRange(len, len); } catch (e) {}
+    }
     return document.activeElement === input;
   }
 
@@ -52,11 +58,14 @@
     var open = !!(modal && modal.classList.contains('show'));
 
     if (open && !wasOpen) {
-      // Opened just now: try until it takes, for at most ~600ms.
-      var tries = 0;
+      var held = 0;
+      var elapsed = 0;
       var timer = setInterval(function () {
-        if (focusSearch() || ++tries > 12) { clearInterval(timer); }
-      }, 50);
+        elapsed += 40;
+        held = focusSearch() ? held + 1 : 0;
+        // Held for ~200ms, or we have been trying for 1.2s: stop either way.
+        if (held >= 5 || elapsed > 1200) { clearInterval(timer); }
+      }, 40);
     }
     wasOpen = open;
   });

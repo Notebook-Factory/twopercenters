@@ -1594,3 +1594,162 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
 }
 .offcanvas .btn-close:hover { opacity: 1; }
 :root[data-theme="light"] .offcanvas .btn-close { filter: none; }
+
+/* ==========================================================================
+   The dataset/year picker
+   One track holding both halves of a single choice: which series on the left,
+   which edition of it on the right, divided by a hairline. Previously these
+   were two separately captioned controls, which read as unrelated.
+   ========================================================================== */
+.ev-picker {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  background-color: color-mix(in srgb, var(--ev-bg-deep) 70%, transparent);
+  border: 1px solid var(--ev-surface-2);
+  border-radius: 12px;
+  padding: 4px;
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ev-picker-left,
+.ev-picker-right { display: flex; align-items: center; }
+
+.ev-picker-right { overflow-x: auto; scrollbar-width: none; }
+.ev-picker-right::-webkit-scrollbar { display: none; }
+
+.ev-picker-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 10px;
+  background-color: var(--ev-surface-2);
+  flex: 0 0 1px;
+}
+
+/* Inside the track the segments are pills, not bordered buttons: the track
+   already draws the edge, so per-button borders only add noise. */
+.ev-picker .btn-group { border-radius: 0; }
+.ev-picker .radio-group { margin: 0 !important; }
+
+.ev-picker .btn,
+.ev-picker .btn-group > .form-check > .btn {
+  border: none !important;
+  border-radius: 8px !important;
+  margin: 0 2px !important;
+  padding: 8px 14px !important;
+  background-color: transparent !important;
+  color: var(--ev-text) !important;
+  font-weight: 550;
+}
+
+.ev-picker .btn:hover:not(.active) {
+  background-color: var(--ev-surface-2) !important;
+}
+
+/* Dataset keeps orange, years keep cyan, so the two halves stay legible as
+   two different questions inside one control. */
+.ev-picker-left .btn.active {
+  background-color: var(--ev-orange) !important;
+  color: #10151D !important;
+}
+.ev-picker-right .btn.active {
+  background-color: var(--ev-accent) !important;
+  color: #10151D !important;
+}
+
+.ev-picker .btn:disabled {
+  color: var(--ev-text-muted) !important;
+  opacity: 0.4;
+}
+
+/* The equal-width rule for the dataset halves still applies inside the track. */
+.ev-picker-left .btn-group > .form-check { flex: 1 1 0; min-width: 112px; }
+.ev-picker-left .btn-group > .form-check > .btn { width: 100%; }
+
+/* ==========================================================================
+   Glass
+   Translucent, blurred surfaces over the page rather than flat opaque blocks.
+   Applied to the layers that genuinely float above content: the top bar, the
+   toolbar, the spotlight, menus and the intro panel. Cards that hold body
+   text stay opaque, because text over a blurred background is harder to read
+   and this is a reading surface as much as a control surface.
+   ========================================================================== */
+.navbar {
+  background-color: color-mix(in srgb, var(--ev-bg-deep) 78%, transparent) !important;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.ev-toolbar {
+  background-color: color-mix(in srgb, var(--ev-surface) 62%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.Select-menu-outer {
+  background-color: color-mix(in srgb, var(--ev-surface) 88%, transparent) !important;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.offcanvas {
+  background-color: color-mix(in srgb, var(--ev-surface) 88%, transparent) !important;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+
+.nav-tabs {
+  background-color: color-mix(in srgb, var(--ev-bg-deep) 65%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* The spotlight is the piece this was asked for, so it goes furthest. */
+.ev-spotlight {
+  background-color: color-mix(in srgb, var(--ev-surface) 58%, transparent);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--ev-text) 14%, transparent);
+}
+
+#spotlight .modal-backdrop,
+.modal-backdrop.show { backdrop-filter: blur(3px); opacity: 0.45; }
+
+/* Browsers without backdrop-filter would show near-transparent panels with
+   text floating over the page, so those fall back to opaque. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .navbar { background-color: var(--ev-bg-deep) !important; }
+  .ev-toolbar, .ev-spotlight, .Select-menu-outer, .offcanvas {
+    background-color: var(--ev-surface) !important;
+  }
+  .ev-picker, .nav-tabs { background-color: var(--ev-bg-deep); }
+}
+
+/* The selected-segment colours have to out-specify the transparent rule above
+   them, which is written as .ev-picker .btn-group > .form-check > .btn and so
+   carries four classes. A plain .ev-picker-left .btn.active carries three and
+   silently lost, which is why the dataset half rendered with nothing
+   selected. These match its shape and add .active on top. */
+.ev-picker-left .btn-group > .form-check > .btn.active,
+.ev-picker-left .btn.active {
+  background-color: var(--ev-orange) !important;
+  color: #10151D !important;
+}
+
+.ev-picker-right .btn-group > .form-check > .btn.active,
+.ev-picker-right .btn.active {
+  background-color: var(--ev-accent) !important;
+  color: #10151D !important;
+}
+
+/* The in-panel picker sits under a search box rather than in a toolbar, so it
+   centres itself and keeps a little air above. */
+.ev-picker-inline {
+  margin: 14px auto 0;
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+}
