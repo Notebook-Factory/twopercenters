@@ -155,6 +155,23 @@ color: #2C2C2C;
   margin-left: -1px;
 }
 
+/* The year rows were laid out when the data stopped at 2021, so five
+   buttons. The editions table now runs to 2024, which is eight, and at the
+   old padding that bar is wider than the columns it sits in. Tightening the
+   buttons keeps all eight on one line at the widths these layouts actually
+   use; wrapping is the fallback for a genuinely narrow viewport, where a
+   second row is better than a bar running off the edge. */
+.radio-group .btn-group {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.radio-group .btn-group > .form-check > .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
 .danger {
   background-color: #ebd4b0;
   color: black;
