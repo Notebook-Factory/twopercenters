@@ -63,9 +63,9 @@ FRACTION_COLUMNS = {
 }
 
 FACT_COLUMNS = [
-    "author_id", "edition_id", "institution_id", "field_id", "field_frac",
-    "subfield_1_id", "subfield_1_frac", "subfield_2_id", "subfield_2_frac",
-    "observation_date",
+    "author_id", "edition_id", "institution_id", "country_code", "field_id",
+    "field_frac", "subfield_1_id", "subfield_1_frac", "subfield_2_id",
+    "subfield_2_frac", "observation_date",
 ] + METRIC_COLUMNS
 
 TABLES = [
@@ -604,6 +604,11 @@ def _write_facts(conn, frame, edition, assignments):
         "author_id": [a.author_id for a in assignments],
         "edition_id": [edition.edition_id] * length,
         "institution_id": dimension("inst_name", institution_id),
+        # RULING R17: the row's own country, not its institution's. The two
+        # disagree for 33,028 rows, and 695 rows have a country but no
+        # institution at all, so reading it back through institutions would
+        # serve 55,355 rows wrongly or not at all.
+        "country_code": dimension("cntry", lambda code: code),
         "field_id": dimension("sm-field", field_id),
         "subfield_1_id": dimension("sm-subfield-1", subfield_id),
         "subfield_2_id": dimension("sm-subfield-2", subfield_id),

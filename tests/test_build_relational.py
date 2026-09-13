@@ -90,3 +90,53 @@ def test_every_edition_metric_gets_a_maximum(conn):
     assert maxima["nc"] == conn.execute(
         "select max(nc) from career_metrics").fetchone()[0]
     assert "h" in maxima and "hm" in maxima
+
+
+def test_a_row_without_an_institution_still_carries_its_own_country(conn):
+    # RULING R17. 695 rows across the editions have no inst_name but do have a
+    # cntry: 155 in career 2018 and 540 in singleyr 2019. Reading country back
+    # through institutions loses every one of them.
+    load_edition(conn, "data_clean/version-1", kind="career")
+    row = conn.execute("""
+        select m.country_code, m.institution_id
+        from career_metrics m
+        join author_name_observations o
+          on o.author_id = m.author_id and o.edition_id = m.edition_id
+        where m.edition_id = 'career-2018'
+          and o.authfull_raw = 'Harley, Calvin B.'
+    """).fetchone()
+    assert row is not None
+    assert row[1] is None, "this row has no institution in the source"
+    assert row[0] == "usa"
+
+
+def test_a_row_keeps_its_own_country_not_its_institutions(conn):
+    # RULING R17. 'Department of Psychiatry' is first seen in career 2024 with
+    # 'usa', but Bullmore's row carries 'gbr'. 1,170 rows of that edition
+    # disagree with their institution's first-seen country.
+    load_edition(conn, "data_clean/version-8", kind="career")
+    row = conn.execute("""
+        select m.country_code, i.country_code, i.inst_name
+        from career_metrics m
+        join institutions i on i.institution_id = m.institution_id
+        join author_name_observations o
+          on o.author_id = m.author_id and o.edition_id = m.edition_id
+        where m.edition_id = 'career-2024'
+          and o.authfull_raw = 'Bullmore, Edward T.'
+    """).fetchone()
+    assert row is not None
+    assert row[2] == "Department of Psychiatry"
+    assert row[1] == "usa", "the institution's own country is unchanged"
+    assert row[0] == "gbr", "the row must carry its own country"
+
+
+def test_null_country_matches_the_rows_whose_source_country_is_empty(conn):
+    # The only rows left without a country are the ones the source leaves
+    # empty: 252 of career 2024's 230,333, and 128 of career 2018's 105,000.
+    # Not the 22,327 rows that merely have no institution.
+    load_edition(conn, "data_clean/version-8", kind="career")
+    load_edition(conn, "data_clean/version-1", kind="career")
+    empty = dict(conn.execute(
+        "select edition_id, count(*) from career_metrics "
+        "where country_code is null group by 1").fetchall())
+    assert empty == {"career-2024": 252, "career-2018": 128, "career-2017": 10067}
