@@ -1,0 +1,17 @@
+{
+  "n": 6,
+  "repeats": 5,
+  "typeahead_p50_ms": 11.46,
+  "typeahead_p95_ms": 40.31,
+  "fetch_p50_ms": 15.25,
+  "fetch_p95_ms": 30.96,
+  "mode": "legacy",
+  "terms": [
+    "ioa",
+    "ioan",
+    "ioann",
+    "ioannidis",
+    "smi",
+    "smith"
+  ]
+}
