@@ -457,19 +457,27 @@ EVIDENCE_URL = "https://evidencepub.io"
 dede = dbc.Navbar(
     dbc.Container(
         [
-            html.A(
+            html.Div(
                 [
-                    html.Img(src=EVIDENCE_LOGO, className="ev-mark"),
+                    html.A(html.Img(src=EVIDENCE_LOGO, className="ev-mark"),
+                           href="/"),
                     html.Div(
                         [
-                            html.Span("Twopercenters", className="ev-wordmark"),
-                            html.Span("Top 2% most-cited researchers",
-                                      className="ev-tagline"),
+                            html.A("Twopercenters", href="/",
+                                   className="ev-wordmark"),
+                            html.Span(
+                                [
+                                    "developed and hosted by ",
+                                    html.A("Evidence", href=EVIDENCE_URL,
+                                           target="_blank",
+                                           className="ev-attrib-link"),
+                                ],
+                                className="ev-tagline",
+                            ),
                         ],
                         className="ev-brand-text",
                     ),
                 ],
-                href="/",
                 className="ev-brand",
             ),
             html.Div(
@@ -489,8 +497,6 @@ dede = dbc.Navbar(
                     dbc.Button("◑", id="theme-toggle", n_clicks=0,
                                className="ev-theme-toggle",
                                title="Switch between dark and light"),
-                    html.A("Evidence", href=EVIDENCE_URL, target="_blank",
-                           className="ev-by"),
                 ],
                 className="ev-nav-actions",
             ),
@@ -559,12 +565,10 @@ navigation_row = html.Div(
         row1,
         dbc.Row(
             [
-                dbc.Col(html.Div(kek, className="ev-card ev-map-card"),
-                        lg=8, md=12),
-                dbc.Col(html.Div(zart, className="ev-card ev-side-card"),
-                        lg=4, md=12),
+                dbc.Col(html.Div(kek), width=8),
+                dbc.Col(zart, width=4),
             ],
-            className="g-3 ev-panes",
+            className="ev-panes",
         ),
     ],
     className="ev-stage",
@@ -834,7 +838,7 @@ layout = dbc.Container(fluid = True, children = [
         html.Hr(),
         dbc.Row(accordion),
         footer
-        ], className = 'ev-page')
+        ], className = 'ev-page ev-shell')
     # dbc.Tooltip("Options selected in this row determine what dataset NC metrics are obtained from.", target = "selectStep1Card", placement = "right"), 
     # dbc.Tooltip("Exclude or include author self citations.", target = "selfCToggle", placement = "right"), 
     # dbc.Tooltip("Author metrics from entire career-span ('Career') or just from year of interest ('Single year').", target = "careerSingleYrRadio", placement = "right"), 

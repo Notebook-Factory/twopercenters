@@ -854,20 +854,11 @@ color: var(--ev-bg);
   background-color: var(--ev-surface);
 }
 
-.ev-by {
-  color: var(--ev-text-muted);
-  font-size: 0.74rem;
-  text-decoration: none;
-  margin-left: 4px;
-  white-space: nowrap;
-}
-.ev-by::before { content: "by "; opacity: 0.7; }
-.ev-by:hover { color: var(--ev-accent); }
 
 @media (max-width: 980px) {
   .ev-navbar-inner { flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
   .ev-nav-search { min-width: 0; }
-  .ev-search-label, .ev-tagline, .ev-by, .ev-nav-sep { display: none; }
+  .ev-search-label, .ev-nav-sep { display: none; }
 }
 
 /* ====== Control toolbar ======
@@ -916,7 +907,6 @@ color: var(--ev-bg);
   height: 100%;
 }
 
-.ev-side-card { overflow-y: auto; max-height: 520px; }
 
 /* ====== Charts follow the theme ======
    Plotly bakes colours into the figure server-side, so a chart cannot follow
@@ -971,3 +961,62 @@ color: var(--ev-bg);
 .js-plotly-plot .modebar-group { background: transparent !important; }
 
 .js-plotly-plot .geo .bg { fill: transparent !important; }
+
+/* ==========================================================================
+   Full-bleed shell.
+   The page is a dbc.Container(fluid=True), which is a Bootstrap
+   container-fluid and carries a horizontal gutter. That gutter is why the top
+   bar could not reach the window edges however its own padding was set: the
+   bar was already inset by its parent. The shell is zero-padding now and each
+   section supplies its own inset instead.
+   ========================================================================== */
+.ev-shell {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  max-width: 100% !important;
+  overflow-x: hidden;
+}
+
+/* The bar spans the shell edge to edge; only its inner row is inset. */
+.navbar { width: 100%; }
+
+/* Sections that used to inherit the container's gutter now ask for it. */
+.ev-shell > .ev-stage { padding: 18px 24px 0; }
+.ev-shell > hr,
+.ev-shell > .row { margin-left: 24px; margin-right: 24px; }
+.ev-shell > footer { padding: 0 24px; }
+
+/* ====== Brand ======
+   Wordmark with the attribution beneath it, which is where it belongs: it
+   says who made the thing named directly above it. */
+.ev-brand { align-items: center; }
+
+.ev-wordmark {
+  color: var(--ev-text);
+  text-decoration: none;
+  font-size: 1.12rem;
+  font-weight: 650;
+  letter-spacing: 0.1px;
+}
+.ev-wordmark:hover { color: var(--ev-accent); }
+
+.ev-tagline {
+  color: var(--ev-text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.1px;
+}
+
+.ev-attrib-link {
+  color: var(--ev-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.ev-attrib-link:hover { text-decoration: underline; }
+
+/* ====== Panes ======
+   The summary column is long-form prose, not a widget, so it is left to flow
+   at its natural height. Boxing it at a fixed height clipped the text and
+   forced it to match the map, which is what broke this layout. */
+.ev-panes { margin: 0; }
+.ev-panes > [class*="col"] { padding-left: 0; padding-right: 14px; }
+.ev-panes > [class*="col"]:last-child { padding-right: 0; padding-left: 14px; }
