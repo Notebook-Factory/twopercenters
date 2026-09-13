@@ -256,7 +256,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
    
     row2 = dbc.Container([
         dbc.Row([
-            dbc.Col([author1Options, dbc.Row([ dbc.Col([careerORSingleA1],width=4),dbc.Col([selectYrA1],width=8)],justify='end') ], width = {'size':8}),
+            dbc.Col([author1Options, dbc.Row([ dbc.Col([careerORSingleA1],width='auto'),dbc.Col([selectYrA1],width='auto')],justify='center',align='center',className='g-3') ], width = {'size':8}),
             #dbc.Col([author2Options, dbc.Row([dbc.Col([careerORSingleA2],width=4),dbc.Col([selectYrA2],width=8)],justify='around') ], width = {'size':6}), 
         ], justify ='center'), dbc.Row([
             dbc.Col(html.Center(id = 'InfoAuthor1' + SUFFIX), width = {'size':8}, style={'visibility':'hidden','height':'0px'})
