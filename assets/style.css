@@ -2505,3 +2505,32 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   margin-top: .7rem;
   list-style: none;
 }
+
+/*
+  Site navigation. Dash registers pages but links to none of them, so two
+  pages shipped reachable only by typing their URL. This bar is built from
+  dash.page_registry, so a page added later appears without an edit here.
+*/
+.ev-nav {
+  display: flex;
+  gap: .4rem;
+  align-items: center;
+  padding: .55rem 1rem;
+  background: var(--ev-bg-deep);
+  border-bottom: 1px solid var(--ev-surface-2);
+  position: sticky;
+  top: 0;
+  z-index: 500;
+}
+.ev-nav-link {
+  color: var(--ev-text-muted);
+  text-decoration: none;
+  font-size: .9rem;
+  padding: .35rem .8rem;
+  border-radius: var(--ev-radius);
+}
+.ev-nav-link:hover {
+  color: var(--ev-text);
+  background: var(--ev-surface);
+  text-decoration: none;
+}

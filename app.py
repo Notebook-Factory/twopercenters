@@ -19,6 +19,25 @@ app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
            suppress_callback_exceptions=True)
 server = app.server
 app.title = "Evidence"
+# The pages exist only if a reader can get to them. Dash registers a page the
+# moment its module is imported, but it puts no link anywhere, so /retraction
+# and /ranking were reachable only by typing the URL. This builds the bar from
+# dash.page_registry, which means a page added later appears here without an
+# edit; the scratch page at /keke is excluded by name.
+_HIDDEN_ROUTES = {'/keke'}
+
+
+def _nav():
+    links = []
+    for page in sorted(dash.page_registry.values(),
+                       key=lambda p: (p['path'] != '/', p['name'])):
+        if page['path'] in _HIDDEN_ROUTES:
+            continue
+        links.append(dcc.Link(page['name'], href=page['path'],
+                              className='ev-nav-link'))
+    return html.Nav(links, className='ev-nav')
+
+
 app.layout = html.Div([
         html.Div([dcc.Store(id="df-store", storage_type='local'),
             dcc.Interval(
@@ -26,6 +45,7 @@ app.layout = html.Div([
             n_intervals=0, 
             max_intervals=0,
             interval=1)]),
+	_nav(),
 	dash.page_container
 ])
 
