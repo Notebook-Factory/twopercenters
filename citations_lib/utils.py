@@ -544,6 +544,72 @@ def _requested_kinds(idx_name):
 # the page that shows them must never present the two alike.
 # ---------------------------------------------------------------------------
 
+# The bands the coverage chart reports. Narrow where the list is dense and
+# wide where it thins out, so the shape of the decay is visible rather than
+# being flattened into one long tail.
+_RANK_BANDS = [
+    (1, 25_000), (25_001, 50_000), (50_001, 75_000), (75_001, 100_000),
+    (100_001, 150_000), (150_001, 200_000), (200_001, 300_000),
+    (300_001, 500_000), (500_001, 1_000_000), (1_000_001, 3_000_000),
+]
+
+# Where the published list stops being everybody. Verified across all eight
+# career editions: every rank from 1 to 100,000 appears, and past it coverage
+# falls away. career-2018 is the one exception at 99,998 of 100,000.
+RANK_CUTOFF = 100_000
+
+
+def rank_coverage(kind, year):
+    """How much of each rank band actually appears in one edition.
+
+    `rank` is a position in a ranking of every scientist scored, not of the
+    people published, so a reader meeting a rank of 214,011 beside a list of
+    159,683 has no way to make sense of it. This is the shape that explains
+    it: the list holds every one of the first 100,000 ranks and then thins
+    out, because past that point a researcher only appears if they are near
+    the top of their own subfield.
+
+    Returns one dict per band with the band's bounds, how many of its ranks
+    are present, how wide it is, and the resulting share. Bands entirely past
+    the edition's largest rank are dropped rather than drawn as empty.
+    """
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None:
+        return []
+    edition_id = f'{kind}-{year}'
+
+    rows = _fetch(
+        f"select count(*), min(rank), max(rank) from {table} "
+        "where edition_id = %s and rank is not null", (edition_id,))
+    if not rows or not rows[0][0]:
+        return []
+    published, _lowest, highest = rows[0]
+
+    cases = " ".join(
+        f"count(*) filter (where rank between {lo} and {hi}) as b{index},"
+        for index, (lo, hi) in enumerate(_RANK_BANDS)).rstrip(",")
+    counts = _fetch(
+        f"select {cases} from {table} "
+        "where edition_id = %s and rank is not null", (edition_id,))[0]
+
+    bands = []
+    for (lo, hi), present in zip(_RANK_BANDS, counts):
+        if lo > highest:
+            break
+        width = min(hi, int(highest)) - lo + 1
+        if width <= 0:
+            continue
+        bands.append({
+            'low': lo, 'high': min(hi, int(highest)),
+            'present': int(present), 'width': width,
+            'share': int(present) / width,
+        })
+    return {
+        'edition_id': edition_id, 'published': int(published),
+        'highest_rank': int(highest), 'bands': bands,
+    }
+
+
 def prediction_run(task):
     """What a published model run scored, or None if nothing is published."""
     rows = _fetch(

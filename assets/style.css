@@ -2486,3 +2486,22 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 .ev-caveats      { color: var(--ev-text-muted); font-size: .82rem;
                    margin: .8rem 0 0; padding-left: 1.1rem; }
 .ev-caveats li   { margin-bottom: .35rem; }
+
+/* Ranking page: the rank-locator input and its verdict. */
+.ev-input {
+  background: var(--ev-bg-deep);
+  color: var(--ev-text);
+  border: 1px solid var(--ev-surface-2);
+  border-radius: var(--ev-radius);
+  padding: .45rem .7rem;
+  width: 100%;
+  margin-bottom: .9rem;
+}
+.ev-input::placeholder { color: var(--ev-text-muted); }
+.ev-verdict {
+  color: var(--ev-text);
+  border-left: 3px solid var(--ev-orange);
+  padding-left: .7rem;
+  margin-top: .7rem;
+  list-style: none;
+}
