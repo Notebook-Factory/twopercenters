@@ -88,3 +88,79 @@ and it can be validated against the 957,429 unambiguous trajectories we
 already trust. OpenAlex then becomes the independent check on the result
 rather than the mechanism, which is also the honest way to report a precision
 figure.
+
+## The extra attributes, measured
+
+Over the same 957,429 consecutive-edition observations, how often each
+attribute is unchanged from one edition to the next:
+
+| attribute | unchanged | note |
+|---|---|---|
+| field | 97.9% | |
+| country | 97.3% | |
+| subfield | 96.3% | |
+| institution | 72.3% | Scopus picks one affiliation by ML from recent papers |
+
+Institution is the weak one and the published FAQ explains why. Country and
+field are nearly fixed.
+
+## Does it discriminate inside a block?
+
+Stability is not the question; discrimination is. Test: take unambiguous
+authors present in both 2023 and 2024, where the true pairing is known, form
+synthetic blocks, and solve the assignment with `scipy.optimize.
+linear_sum_assignment` over a cost of relative change in `c`, an h-index
+monotonicity penalty, and mismatch penalties on subfield, country and
+institution.
+
+Blocks drawn on shared firstyr only:
+
+| block size | random | `c`+`h` only | plus field/country/institution |
+|---|---|---|---|
+| 5 | 20.0% | 98.5% | 100.0% |
+| 10 | 10.0% | 96.1% | 100.0% |
+| 20 | 5.0% | 95.8% | 100.0% |
+| 50 | 2.0% | 88.5% | 100.0% |
+
+Harder, with field and country neutralised by construction, every block
+member sharing firstyr **and** field **and** country:
+
+| block size | random | `c`+`h` only | plus subfield/institution |
+|---|---|---|---|
+| 5 | 20.0% | 97.3% | 100.0% |
+| 10 | 10.0% | 97.4% | 100.0% |
+| 20 | 5.0% | 96.1% | 99.5% |
+| 50 | 2.0% | 89.4% | **99.4%** |
+
+99.4% against a 2% random baseline, on the hardest configuration available.
+The metrics alone carry most of it and the categorical attributes close the
+remaining gap, which answers whether affiliation and field are worth
+including: they are, and they matter most exactly where the blocks are
+largest.
+
+Two honest limits on that figure. These blocks are balanced, every 2023
+member having a 2024 counterpart, whereas real blocks gain and lose people,
+so the implementation needs a rectangular assignment and a cost threshold
+above which no match is made. And the members are drawn from authors the
+resolver already found unambiguous, who may be easier than the residual.
+
+## On a learned matcher
+
+The relational-learning approach can do this too, and there are 957,429
+known positive pairs to train on, which is an unusually comfortable position
+for an entity-resolution problem. But the hand-built cost already reaches
+99.4% on the hardest synthetic blocks, so a learned model would compete for
+the last fraction of a percent. The place it earns its keep is the reject
+threshold, deciding when a person genuinely left rather than forcing a match,
+and the residual blocks where metrics are missing. Worth doing second, on the
+cases the rules leave open, not first.
+
+## A correction on Scopus and ORCID
+
+Scopus does carry ORCID: Scopus author profiles link to ORCID and Elsevier
+runs that integration. What is missing is in the published dataset. Ioannidis
+and Elsevier strip every identifier at publication, including the Scopus
+Author ID used to compute the metrics, leaving only the profile's preferred
+name as of the calculation date. The identity exists upstream and is
+discarded on the way out. That is an editorial decision about the data
+product, not a gap in Scopus, and it should be described that way.
