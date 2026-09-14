@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 DATASET_DIR = ROOT / "data_rdl" / "twopercenters"
 OUT_DIR = ROOT / "data_rdl" / "predictions"
+CHECKPOINT_DIR = ROOT / "data_rdl" / "checkpoints"
 
 
 def pick_device() -> str:
@@ -195,6 +196,23 @@ def run(
         results[split] = format_result(metrics, baseline)
         logger.info("%s: %s", split, results[split])
 
+    # Save the weights. Without this the model is discarded at the end of the
+    # run and the only thing that survives is a metric, which makes the
+    # backfill -- the actual point of the task -- impossible. The
+    # hyperparameters are stored alongside because Model's constructor needs
+    # them to rebuild the same architecture before the state dict will load.
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "task": task_name,
+            "state_dict": model.state_dict(),
+            "channels": channels,
+            "num_layers": num_layers,
+            "out_channels": _out_channels(task.task_type),
+        },
+        CHECKPOINT_DIR / f"{task_name}.pt",
+    )
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "task": task_name,
@@ -204,6 +222,7 @@ def run(
         "channels": channels,
         "num_layers": num_layers,
         "results": results,
+        "checkpoint": str(CHECKPOINT_DIR / f"{task_name}.pt"),
     }
     (OUT_DIR / f"{task_name}.json").write_text(json.dumps(payload, indent=2))
     return payload
