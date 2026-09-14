@@ -351,16 +351,42 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                                           to='name_short'))
             if cntry_full in ('not found', 'None'):
                 cntry_full = str(names['cntry']).upper()
-            # A rank means little without its denominator: 4,812 is a very
-            # different result out of 5,000 than out of 230,000.
-            total_authors = edition_author_count(prefix1, yr1)
+            # A rank means little without its denominator, and the denominator
+            # has to be the right one.
+            #
+            # `rank` is the position in a ranking of EVERY scientist Scopus
+            # scored, not of the people on this list. Verified: sorting a
+            # career edition by rank leaves c monotonically non-increasing in
+            # 100.00% of steps, so it is a strict global ordering by composite
+            # score. In career-2024 the largest rank is 1,210,493 against
+            # 230,333 published rows, and 48,401 rows (21%) carry a rank
+            # larger than the list itself. Those people are published because
+            # they are near the top of a SUBFIELD, not of the whole ranking:
+            # their median subfield rank is 2,311 out of a median subfield of
+            # 131,858.
+            #
+            # So pairing `rank` with the edition's size produced "ranked
+            # 1,210,493 among 230,333 researchers", which is not just
+            # unhelpful but visibly impossible, and it is the first thing a
+            # reader notices. The subfield pair is a real one: rank_subfield
+            # is at most subfield_count in 100.00% of rows.
             span = 'career-long up to' if prefix1 == 'career' else 'in'
+            subfield = names.get('subfield') or data1.get('sm-subfield-1')
+            sub_rank = data1.get('rank sm-subfield-1')
+            sub_total = data1.get('sm-subfield-1 count')
+            if sub_rank is not None and sub_total:
+                standing = (f"**{int(sub_rank):,}** of "
+                            f"**{int(sub_total):,}** in {subfield}")
+            else:
+                # No subfield standing recorded: say what the rank is rather
+                # than inventing a denominator for it.
+                standing = f"overall position {int(data1['rank']):,} of all scored"
             auth_info = f'''
                         * **Country:** {cntry_full}
                         * **Field:** {names['field']}
                         * **Institute:** {names['inst']}
                         * **Self citation (%):** {round(data1['self%']*100,2)}
-                        * **Ranked among:** {total_authors:,} researchers ({span} {yr1})
+                        * **Subfield standing:** {standing} ({span} {yr1})
                         '''
             if uplim == 'Max and median (red) by country':
                 kek = get_es_aggregate('cntry',names['cntry'],prefix1)

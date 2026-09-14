@@ -533,6 +533,71 @@ def _requested_kinds(idx_name):
     return kinds or ['career', 'singleyr']
 
 
+def author_options(result):
+    """Dropdown options that show WHO each candidate is, not just a name.
+
+    `Zhu, Jianguo` is one string shared by dozens of real researchers, and a
+    list of bare names gives a reader no way to tell which one they are
+    about to select. Each option carries the institution and country, so the
+    choice is informed, and when one name covers several researchers in the
+    same result the option says so rather than silently standing for one of
+    them.
+
+    The value stays the name, because that is what every downstream callback
+    still looks an author up by. Narrowing between two people with the same
+    name is done by typing an affiliation into the search, which
+    get_es_results now understands; making the value an author_id is the
+    deeper change that would let the dropdown itself do it.
+    """
+    if result is None or len(result) == 0:
+        return []
+
+    def _cell(row, column):
+        value = row.get(column)
+        if value is None or (isinstance(value, float) and value != value):
+            return None
+        text = str(value).strip()
+        return text or None
+
+    people = {}
+    for _index, row in result.iterrows():
+        name = _cell(row, '_source.authfull')
+        if not name:
+            continue
+        # Count distinct PEOPLE, not distinct institution strings. One
+        # researcher's affiliation is recorded differently from one edition
+        # to the next often enough to matter: John Ioannidis appears as both
+        # "Stanford University School of Medicine" and "Stanford University",
+        # and counting strings called him two researchers.
+        author = _cell(row, '_source.author_id') or name
+        entry = people.setdefault(name, {})
+        place = _cell(row, '_source.inst_name')
+        country = _cell(row, '_source.cntry')
+        if place and country:
+            place = f"{place} ({str(country).upper()})"
+        elif country:
+            place = str(country).upper()
+        if place and not entry.get(author):
+            entry[author] = place
+        else:
+            entry.setdefault(author, place)
+
+    options = []
+    for name, by_author in people.items():
+        places = [p for p in by_author.values() if p]
+        if len(by_author) > 1:
+            shown = ", ".join(places[:2])
+            label = (f"{name} - {len(by_author)} researchers"
+                     + (f": {shown}" if shown else "")
+                     + (", ..." if len(places) > 2 else ""))
+        elif places:
+            label = f"{name} - {places[0]}"
+        else:
+            label = name
+        options.append({"label": label, "value": name})
+    return options
+
+
 def es_result_pick(result, field, nohit=[''], expect_name=None):
     """Pull one field out of a get_es_results() frame.
 
@@ -813,13 +878,40 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
                                     requested_name=search_term)
         query = {"term": {search_fields: search_term}}
     else:
+        # Two clauses, either of which can satisfy the search.
+        #
+        # The first is the original fuzzy name match, unchanged, and it is
+        # boosted so a plain name search ranks exactly as it did before.
+        #
+        # The second lets the terms of one query land in different fields, so
+        # "zhu jianguo stanford" finds the Zhu Jianguo at Stanford rather
+        # than nothing. That matters here more than it would elsewhere:
+        # `Zhu, Jianguo` is one name shared by dozens of real people, and a
+        # name alone cannot separate them. cross_fields does not support
+        # fuzziness, which is why it supplements the fuzzy clause instead of
+        # replacing it: misspell the name and the first clause still catches
+        # it, add an affiliation and the second does.
+        name_fields = search_fields if isinstance(search_fields, list) \
+            else [search_fields]
         query = {
-            "multi_match": {
-                "query": search_term,
-                #"type": "phrase_prefix",
-                "operator": "and",
-                "fuzziness": "auto",
-                "fields": search_fields
+            "bool": {
+                "should": [
+                    {"multi_match": {
+                        "query": search_term,
+                        "operator": "and",
+                        "fuzziness": "auto",
+                        "fields": name_fields,
+                        "boost": 3.0,
+                    }},
+                    {"multi_match": {
+                        "query": search_term,
+                        "type": "cross_fields",
+                        "operator": "and",
+                        "fields": name_fields + ["inst_name", "cntry",
+                                                 "sm_field"],
+                    }},
+                ],
+                "minimum_should_match": 1,
             },
         }
     result = es.search(index=AUTHOR_ALIAS, size=30,

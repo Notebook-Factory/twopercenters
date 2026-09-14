@@ -18,7 +18,10 @@ def generate_es_dropdown_callback(element_id):
     )
     def update_output(search_value):
         result = get_es_results(search_value, ['career', 'singleyr'], 'authfull')
-        return es_result_pick(result, 'authfull')
+        # Labels carry the institution and country: a bare list of names
+        # cannot tell two people called `Zhu, Jianguo` apart, and there are
+        # dozens of them. Typing an affiliation narrows the search itself.
+        return author_options(result)
 
     return dcc.Dropdown(
         options=[],

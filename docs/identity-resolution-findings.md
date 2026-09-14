@@ -234,3 +234,51 @@ both harder and real, with a 9.4% positive rate rather than 18.6%.
 A model scoring 0.81 on a corrupted label is worth less than one scoring
 0.69 on a clean one, and the only way to tell them apart is to check what a
 trivial feature gets. That check belongs on every task here from now on.
+
+---
+
+# Two more problems the rebuild exposed
+
+## `rank` has no denominator on this list, and the dashboard invented one
+
+`rank` is the position in a ranking of every scientist Scopus scored, not of
+the people on the published list. Verified: sort a career edition by rank and
+`c` is non-increasing in **100.00%** of steps, so it is a strict global
+ordering by composite score.
+
+In career-2024 the largest rank is **1,210,493** against **230,333**
+published rows, and **48,401 rows (21%)** carry a rank larger than the list
+itself. Those people are on the list because they are near the top of a
+*subfield*: their median subfield rank is 2,311 out of a median subfield of
+131,858, and nobody published is below the top 5.6% of their own subfield.
+
+The author panel had begun showing "Ranked among: 230,333 researchers" beside
+a rank that can be 1,210,493. That is not merely unhelpful, it is visibly
+impossible, and it is the first thing a reader notices. The subfield pair is
+a real one, `rank_subfield` being at most `subfield_count` in 100.00% of
+rows, so the panel shows subfield standing instead.
+
+## `firstyr` is absent from the whole of singleyr-2017
+
+| edition | rows | `firstyr` NULL |
+|---|---|---|
+| singleyr-2017 | 106,368 | **106,368 (100%)** |
+| every other edition | | 0 |
+
+The version-1 single-year file does not carry the column at all. `firstyr` is
+the third component of the blocking key, so every author in that edition is
+blocked as `(surname, initial, NULL)` and cannot join their own career
+record. John Ioannidis is two authors in this data for exactly that reason:
+one carrying all eight career editions and six single-year ones, and one
+carrying singleyr-2017 alone.
+
+It is partly recoverable. Of 104,656 distinct names in singleyr-2017, 69,517
+also appear in career-2017 and 68,315 of those have an unambiguous `firstyr`
+there, so about 65% could be filled in from the publisher's own data for the
+same person in the same year. The remaining 35% appear only in the
+single-year table, having had one strong year without a career-long standing,
+and have nothing to borrow from.
+
+Whether to do it is a judgement call rather than a bug fix. It does not alter
+a published metric, it fills a blocking key we derive, but it is still a
+repair to source data and belongs in the open rather than in a quiet commit.
