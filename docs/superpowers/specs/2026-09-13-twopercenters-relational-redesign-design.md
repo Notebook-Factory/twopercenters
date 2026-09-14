@@ -421,9 +421,9 @@ Validation holds out 2023 and 2024, where the truth is known, and reports
 regression error and AUROC respectively. `np_rw` is worth running afterwards
 as the deliberately harder rare-event case, reported as such.
 
-Note that backfilling all 855,512 NULL career rows is not one call: `predict`
+Note that backfilling all 955,512 NULL career rows is not one call: `predict`
 accepts at most 1000 entities, so the full backfill is a batched job of
-roughly 856 calls, and the demo itself runs on a sample.
+956 calls, and the demo itself runs on a sample.
 
 **5. Entity resolution as link prediction**, presented as the open problem
 rather than a finished result. There is now a deterministic baseline of 85.2
@@ -490,7 +490,7 @@ few hundred cases, plus OpenAlex linkage, produce precision and recall. The
   resolved above, against `kumo-rfm-mcp` 0.3.1.
 - **A `predict` call takes at most 1000 entities.** Demos run on samples and
   any full backfill is a batched job. Kumo's own rate limits on the free tier
-  are not yet known and need checking before a 856-call batch is attempted.
+  are not yet known and need checking before a 956-call batch is attempted.
 - **The graph materializes in local memory.** `career_metrics` is 194 MB and
   `singleyr_metrics` 171 MB as Parquet, which expand several-fold in pandas.
   Whether the full graph fits, or the demo needs a narrowed slice, is measured
