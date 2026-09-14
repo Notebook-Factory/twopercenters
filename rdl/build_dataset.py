@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -39,7 +40,9 @@ from rdl import spec
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
-PARQUET_DIR = ROOT / "data_parquet"
+# Overridable so a rebuilt export can be compared against the current one
+# without moving directories around.
+PARQUET_DIR = Path(os.environ.get("RDL_PARQUET_DIR", ROOT / "data_parquet"))
 DATASET_DIR = ROOT / "data_rdl" / "twopercenters"
 
 

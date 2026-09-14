@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -48,7 +49,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-DATASET_DIR = ROOT / "data_rdl" / "twopercenters"
+DATASET_DIR = Path(os.environ.get("RDL_DATASET_DIR", ROOT / "data_rdl" / "twopercenters"))
 DB_DIR = DATASET_DIR / "db"
 TASKS_DIR = DATASET_DIR / "tasks"
 

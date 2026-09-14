@@ -164,3 +164,73 @@ Author ID used to compute the metrics, leaving only the profile's preferred
 name as of the calculation date. The identity exists upstream and is
 discarded on the way out. That is an editorial decision about the data
 product, not a gap in Scopus, and it should be described that way.
+
+---
+
+# What the fix actually did
+
+Rebuilt all 15 editions with career matching in place, 2,730,673 rows in
+11m36s.
+
+## The ambiguous population stops being broken
+
+| | before | after |
+|---|---|---|
+| authors total | 818,667 | 594,380 |
+| flagged ambiguous | 350,908 (42.9%) | 126,621 (21.3%) |
+| ambiguous: mean editions each | **1.00** | **4.02** |
+| ambiguous: appear exactly once | **100.0%** | **23.3%** |
+| unambiguous: mean editions each | 4.44 | 4.44 |
+| unambiguous: appear exactly once | 23.6% | 23.6% |
+| overall: appear exactly once | 47.7% | 23.5% |
+
+The row to read is the ambiguous one against the unambiguous one. 4.02
+editions against 4.44, and 23.3% appearing once against 23.6%: the
+previously broken population is now indistinguishable from the healthy one.
+224,287 author records were fragments of people and have been merged.
+
+Edition-over-edition retention rises everywhere:
+
+| edition | before | after |
+|---|---|---|
+| 2021 | 85.4% | 94.1% |
+| 2022 | 84.5% | 93.3% |
+| 2023 | 85.5% | 94.6% |
+| 2024 | 81.4% | 90.6% |
+
+The 2024 dip survives, about 3.5 points below the new trend. That is the
+residual of the name break, now visible on its own rather than buried under
+a general linkage failure.
+
+## Half the dropout labels were artifacts
+
+| split | before | after |
+|---|---|---|
+| train | 19.33% | 11.69% |
+| val | 14.46% | 5.38% |
+| test | 18.63% | 9.40% |
+
+An author in an ambiguous block dropped out every single year by
+construction, so roughly half of every dropout label was recording our own
+resolver rather than anyone's career.
+
+## The model's score went down, and that is the improvement
+
+| | GNN test ROC AUC | `is_ambiguous` alone |
+|---|---|---|
+| before | 0.814 | **0.776** |
+| after | 0.687 | **0.506** |
+
+This is the finding worth keeping. Before the fix, one binary flag, "was
+this author in an ambiguous block", scored 0.776 on the dropout test set by
+itself. The graph network's 0.814 was therefore almost all bug detection:
+the labels said an author vanished, the flag said the resolver had lost
+them, and the two agreed.
+
+After the fix that flag is worth 0.506, which is chance. The remaining 0.687
+is signal about authors actually leaving the list, on a task that is now
+both harder and real, with a 9.4% positive rate rather than 18.6%.
+
+A model scoring 0.81 on a corrupted label is worth less than one scoring
+0.69 on a clean one, and the only way to tell them apart is to check what a
+trivial feature gets. That check belongs on every task here from now on.
