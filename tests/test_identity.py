@@ -129,3 +129,103 @@ def test_author_ids_are_deterministic():
     second = mapping(shuffled)
 
     assert first == second
+
+
+# ---------------------------------------------------------------------------
+# The ambiguous branch now chains a person across editions instead of minting
+# a fresh identity per edition.
+# ---------------------------------------------------------------------------
+
+def _amb(edition, authfull, c, h, inst="Inst A", cntry="usa"):
+    return {"edition_id": edition, "authfull": authfull, "firstyr": 1990,
+            "inst_name": inst, "cntry": cntry, "c": c, "h": h,
+            "field": "Engineering", "subfield": "Optics"}
+
+
+def test_two_people_in_an_ambiguous_block_keep_their_own_time_series():
+    """The regression this replaces: the old resolver gave each observation
+    its own id per edition, so an ambiguous author could never have more
+    than one edition. Here two people appear in two editions each and must
+    come out as two authors with two observations apiece."""
+    observations = [
+        _amb("career-2023", "Zhu, Jianguo", 3.50, 20, inst="Alpha"),
+        _amb("career-2023", "Zhu, Jianguo", 8.00, 60, inst="Beta"),
+        _amb("career-2024", "Zhu, Jianguo", 3.52, 21, inst="Alpha"),
+        _amb("career-2024", "Zhu, Jianguo", 8.05, 62, inst="Beta"),
+    ]
+    resolutions = resolve(observations)
+    assert len(resolutions) == 4
+    by_author = {}
+    for r in resolutions:
+        by_author.setdefault(r.author_id, []).append(r.edition_id)
+    assert len(by_author) == 2, "should be two people, not four"
+    for editions in by_author.values():
+        assert sorted(editions) == ["career-2023", "career-2024"]
+
+
+def test_same_edition_rows_still_never_merge():
+    """Rule one survives the change, and it is enforced by the assignment
+    being one-to-one rather than by a separate check."""
+    observations = [
+        _amb("career-2023", "Li, Min", 3.5, 20, inst="Alpha"),
+        _amb("career-2023", "Li, Min", 3.5, 20, inst="Alpha"),
+    ]
+    resolutions = resolve(observations)
+    assert len({r.author_id for r in resolutions}) == 2
+
+
+def test_an_ambiguous_author_id_does_not_encode_the_edition():
+    """The old id was a hash over edition_id, which is why it could not
+    survive into the next edition."""
+    observations = [
+        _amb("career-2023", "Zhu, Jianguo", 3.50, 20, inst="Alpha"),
+        _amb("career-2023", "Zhu, Jianguo", 8.00, 60, inst="Beta"),
+        _amb("career-2024", "Zhu, Jianguo", 3.52, 21, inst="Alpha"),
+    ]
+    resolutions = resolve(observations)
+    chained = [r for r in resolutions if r.edition_id == "career-2024"]
+    partner = [r for r in resolutions
+               if r.edition_id == "career-2023" and r.author_id == chained[0].author_id]
+    assert partner, "the 2024 row did not join an existing 2023 author"
+
+
+def test_resolution_is_independent_of_input_order():
+    observations = [
+        _amb("career-2023", "Zhu, Jianguo", 3.50, 20, inst="Alpha"),
+        _amb("career-2023", "Zhu, Jianguo", 8.00, 60, inst="Beta"),
+        _amb("career-2024", "Zhu, Jianguo", 3.52, 21, inst="Alpha"),
+        _amb("career-2024", "Zhu, Jianguo", 8.05, 62, inst="Beta"),
+    ]
+    def signature(obs_list):
+        groups = {}
+        for r in resolve(obs_list):
+            groups.setdefault(r.author_id, []).append(
+                (r.edition_id, r.authfull))
+        return sorted(tuple(sorted(v)) for v in groups.values())
+    assert signature(observations) == signature(list(reversed(observations)))
+
+
+def test_the_ambiguous_branch_is_still_flagged_not_confident():
+    """Matching on a career is evidence, not proof. These stay marked so the
+    dashboard and any analysis can tell them apart."""
+    observations = [
+        _amb("career-2023", "Zhu, Jianguo", 3.50, 20, inst="Alpha"),
+        _amb("career-2023", "Zhu, Jianguo", 8.00, 60, inst="Beta"),
+    ]
+    assert all(not r.is_confident for r in resolve(observations))
+    assert all(r.method == "career_matched" for r in resolve(observations))
+
+
+def test_observations_without_metrics_still_resolve():
+    """Prior observations reloaded from the database may arrive without
+    metrics. They must not crash, and should fall back to the categorical
+    attributes."""
+    observations = [
+        {"edition_id": "career-2023", "authfull": "Wang, Wei",
+         "firstyr": 1990, "inst_name": "Alpha", "cntry": "chn"},
+        {"edition_id": "career-2023", "authfull": "Wang, Wei",
+         "firstyr": 1990, "inst_name": "Beta", "cntry": "usa"},
+    ]
+    resolutions = resolve(observations)
+    assert len(resolutions) == 2
+    assert len({r.author_id for r in resolutions}) == 2

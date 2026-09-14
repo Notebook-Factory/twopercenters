@@ -284,17 +284,30 @@ def _firstyr_values(frame):
     return [_int_or_none(v) for v in numeric.tolist()]
 
 
+def _column_or_nones(frame, column, length):
+    return (frame[column].tolist() if column in frame.columns
+            else [None] * length)
+
+
 def _new_observations(frame, edition_id):
     authfull = frame["authfull"].tolist()
     firstyr = _firstyr_values(frame)
-    inst = (frame["inst_name"].tolist() if "inst_name" in frame.columns
-            else [None] * len(authfull))
-    cntry = (frame["cntry"].tolist() if "cntry" in frame.columns
-             else [None] * len(authfull))
+    inst = _column_or_nones(frame, "inst_name", len(authfull))
+    cntry = _column_or_nones(frame, "cntry", len(authfull))
+    # The matching signals. identity.resolve only reads these inside an
+    # ambiguous block, where the name has already failed to separate people
+    # and the career has to. The composite score c does most of the work: it
+    # moves by a median of 0.42% a year for a real person.
+    score = _column_or_nones(frame, "c", len(authfull))
+    h_index = _column_or_nones(frame, "h", len(authfull))
+    field = _column_or_nones(frame, "sm-field", len(authfull))
+    subfield = _column_or_nones(frame, "sm-subfield-1", len(authfull))
     return [
         {"edition_id": edition_id, "authfull": a, "firstyr": y,
-         "inst_name": i, "cntry": c}
-        for a, y, i, c in zip(authfull, firstyr, inst, cntry)
+         "inst_name": i, "cntry": c, "c": s, "h": hh,
+         "field": f, "subfield": sf}
+        for a, y, i, c, s, hh, f, sf in zip(
+            authfull, firstyr, inst, cntry, score, h_index, field, subfield)
     ]
 
 
@@ -320,21 +333,43 @@ def _relevant_prior_observations(conn, observations):
     seen = set()
 
     def collect(rows):
-        for _surname, _initial, firstyr, edition_id, authfull, author_id in rows:
+        for (_surname, _initial, firstyr, edition_id, authfull, author_id,
+             score, h_index, inst_name, cntry, field, subfield) in rows:
             marker = (edition_id, author_id, authfull)
             if marker in seen:
                 continue
             seen.add(marker)
             prior.append({
                 "edition_id": edition_id, "authfull": authfull,
-                "firstyr": firstyr, "inst_name": None, "cntry": None,
+                "firstyr": firstyr, "inst_name": inst_name, "cntry": cntry,
+                "c": score, "h": h_index, "field": field,
+                "subfield": subfield,
                 "_author_id": author_id,
             })
 
-    select = ("select a.surname, a.first_initial, a.firstyr, o.edition_id, "
-              "o.authfull_raw, o.author_id "
-              "from author_name_observations o "
-              "join authors a using (author_id) ")
+    # The matching signals have to come back in the same form the incoming
+    # edition supplies them: names, not the hashed ids the fact tables store,
+    # or a prior observation could never compare equal to a new one. Country
+    # is the exception and needs no join, because the raw `cntry` value IS
+    # the country_code.
+    select = (
+        "with metrics as ("
+        "  select author_id, edition_id, c, h, institution_id, country_code,"
+        "         field_id, subfield_1_id from career_metrics"
+        "  union all"
+        "  select author_id, edition_id, c, h, institution_id, country_code,"
+        "         field_id, subfield_1_id from singleyr_metrics"
+        ") "
+        "select a.surname, a.first_initial, a.firstyr, o.edition_id, "
+        "o.authfull_raw, o.author_id, "
+        "m.c, m.h, i.inst_name, m.country_code, f.name, sf.name "
+        "from author_name_observations o "
+        "join authors a using (author_id) "
+        "left join metrics m on m.author_id = o.author_id "
+        "  and m.edition_id = o.edition_id "
+        "left join institutions i on i.institution_id = m.institution_id "
+        "left join fields f on f.field_id = m.field_id "
+        "left join subfields sf on sf.subfield_id = m.subfield_1_id ")
 
     collect(conn.execute(select + "where a.is_ambiguous").fetchall())
 
@@ -356,44 +391,20 @@ def _relevant_prior_observations(conn, observations):
 
 
 def _resolve_by_firstyr(observations):
-    """Resolve one firstyr at a time, grouped by (edition_id, authfull).
+    """Resolve one firstyr at a time.
 
     `resolve` blocks on surname and first initial, then splits each block by
     firstyr and treats every firstyr group independently, so resolving one
-    firstyr at a time gives exactly the same answer as resolving everything at
-    once. Doing it that way is what makes (edition_id, authfull) enough to pair
-    a Resolution back to the row it came from: Resolution does not carry
-    firstyr, so without the split two rows sharing a name but not a firstyr
-    would be indistinguishable.
+    firstyr at a time gives exactly the same answer as resolving everything
+    at once, and gives the caller the firstyr each Resolution belongs to,
+    which Resolution itself does not carry.
     """
     partitions = {}
     for obs in observations:
         partitions.setdefault(obs["firstyr"], []).append(obs)
 
     for firstyr, partition in partitions.items():
-        grouped = {}
-        for resolution in resolve(partition):
-            grouped.setdefault(
-                (resolution.edition_id, resolution.authfull),
-                []).append(resolution)
-        yield firstyr, grouped
-
-
-def _pair(rows, resolutions):
-    """Pair one edition's rows for one name with that name's resolutions.
-
-    For an ambiguous group `resolve` orders the edition's rows by normalised
-    institution, then country, then name, and hands out one id per position.
-    Restricting that order to a single name leaves the rows ordered by
-    institution then country, so sorting the same way here reproduces the
-    assignment `resolve` intended.
-    """
-    if len(rows) == 1:
-        return [(rows[0], resolutions[0])]
-    ordered = sorted(rows, key=lambda r: (
-        normalize(r[1].get("inst_name") or ""),
-        normalize(r[1].get("cntry") or "")))
-    return list(zip(ordered, resolutions))
+        yield firstyr, resolve(partition)
 
 
 def _resolve_edition(conn, observations):
@@ -410,10 +421,16 @@ def _resolve_edition(conn, observations):
     assignments = [None] * len(observations)
     remaps = {}
 
-    incoming = {}
+    # Every observation is tagged so a Resolution can be traced back to the
+    # exact row it came from. Inside an ambiguous block several rows share an
+    # edition and a name, so that pair does not identify a row, and an
+    # earlier version paired them by sorting both sides the same way. That
+    # worked only while ambiguous ids were handed out in a known order; now
+    # they follow a chain built from the career, and position means nothing.
     for index, obs in enumerate(observations):
-        incoming.setdefault(
-            (obs["firstyr"], obs["authfull"]), []).append((index, obs))
+        obs["_token"] = ("incoming", index)
+    for index, obs in enumerate(prior):
+        obs["_token"] = ("prior", index)
 
     # Old and new ids are compared per whole block, not per name. An already
     # ambiguous block hands out the same set of ids either way, but not
@@ -428,17 +445,16 @@ def _resolve_edition(conn, observations):
             set()).add(obs["_author_id"])
     resolved_ids = {}
 
-    for firstyr, grouped in _resolve_by_firstyr(prior + observations):
-        for (resolved_edition, authfull), resolutions in grouped.items():
-            if resolved_edition == edition_id:
-                rows = incoming[(firstyr, authfull)]
-                for (index, _obs), resolution in _pair(rows, resolutions):
-                    assignments[index] = resolution
+    for firstyr, resolutions in _resolve_by_firstyr(prior + observations):
+        for resolution in resolutions:
+            source, index = resolution.token
+            if source == "incoming":
+                assignments[index] = resolution
                 continue
-            surname, initial = block_key(authfull)
+            surname, initial = block_key(resolution.authfull)
             resolved_ids.setdefault(
-                (surname, initial, firstyr, resolved_edition),
-                set()).update(r.author_id for r in resolutions)
+                (surname, initial, firstyr, resolution.edition_id),
+                set()).add(resolution.author_id)
 
     for block, old_ids in stored_ids.items():
         new_ids = resolved_ids.get(block, set())
