@@ -432,43 +432,31 @@ def _resolve_edition(conn, observations):
     for index, obs in enumerate(prior):
         obs["_token"] = ("prior", index)
 
-    # Old and new ids are compared per whole block, not per name. An already
-    # ambiguous block hands out the same set of ids either way, but not
-    # necessarily the same id to the same name: the ordinals are decided by
-    # institution and country, which prior observations no longer carry. At
-    # block level that reshuffling cancels out and only a real change shows.
-    stored_ids = {}
-    for obs in prior:
-        surname, initial = block_key(obs["authfull"])
-        stored_ids.setdefault(
-            (surname, initial, obs["firstyr"], obs["edition_id"]),
-            set()).add(obs["_author_id"])
-    resolved_ids = {}
-
+    # An already-stored row moves to a new author whenever re-resolving its
+    # block puts it on a different chain. Comparing per observation rather
+    # than per block is what makes that expressible: the resolution carries
+    # the token of the exact row it came from, so the old id and the new one
+    # are known for that row rather than inferred from two sets.
+    #
+    # An earlier version compared id sets per block and raised unless the
+    # difference was a confident-to-ambiguous flip. That held while ambiguous
+    # ids were minted per edition and could only ever be reshuffled within
+    # one. Chain ids are derived from the career now, so a later edition can
+    # legitimately change an earlier row's author: career-2020's
+    # `Johnson, Mary Ann` continues the dormant usa `Johnson, Mark` chain at
+    # a cost of about 4.4, under the threshold, and whether she does depends
+    # on what else the block holds when it is re-resolved. That is the
+    # matcher working, not a corruption, and the remap machinery already
+    # knows how to move rows.
     for firstyr, resolutions in _resolve_by_firstyr(prior + observations):
         for resolution in resolutions:
             source, index = resolution.token
             if source == "incoming":
                 assignments[index] = resolution
                 continue
-            surname, initial = block_key(resolution.authfull)
-            resolved_ids.setdefault(
-                (surname, initial, firstyr, resolution.edition_id),
-                set()).add(resolution.author_id)
-
-    for block, old_ids in stored_ids.items():
-        new_ids = resolved_ids.get(block, set())
-        if old_ids == new_ids:
-            continue
-        # Ambiguity only ever spreads, so the ids can differ in one way only:
-        # a confident block has just flipped. A confident block holds at most
-        # one row per edition, which makes this a one-for-one swap.
-        if len(old_ids) != 1 or len(new_ids) != 1:
-            raise RuntimeError(
-                f"block {block} changed from {sorted(old_ids)} to "
-                f"{sorted(new_ids)}, which is not a confident-to-ambiguous "
-                "flip")
-        remaps[(old_ids.pop(), block[3])] = new_ids.pop()
+            stored = prior[index]["_author_id"]
+            if resolution.author_id != stored:
+                remaps[(stored, resolution.edition_id)] = resolution.author_id
 
     unassigned = [i for i, a in enumerate(assignments) if a is None]
     if unassigned:
@@ -479,11 +467,55 @@ def _resolve_edition(conn, observations):
 
 
 def _apply_remaps(conn, remaps):
-    """Move earlier editions' rows onto the ids their group now resolves to."""
+    """Move earlier editions' rows onto the ids their group now resolves to.
+
+    Via a temporary id, because a block's ids can be permuted rather than
+    merely reassigned. Two chains indistinguishable on every attribute can
+    exchange ordinals, making the remap a swap: A to B and B to A. Applied
+    one at a time, the first update lands on an id the second has not vacated
+    yet and `author_name_observations_edition_id_authfull_raw_author_id_key`
+    rejects it. Observed on `Zhang, Lei` in singleyr-2017.
+
+    This does not weaken that constraint. A genuine merge, two rows of one
+    edition ending up on one author, still collides when the parked rows are
+    unparked, which is what should happen.
+
+    `authors` has a foreign key from every fact table, so the parking id has
+    to exist as an author row before anything points at it, and has to be
+    removed once nothing does.
+    """
     if not remaps:
         return 0
+
+    parking = {
+        (old, edition_id):
+            "tmp-" + hashlib.sha1(
+                f"{old}|{edition_id}".encode("utf-8")).hexdigest()[:12]
+        for (old, edition_id) in remaps
+    }
+    tables = ("author_name_observations", "career_metrics",
+              "singleyr_metrics")
+
     with conn.cursor() as cur:
+        for (old, edition_id), parked in sorted(parking.items()):
+            cur.execute("""
+                insert into authors (author_id, authfull_display,
+                    name_normalized, surname, first_initial, firstyr,
+                    is_ambiguous, first_data_year, last_data_year)
+                select %s, authfull_display, name_normalized, surname,
+                       first_initial, firstyr, true,
+                       first_data_year, last_data_year
+                from authors where author_id = %s
+                on conflict (author_id) do nothing
+            """, (parked, old))
+            for table in tables:
+                cur.execute(
+                    f"update {table} set author_id = %s "
+                    "where author_id = %s and edition_id = %s",
+                    (parked, old, edition_id))
+
         for (old, edition_id), new in sorted(remaps.items()):
+            parked = parking[(old, edition_id)]
             cur.execute("""
                 insert into authors (author_id, authfull_display,
                     name_normalized, surname, first_initial, firstyr,
@@ -494,19 +526,21 @@ def _apply_remaps(conn, remaps):
                        (select data_year from editions where edition_id = %s)
                 from authors where author_id = %s
                 on conflict (author_id) do nothing
-            """, (new, edition_id, edition_id, old))
-            for table in ("author_name_observations", "career_metrics",
-                          "singleyr_metrics"):
+            """, (new, edition_id, edition_id, parked))
+            for table in tables:
                 cur.execute(
                     f"update {table} set author_id = %s "
                     "where author_id = %s and edition_id = %s",
-                    (new, old, edition_id))
+                    (new, parked, edition_id))
+
+        # Anything left holding no observations goes: the parking rows always,
+        # and any old author every one of whose rows moved away.
         cur.execute("""
             delete from authors a
             where a.author_id = any(%s)
               and not exists (select 1 from author_name_observations o
                               where o.author_id = a.author_id)
-        """, ([old for old, _edition in remaps],))
+        """, (list(parking.values()) + [old for old, _e in remaps],))
     return len(remaps)
 
 
