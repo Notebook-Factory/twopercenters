@@ -733,6 +733,39 @@ def _check_load_order(conn, edition):
             "oldest first, as build() does, or rebuild from an empty schema.")
 
 
+# firstyr backfill: attempted, measured, and NOT shipped.
+#
+# The version-1 single-year file carries no firstyr at all. All 106,368 rows
+# of singleyr-2017 have none and every other edition has one for every row.
+# firstyr is the third component of the blocking key, so every author in that
+# edition is blocked as (surname, initial, NULL) and cannot join their own
+# career record: John Ioannidis is two authors in this data for exactly that
+# reason.
+#
+# Filling it from the same year's career file works on its own terms. It
+# recovered 68,890 of the 106,368 rows, the rest being researchers who had
+# one strong year without a career-long standing and so have no career row to
+# borrow from.
+#
+# It is not shipped because it breaks an invariant the incremental resolver
+# depends on. Ambiguity is a property of a whole (surname, initial, firstyr)
+# block, and _relevant_prior_observations relies on that: it fetches prior
+# rows by `where a.is_ambiguous`, which is only complete if every author in a
+# block shares the flag. Changing firstyr for some rows of an
+# already-resolved edition moves them between blocks, and the rebuild
+# produced blocks holding both confident and ambiguous authors, which that
+# fetch then reads incompletely. The result was a remap trying to merge two
+# singleyr-2017 rows onto one author, refused by
+# singleyr_metrics_author_id_edition_id_key. Measured on the current
+# database, there are zero such mixed blocks, so this is a fault the backfill
+# introduces rather than one it reveals.
+#
+# Doing it properly means either backfilling before any edition is loaded, so
+# no blocking key ever changes after the fact, or making the prior fetch
+# complete for a block regardless of flags. Both are real work and neither
+# belongs in the same change as the matcher.
+
+
 def _load_file(conn, edition):
     _check_load_order(conn, edition)
     frame = canonical_frame(pd.read_pickle(edition.path))
