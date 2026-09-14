@@ -1,5 +1,24 @@
 # Kumo Relational Demo Implementation Plan
 
+> **STATUS: BLOCKED on access, as of 2026-09-14. Do not execute.**
+>
+> Task 3 onward cannot run. `kumorfm.ai` now 301-redirects to
+> `docs.nvidia.com/sdgm/rfm/overview`, including the `/authenticate-sdk/`
+> path the SDK opens, and `api.kumorfm.ai` does not resolve. So
+> `rfm.authenticate()` waits on `localhost:8765` for a token that never
+> arrives. The SDGM alternative states plainly that "credentials are
+> provided by your NVIDIA or Kumo contact. There is no self-service sign-up
+> path."
+>
+> What to ask for is in `docs/kumo-access-ask.md`. Until access exists, the
+> work proceeds on RelBench:
+> `docs/superpowers/plans/2026-09-14-relbench-rdl.md`, which builds the same
+> graph with the same tasks and the same time splits so the comparison stays
+> like-for-like.
+>
+> Tasks 1 and 2 here are engine-independent and were largely absorbed into
+> the RelBench plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the relational core built in plan 1 into a working KumoRFM demo: a materialized graph, five predictive queries, an OpenAlex co-authorship enrichment, and a natural-language query box in the dashboard.
