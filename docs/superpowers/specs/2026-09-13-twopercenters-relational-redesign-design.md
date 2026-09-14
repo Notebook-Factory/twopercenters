@@ -340,15 +340,32 @@ snapshot, not the API.
 
 ### Predictive queries
 
-Exact PQL syntax below is our reading of the documented grammar
-(`FUNCTION(column, start, end, unit)`, units of hours, days or months, start
-exclusive and end inclusive) and must be confirmed against the MCP server before
-demonstration. Only the regression form is quoted verbatim in the docs we could
-reach.
+The PQL grammar below is no longer a reading of partial documentation. The
+`kumo-rfm-mcp` package (version 0.3.1) ships its own reference at
+`kumo://docs/predictive-query`, and the queries here were written against it.
+The constraints that shaped them, all taken from that reference:
+
+- Time units are `seconds`, `minutes`, `hours`, `days`, `weeks` and `months`,
+  defaulting to `days`. Both offsets are non-negative for target expressions
+  and `end` must be strictly greater than `start`. Temporal entity filters
+  are backward looking, so `start < 0` and `end <= 0`, and `start` may be
+  `-INF`.
+- PQL has no arithmetic. Any derived quantity has to exist as a column
+  before the query runs.
+- `LIST_DISTINCT` applies only to foreign key columns, requires `RANK TOP k`
+  with k between 1 and 20, and cannot be combined with conditions.
+- Static imputation requires the target column to live in the entity's own
+  table, so the entity for an imputation query is the fact row, not the
+  author.
+- **A single `predict` call accepts at most 1000 entities.** Every query
+  below is therefore demonstrated on a sample, and any backfill over the
+  full table is a batched job rather than one call.
 
 **1. Top-2% dropout.** The direct analog of their flagship churn case, and
 competitive: remaining on the list is a threshold on rank within a subfield, so
-the outcome depends on every other author.
+the outcome depends on every other author. The syntax below is valid against
+the shipped grammar, with `career_metrics` linked to `authors` by a foreign
+key and carrying `observation_date` as its time column.
 
     PREDICT COUNT(career_metrics.*, 0, 12, months) = 0
     FOR EACH authors.author_id
@@ -358,16 +375,55 @@ the outcome depends on every other author.
 say why it is the weakest of the four: career metrics are cumulative since 1960,
 so next year's `c` is close to this year's `c`.
 
+    PREDICT AVG(career_metrics.c, 0, 12, months)
+    FOR EACH authors.author_id
+    WHERE COUNT(career_metrics.*, -12, 0, months) > 0
+
 **3. Next affiliation.** Link prediction over institutions. Genuinely hard,
 since affiliation is itself an ML guess at one of several and we measured it as
-only 69 to 84 percent stable.
+only 69 to 84 percent stable. `LIST_DISTINCT` requires a foreign key column and
+a `RANK TOP k` with k at most 20, which `career_metrics.institution_id`
+satisfies.
 
-**4. Retraction-exposure backfill.** The centrepiece. The `_rw` columns exist
-only for 2023 and 2024. Every earlier edition is empty, not because nothing was
-retracted but because tracking began in 2024. Kumo supports missing value
-imputation, so: impute retraction exposure for 2017 to 2022 and validate by
-holding out 2023 and 2024 where the truth is known. A real question, a built-in
-evaluation, and an output nobody currently has.
+    PREDICT LIST_DISTINCT(career_metrics.institution_id, 0, 12, months) RANK TOP 10
+    FOR EACH authors.author_id
+
+**4. Retraction-exposure backfill.** The centrepiece, and the measurements
+below changed which column it should use.
+
+The three retraction columns exist only for 2023 and 2024. Every earlier
+edition is genuinely NULL rather than zero, which we confirmed: `np_rw` is
+100 percent NULL for career-2017 through career-2022 and 0 percent NULL for
+2023 and 2024. That is the shape missing-value imputation wants.
+
+The column choice matters, because two of the three are rare events:
+
+| Column | Meaning | 2023 nonzero | 2024 nonzero |
+|---|---|---|---|
+| `np_rw` | the author's own retracted papers | 3.26% | 3.82% |
+| `nc_to_rw` | cites to this author's retracted papers | 3.01% | 3.54% |
+| `nc_rw` | cites received from any retracted paper | 71.12% | 75.95% |
+
+`np_rw` is 96.7 percent zero in 2023, so a regression on it scores well by
+predicting zero for everyone and demonstrates nothing. **`nc_rw` is the
+target**: it is the quantity that actually means "retraction exposure", and
+at 71 to 76 percent nonzero it supports both a regression and a balanced
+binary form.
+
+Imputation is a static query, so the entity is the fact row rather than the
+author, and `career_metrics.metric_id` is its primary key. Because these rows
+are temporal facts, `anchor_time='entity'` is required to avoid leakage.
+
+    PREDICT career_metrics.nc_rw FOR EACH career_metrics.metric_id
+    PREDICT career_metrics.nc_rw > 0 FOR EACH career_metrics.metric_id
+
+Validation holds out 2023 and 2024, where the truth is known, and reports
+regression error and AUROC respectively. `np_rw` is worth running afterwards
+as the deliberately harder rare-event case, reported as such.
+
+Note that backfilling all 855,512 NULL career rows is not one call: `predict`
+accepts at most 1000 entities, so the full backfill is a batched job of
+roughly 856 calls, and the demo itself runs on a sample.
 
 **5. Entity resolution as link prediction**, presented as the open problem
 rather than a finished result. There is now a deterministic baseline of 85.2
@@ -376,16 +432,30 @@ percent on the hardest edition boundary, with a defined residual of roughly
 Kumo is specific and falsifiable: can link prediction over the relational graph
 beat that baseline on the remainder?
 
+This one does not map cleanly onto PQL. `LIST_DISTINCT` ranks foreign key
+values, so expressing "which 2023 author is this 2024 author" requires a
+candidate-link table with a foreign key to each side, built before the query.
+That construction is part of the work, not a given.
+
 ### Agentic layer
 
 `kumo-rfm-mcp` is an MCP server, so Claude Code drives it directly, and a
 natural-language box in the dashboard becomes question to PQL to `predict` to
 chart, with `explain` rendering the reasoning.
 
-There appear to be two MCP surfaces: a documentation server at
-`docs.nvidia.com/sdgm/_mcp/server` for AI clients, and the `kumo-rfm-mcp`
-package exposing the predictive tools. Which is the supported path for a live
-demo must be confirmed early, since it affects the demo's architecture.
+This is settled. Of the two candidate MCP surfaces, the documentation
+server at `docs.nvidia.com/sdgm/_mcp/server` only serves docs to AI clients;
+`kumo-rfm-mcp` is the one exposing the predictive tools, and it is the demo
+path. Version 0.3.1 depends on `kumoai`, registers its tools in five groups
+(docs, auth, io, graph, model), and ships the PQL and graph-setup references
+as MCP resources under `kumo://docs/`. It authenticates from a `KUMO_API_KEY`
+environment variable, falling back to an OAuth2 browser flow that sets the
+same variable.
+
+One architectural consequence is worth stating plainly: `materialize_graph`
+reads each table locally with `pd.read_parquet` into a `LocalTable`. The graph
+is assembled in the host process's memory, so our Parquet table sizes are a
+local memory question, not an upload question.
 
 ## Verification and acceptance criteria
 
@@ -416,9 +486,15 @@ few hundred cases, plus OpenAlex linkage, produce precision and recall. The
 
 ## Risks and open questions
 
-- **PQL syntax for classification, link prediction and imputation is unverified.**
-  Confirm against the MCP server before building the demo around specific queries.
-- **Which MCP surface to use** is ambiguous in the documentation.
+- ~~PQL syntax unverified~~ and ~~which MCP surface to use~~ are both
+  resolved above, against `kumo-rfm-mcp` 0.3.1.
+- **A `predict` call takes at most 1000 entities.** Demos run on samples and
+  any full backfill is a batched job. Kumo's own rate limits on the free tier
+  are not yet known and need checking before a 856-call batch is attempted.
+- **The graph materializes in local memory.** `career_metrics` is 194 MB and
+  `singleyr_metrics` 171 MB as Parquet, which expand several-fold in pandas.
+  Whether the full graph fits, or the demo needs a narrowed slice, is measured
+  in the first task rather than assumed.
 - **Eight annual snapshots is a coarse temporal graph.** PQL time units are
   hours, days and months, so a year is `12, months` and there are eight points.
 - **Cumulative-metric leakage** makes naive regression targets trivially easy.
