@@ -174,3 +174,4 @@ data_parquet/
 # Working design docs and implementation plans (local only)
 docs/superpowers/
 data_rdl/
+data_parquet_old/
