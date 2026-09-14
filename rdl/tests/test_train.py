@@ -59,3 +59,19 @@ def test_an_unwired_task_type_raises_rather_than_guessing():
     from relbench.base import TaskType
     with pytest.raises(NotImplementedError):
         train._loss_for(TaskType.RECOMMENDATION)
+
+
+def test_regression_forecast_tasks_declare_a_persistence_column():
+    """The median baseline flatters a model on a persistent quantity: it
+    scored 0.93 on next_rank where the model got 0.295 and simply repeating
+    this year's rank got 0.079. Any regression forecast task must name the
+    column it should be compared against, so that cannot happen silently."""
+    from rdl.tasks import forecast
+    for name, cfg in forecast.TASKS.items():
+        if cfg["task_type"] == "regression":
+            assert cfg.get("persistence_col"), name
+
+
+def test_persistence_column_lookup_handles_unknown_tasks():
+    assert train._persistence_column("retraction_exposed") is None
+    assert train._persistence_column("next_rank") == "rank"

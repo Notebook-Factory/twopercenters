@@ -74,6 +74,53 @@ def _out_channels(task_type) -> int:
     raise NotImplementedError(f"no head wired for {task_type}")
 
 
+def persistence_baseline(task, split: str, dataset, source_col: str):
+    """Score "predict the value this author already has".
+
+    For an annual ranking this is a brutally strong baseline and it is the
+    honest one. Measured here: on next_rank it gets nmae 0.079 against the
+    trained model's 0.295, and on next_score 0.054 against 0.299. A median
+    predictor, by contrast, scores 0.93 and makes the model look excellent,
+    which is why quoting the median alone would have been misleading.
+
+    Returns None when the task declares no persistence column, which is the
+    case for tasks whose target has no present-day counterpart.
+    """
+    import pandas as pd
+
+    table = task.get_table(split, mask_input_cols=False)
+    labels = table.df
+    cm = dataset.get_db(upto_test_timestamp=False).table_dict[
+        "career_metrics"].df
+
+    seed = labels[task.time_col].iloc[0]
+    current_edition = cm.loc[cm["observation_date"] <= seed,
+                             "observation_date"].max()
+    current = cm.loc[cm["observation_date"] == current_edition,
+                     ["author_id", source_col]]
+
+    merged = labels.merge(current, on=task.entity_col, how="left")
+    known = merged[source_col].notna().to_numpy()
+    if not known.any():
+        return None
+
+    from relbench.base import Table
+    subset = Table(df=labels[known], fkey_col_to_pkey_table={},
+                   pkey_col=None, time_col=None)
+    scored = task.evaluate(
+        merged.loc[known, source_col].to_numpy().astype(float), subset)
+    return {f"persistence_{k}": v for k, v in scored.items()}
+
+
+def _persistence_column(task_name: str) -> str | None:
+    """The present-day column a task's target should be compared against."""
+    try:
+        from rdl.tasks import forecast
+    except ImportError:
+        return None
+    return forecast.TASKS.get(task_name, {}).get("persistence_col")
+
+
 def _to_device(batch, device: str):
     """Move a batch to the device, downcasting float64 on the way.
 
@@ -192,6 +239,16 @@ def run(
                 np.full_like(pred, float(np.median(y_true)), dtype=float),
                 table)
             baseline = {f"median_{k}": v for k, v in baseline.items()}
+            # The median is the weak baseline. Where the target has a
+            # present-day counterpart, "predict what they already have" is
+            # the one that actually has to be beaten, and on this data it
+            # usually wins.
+            source_col = _persistence_column(task_name)
+            if source_col is not None:
+                persistence = persistence_baseline(task, split, dataset,
+                                                   source_col)
+                if persistence is not None:
+                    baseline.update(persistence)
 
         results[split] = format_result(metrics, baseline)
         logger.info("%s: %s", split, results[split])

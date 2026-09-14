@@ -126,6 +126,7 @@ TASKS = {
     "next_rank": {
         "task_type": "regression",
         "target_col": "next_rank",
+        "persistence_col": "rank",
         "sql": NEXT_RANK_SQL,
         "description": (
             "The author's overall rank at the next edition, for authors who "
@@ -136,6 +137,7 @@ TASKS = {
     "next_score": {
         "task_type": "regression",
         "target_col": "next_c",
+        "persistence_col": "c",
         "sql": NEXT_SCORE_SQL,
         "description": (
             "The composite score c at the next edition. Included to be "
