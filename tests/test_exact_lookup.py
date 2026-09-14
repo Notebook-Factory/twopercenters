@@ -97,10 +97,17 @@ def test_a_near_miss_does_not_resolve_to_the_near_name():
 # ------------------------------------- es_result_pick will not take row 0
 
 def test_pick_returns_the_requested_author_from_a_fuzzy_frame():
-    """Even given the fuzzy frame whose row 0 is the wrong man, the pick
-    hands back the requested author's record."""
+    """Even given a fuzzy frame whose row 0 is the wrong man, the pick hands
+    back the requested author's record.
+
+    The precondition says only that row 0 is somebody else, not who. It used
+    to name `Müllner, Markus`, which made the test fail whenever the ranking
+    moved for reasons that have nothing to do with what it checks: rebuilding
+    the index on merged author identities and adding an affiliation clause to
+    the query between them promoted `Keller, Markus` instead. Either one is a
+    wrong author, which is all this needs."""
     fuzzy = get_es_results('Müller, Markus', 'career', 'authfull')
-    assert fuzzy['_source.authfull'].iloc[0] == 'Müllner, Markus', (
+    assert fuzzy['_source.authfull'].iloc[0] != 'Müller, Markus', (
         'this test is only meaningful while row 0 is the wrong author')
     from_fuzzy = es_result_pick(fuzzy, 'data', None)
     from_exact = es_result_pick(

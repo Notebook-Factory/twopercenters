@@ -8,7 +8,7 @@ thing a reader notices.
 import pandas as pd
 import pytest
 
-PARQUET = "data_parquet_v2/career_metrics.parquet"
+PARQUET = "data_parquet/career_metrics.parquet"
 
 
 def _edition(name="career-2024"):
