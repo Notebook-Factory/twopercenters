@@ -2455,3 +2455,34 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   background-color: rgba(16, 21, 29, 0.14);
   color: #10151D !important;
 }
+
+/*
+  Retraction page. The one rule that matters here is that a measured value
+  and an estimated one must never look alike: measured is the cyan accent,
+  estimated is muted and dashed, and the caveats sit beside the number rather
+  than in a footnote.
+*/
+.ev-title       { color: var(--ev-text); font-weight: 600; }
+.ev-subtitle    { color: var(--ev-text); font-weight: 600; margin-top: .25rem; }
+.ev-lede        { color: var(--ev-text-muted); max-width: 70ch; }
+.ev-hint        { color: var(--ev-text-muted); font-size: .9rem; }
+.ev-note        { color: var(--ev-text-muted); font-style: italic; padding: 1rem 0; }
+
+.ev-panel {
+  background: var(--ev-surface);
+  border-radius: var(--ev-radius);
+  box-shadow: var(--ev-shadow);
+  padding: 1.1rem 1.25rem;
+}
+.ev-kicker {
+  color: var(--ev-text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .72rem;
+  margin-bottom: .4rem;
+}
+.ev-metric       { color: var(--ev-accent); font-size: 2.1rem; font-weight: 700; }
+.ev-metric-label { color: var(--ev-text-muted); font-size: .85rem; margin-left: .4rem; }
+.ev-caveats      { color: var(--ev-text-muted); font-size: .82rem;
+                   margin: .8rem 0 0; padding-left: 1.1rem; }
+.ev-caveats li   { margin-bottom: .35rem; }

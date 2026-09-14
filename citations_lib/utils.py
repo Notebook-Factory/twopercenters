@@ -533,6 +533,92 @@ def _requested_kinds(idx_name):
     return kinds or ['career', 'singleyr']
 
 
+# ---------------------------------------------------------------------------
+# Model estimates.
+#
+# These read the `predictions` and `prediction_runs` tables, written offline
+# by rdl/publish.py. Nothing here imports torch or anything under rdl/: the
+# web process must stay small, and tests/test_no_torch_in_app.py enforces it.
+#
+# Every helper distinguishes a measured value from an estimated one, because
+# the page that shows them must never present the two alike.
+# ---------------------------------------------------------------------------
+
+def prediction_run(task):
+    """What a published model run scored, or None if nothing is published."""
+    rows = _fetch(
+        "select task_type, metrics, baseline, epochs, trained_at, "
+        "       graph_variant, notes "
+        "from prediction_runs where task = %s", (task,))
+    if not rows:
+        return None
+    task_type, metrics, baseline, epochs, trained_at, variant, notes = rows[0]
+    return {'task': task, 'task_type': task_type, 'metrics': metrics,
+            'baseline': baseline, 'epochs': epochs, 'trained_at': trained_at,
+            'graph_variant': variant, 'notes': notes}
+
+
+def retraction_by_edition(task):
+    """Share of researchers with any retraction exposure, per data year.
+
+    Measured years come from career_metrics.nc_rw, which the publishers
+    recorded. Estimated years come from the predictions table. `measured`
+    says which, and nothing downstream may drop it.
+    """
+    measured = _fetch(
+        "select e.data_year, "
+        "       avg(case when m.nc_rw > 0 then 1.0 else 0.0 end) "
+        "from career_metrics m join editions e using (edition_id) "
+        "where m.nc_rw is not null group by e.data_year")
+    estimated = _fetch(
+        "select e.data_year, "
+        "       avg(case when p.probability > 0.5 then 1.0 else 0.0 end) "
+        "from predictions p join editions e using (edition_id) "
+        "where p.task = %s group by e.data_year", (task,))
+    rows = ([{'data_year': int(y), 'share': float(v), 'measured': True}
+             for y, v in measured]
+            + [{'data_year': int(y), 'share': float(v), 'measured': False}
+               for y, v in estimated])
+    return sorted(rows, key=lambda r: r['data_year'])
+
+
+def retraction_for_author(authfull, task):
+    """One researcher's exposure across every career edition.
+
+    Resolved through author_id, not through the raw name string. The name a
+    researcher is published under changes: John Ioannidis appears as
+    "Ioannidis, John P.A." in seven editions and "Ioannidis, John Pa" in
+    2022, and matching the string directly silently dropped that year from
+    his history. Identity resolution exists precisely so this does not have
+    to happen twice.
+
+    A display name can still belong to more than one person, so every
+    matching author is included and the most exposed reading is reported per
+    year rather than one being chosen silently.
+    """
+    author_ids = [row[0] for row in _fetch(
+        "select author_id from authors where authfull_display = %s",
+        (authfull,))]
+    if not author_ids:
+        return []
+
+    measured = _fetch(
+        "select e.data_year, max(case when m.nc_rw > 0 then 1 else 0 end) "
+        "from career_metrics m join editions e using (edition_id) "
+        "where m.author_id = any(%s) and m.nc_rw is not null "
+        "group by e.data_year", (author_ids,))
+    estimated = _fetch(
+        "select e.data_year, max(p.probability) "
+        "from predictions p join editions e using (edition_id) "
+        "where p.author_id = any(%s) and p.task = %s "
+        "group by e.data_year", (author_ids, task))
+    rows = ([{'data_year': int(y), 'value': float(v), 'measured': True}
+             for y, v in measured]
+            + [{'data_year': int(y), 'value': float(v), 'measured': False}
+               for y, v in estimated])
+    return sorted(rows, key=lambda r: r['data_year'])
+
+
 def author_options(result):
     """Dropdown options that show WHO each candidate is, not just a name.
 
