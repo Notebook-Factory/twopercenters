@@ -137,6 +137,27 @@ def reindex(
     return result, keymaps
 
 
+def downcast_floats(df: pd.DataFrame) -> pd.DataFrame:
+    """Store float columns as float32.
+
+    This halves the size of the derived tables and costs nothing that
+    matters: float32 carries about seven significant decimal digits, and the
+    widest values here are citation counts in the millions and the composite
+    score c, which the source publishes to four decimal places. data_rdl/ is
+    a derived, regenerable view; the float64 originals stay in data_parquet/.
+
+    Note that this is NOT what makes the graph usable on Apple's MPS backend,
+    which has no float64. Measured on a real batch, the features already
+    arrive as float32 and the only float64 tensor is the label, which is
+    handled in rdl.train._to_device.
+    """
+    out = df.copy()
+    for col in out.columns:
+        if out[col].dtype == "float64":
+            out[col] = out[col].astype("float32")
+    return out
+
+
 def load_frames() -> dict[str, pd.DataFrame]:
     """Read the exported Parquet, apply the declared drops, keep career."""
     frames: dict[str, pd.DataFrame] = {}
@@ -169,7 +190,7 @@ def build(out_dir: Path = DATASET_DIR) -> Path:
     key_dir.mkdir(parents=True, exist_ok=True)
 
     for name, df in reindexed.items():
-        df.to_parquet(db_dir / f"{name}.parquet", index=False)
+        downcast_floats(df).to_parquet(db_dir / f"{name}.parquet", index=False)
     for name, km in keymaps.items():
         km.to_parquet(key_dir / f"{name}.parquet", index=False)
 

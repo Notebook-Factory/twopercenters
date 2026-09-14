@@ -73,14 +73,33 @@ def _out_channels(task_type) -> int:
     raise NotImplementedError(f"no head wired for {task_type}")
 
 
+def _to_device(batch, device: str):
+    """Move a batch to the device, downcasting float64 on the way.
+
+    Apple's MPS backend has no float64 at all: ``.to("mps")`` on such a
+    tensor raises rather than converting. Measured on a real batch, exactly
+    one tensor is affected, and it is the label rather than any feature. The
+    label table's target arrives as float64 whatever dtype it was stored as;
+    the features come through as float32 already.
+
+    The cast has to happen before the move rather than after, which is why
+    the obvious `batch.to(device)` followed by `y.float()` does not work.
+    """
+    for store in batch.stores:
+        for key, value in store.items():
+            if isinstance(value, torch.Tensor) and value.dtype == torch.float64:
+                store[key] = value.float()
+    return batch.to(device)
+
+
 def run(
     task_name: str,
     epochs: int = 10,
     device: str | None = None,
     channels: int = 128,
     num_layers: int = 2,
-    batch_size: int = 512,
-    num_neighbors: int = 128,
+    batch_size: int = 256,
+    num_neighbors: int = 16,
     lr: float = 5e-3,
     dataset_dir: Path = DATASET_DIR,
 ) -> dict[str, Any]:
@@ -97,8 +116,21 @@ def run(
 
     dataset = load_dataset(str(dataset_dir))
     task = dataset.load_task(task_name)
-    data, col_stats = rdl_graph.build(dataset_dir=dataset_dir)
+    # The graph is built from the TASK's view of the database, not the
+    # dataset's: only BaseTask.get_db drops remove_columns. upto_test_
+    # timestamp is False because the entities being predicted here are fact
+    # rows, and a row cannot be a seed node if it is not in the graph. What
+    # keeps that honest is remove_columns hiding the label everywhere, plus
+    # NeighborLoader's temporal sampling, which lets a seed row see only
+    # neighbours at or before its own timestamp.
+    data, col_stats = rdl_graph.build(task=task, dataset_dir=dataset_dir,
+                                      upto_test_timestamp=False)
 
+    # Fan-out is the memory knob, and this graph punishes a large one. It is
+    # a star with extreme hubs: countries is 203 nodes carrying 1,156,204
+    # incoming edges, fields 22 nodes carrying 1,171,842. Two hops at a
+    # fan-out of 128 over 18 edge types exhausted 27 GiB of MPS memory
+    # before finishing a single batch. 16 fits comfortably.
     entity_table = task.entity_table
     loaders = {}
     for split in ("train", "val", "test"):
@@ -132,7 +164,7 @@ def run(
         model.train()
         total, seen = 0.0, 0
         for batch in loaders["train"]:
-            batch = batch.to(device)
+            batch = _to_device(batch, device)
             optimizer.zero_grad()
             pred = model(batch, entity_table).squeeze(-1)
             y = batch[entity_table].y.float()
@@ -184,7 +216,7 @@ def _predict(model, loader, entity_table, device, task_type) -> np.ndarray:
     model.eval()
     chunks = []
     for batch in loader:
-        batch = batch.to(device)
+        batch = _to_device(batch, device)
         out = model(batch, entity_table).squeeze(-1)
         if task_type == TaskType.BINARY_CLASSIFICATION:
             out = torch.sigmoid(out)
@@ -198,13 +230,19 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--device", default=None)
     parser.add_argument("--channels", type=int, default=128)
-    parser.add_argument("--batch-size", type=int, default=512)
+    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--num-neighbors", type=int, default=16,
+                        help="neighbours sampled per hop; the memory knob")
+    parser.add_argument("--num-layers", type=int, default=2)
+    parser.add_argument("--lr", type=float, default=5e-3)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO,
                         format="%(levelname)s %(message)s")
     payload = run(args.task, epochs=args.epochs, device=args.device,
-                  channels=args.channels, batch_size=args.batch_size)
+                  channels=args.channels, batch_size=args.batch_size,
+                  num_neighbors=args.num_neighbors,
+                  num_layers=args.num_layers, lr=args.lr)
     print(json.dumps(payload["results"], indent=2))
 
 

@@ -69,15 +69,35 @@ def stype_dict(db) -> dict[str, dict[str, Any]]:
     return apply_pins(get_stype_proposal(db))
 
 
-def build(dataset_dir: Path = DATASET_DIR,
+def build(task=None,
+          dataset_dir: Path = DATASET_DIR,
           cache_dir: Path | None = CACHE_DIR,
           upto_test_timestamp: bool = True):
-    """Materialize the graph. Returns (HeteroData, col_stats_dict)."""
+    """Materialize the graph. Returns (HeteroData, col_stats_dict).
+
+    **Pass the task.** ``Dataset.get_db`` does not apply ``remove_columns``;
+    only ``BaseTask.get_db`` does. Building from the dataset for a task whose
+    label is a database column puts that column into the graph as a feature,
+    which produces an excellent score and means nothing. The task argument is
+    optional only so the module can be run standalone to inspect the full
+    graph.
+
+    The cache is keyed by task name because different tasks remove different
+    columns; one shared directory would serve a later task the encodings of
+    an earlier one.
+    """
     from relbench.load import load_dataset
     from relbench.modeling.graph import make_pkey_fkey_graph
 
     dataset = load_dataset(str(dataset_dir))
-    db = dataset.get_db(upto_test_timestamp=upto_test_timestamp)
+    if task is not None:
+        db = task.get_db(upto_test_timestamp=upto_test_timestamp)
+        if cache_dir is not None:
+            cache_dir = Path(cache_dir) / getattr(task, "name", "task")
+    else:
+        db = dataset.get_db(upto_test_timestamp=upto_test_timestamp)
+        if cache_dir is not None:
+            cache_dir = Path(cache_dir) / "full"
     col_to_stype = stype_dict(db)
 
     data, col_stats = make_pkey_fkey_graph(
