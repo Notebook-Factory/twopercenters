@@ -65,6 +65,10 @@ W_INSTITUTION = 0.3
 # pushes past 10 as soon as the scores differ by 25%.
 DEFAULT_THRESHOLD = 6.0
 
+# What an absent attribute costs, as a fraction of what a mismatch costs.
+# Not zero: see pair_cost.
+MISSING_FRACTION = 0.5
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -85,9 +89,18 @@ class Candidate:
 def pair_cost(previous: Candidate, nxt: Candidate) -> float:
     """What it costs to claim these two observations are the same person.
 
-    Missing values never argue for a match or against one: an absent
-    attribute contributes nothing rather than a penalty or a bonus, so a
-    sparse row is decided by whatever it does carry.
+    A missing attribute is charged half of what a mismatch costs. Charging
+    nothing looks like the neutral choice and is not: a match costs nothing
+    too, so an absent value would be exactly as good as agreement, and a row
+    with gaps would beat a row that genuinely matches. That is not
+    hypothetical. `Thomas, Stephen J.` in career-2019 has no country, and
+    with missing charged at zero he cost 2.607 against 2.868 for
+    `Thomas, S. H.L.`, the real continuation of the 2018 row, so the 2018
+    career was handed to the wrong person. Given a country he costs 3.807 and
+    loses, correctly.
+
+    Half the weight puts an absent value between agreement and disagreement,
+    which is what "no evidence" should mean.
     """
     cost = 0.0
 
@@ -110,7 +123,9 @@ def pair_cost(previous: Candidate, nxt: Candidate) -> float:
                               ("institution", W_INSTITUTION)):
         a = getattr(previous, attribute)
         b = getattr(nxt, attribute)
-        if a is not None and b is not None and a != b:
+        if a is None or b is None:
+            cost += weight * MISSING_FRACTION
+        elif a != b:
             cost += weight
 
     return cost

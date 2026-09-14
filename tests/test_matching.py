@@ -113,11 +113,26 @@ def test_a_changed_institution_costs_less_than_a_changed_country():
     assert moved < emigrated
 
 
-def test_missing_attributes_neither_help_nor_hurt():
+def test_a_missing_attribute_sits_between_agreement_and_disagreement():
+    """Charging nothing for an absent value would make it exactly as good as
+    agreement, so a row with gaps would beat a row that genuinely matches.
+    Thomas, Stephen J. in career-2019 has no country and, at zero, cost 2.607
+    against 2.868 for the real continuation of the 2018 row: the career went
+    to the wrong person."""
     base = obs("a", 2023, 3.5, 20)
-    same = pair_cost(base, obs("b", 2024, 3.5, 20))
-    absent = pair_cost(base, obs("b", 2024, 3.5, 20, institution=None))
-    assert absent == same
+    agrees = pair_cost(base, obs("b", 2024, 3.5, 20))
+    absent = pair_cost(base, obs("b", 2024, 3.5, 20, country=None))
+    disagrees = pair_cost(base, obs("b", 2024, 3.5, 20, country="gbr"))
+    assert agrees < absent < disagrees
+
+
+def test_a_row_with_gaps_does_not_outrank_a_row_that_matches():
+    """The regression in its own terms: given a real continuation and an
+    impostor whose attributes are simply absent, the continuation must win."""
+    previous = obs("prev", 2023, 3.52, 37, country="gbr", subfield="S1")
+    real = obs("real", 2024, 3.67, 38, country="gbr", subfield="S2")
+    impostor = obs("gap", 2024, 3.40, 40, country=None, subfield="S3")
+    assert pair_cost(previous, real) < pair_cost(previous, impostor)
 
 
 def test_a_continuation_costs_less_than_the_threshold():
