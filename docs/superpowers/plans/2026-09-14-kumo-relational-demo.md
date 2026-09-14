@@ -4,22 +4,25 @@
 
 **Goal:** Turn the relational core built in plan 1 into a working KumoRFM demo: a materialized graph, five predictive queries, an OpenAlex co-authorship enrichment, and a natural-language query box in the dashboard.
 
-**Architecture:** A new top-level `kumo/` package with its **own virtual environment**, because `kumoai` requires pandas 3.x and the dashboard is pinned to pandas 1.5.2. The two never share a process. `kumo/` reads the Parquet tables already exported by plan 1, declares a graph schema, and drives KumoRFM through the `kumo-rfm-mcp` tools. The dashboard reaches predictions through a thin HTTP sidecar, never by importing `kumoai`.
+**Architecture:** A new top-level `kumo/` package in the **existing virtual environment**. `kumoai` was verified to install and import cleanly on the dashboard's exact pinned stack, Python 3.10 with pandas 1.5.2 and numpy 1.21.5, with `pip check` clean, so no version upgrade is needed anywhere. `kumo/` reads the Parquet tables already exported by plan 1, declares a graph schema, and drives KumoRFM through `kumoai.experimental.rfm`. The dashboard imports it directly.
 
-**Tech Stack:** `kumo-rfm-mcp==0.3.1`, `kumoai`, pandas 3.x, pyarrow, FastAPI (sidecar), Dash 2.15 (existing dashboard), Postgres 16 (existing).
+Keeping the prediction work in a separate module rather than a separate process is a deliberate simplification, but it is bounded: the materialized graph is roughly 1.4 GB of resident pandas, so whether the prediction page ships to the dokku host is a memory question decided in Task 8, not a dependency question.
+
+**Tech Stack:** `kumo-rfm-mcp==0.3.1`, `kumoai`, pandas 1.5.2, numpy 1.21.5, pyarrow 17, Dash 2.15, Postgres 16. All existing versions, unchanged.
 
 **Spec:** `docs/superpowers/specs/2026-09-13-twopercenters-relational-redesign-design.md`
 
 ## Global Constraints
 
-- **Two environments, never mixed.** `kumo/requirements.txt` installs into `kumo/.venv`. Nothing under `kumo/` may be imported by `app.py`, `pages/`, or `citations_lib/`. Nothing in the dashboard's `requirements.txt` changes.
+- **One environment, no version changes.** The Kumo dependencies go into the existing `requirements.txt` and the existing `.venv`. `pandas==1.5.2`, `numpy==1.21.5`, `pyarrow==17.0.0` and `runtime.txt`'s `python-3.10.14` all stay exactly as they are: `kumoai` was verified against them. If any task finds itself wanting to bump one of those pins, stop and report rather than bumping it, because the dashboard's 118 tests and the verified pickle reproduction both depend on them.
+- **Kumo is an optional import.** `import kumoai` must never happen at dashboard import time. The prediction page imports it lazily, inside the callback, so that a deployment without a Kumo key or without the memory for a graph still serves every other page.
 - **`KUMO_API_KEY` comes from the environment only.** Never write it to a file, never commit it, never echo it in logs or reports. `kumo-rfm-mcp` falls back to an OAuth2 browser flow if it is unset.
 - **A `predict` or `evaluate` call accepts at most 1000 entities.** Every demo runs on a sample; every full-table pass is an explicit batched job with a progress log and resumability.
 - **PQL is not SQL.** No arithmetic. No `JOIN`, `SELECT`, `GROUP BY`, or subqueries. `LIST_DISTINCT` applies only to foreign key columns and requires `RANK TOP k` with 1 <= k <= 20. Do not invent syntax: the authoritative grammar is the MCP resource `kumo://docs/predictive-query`, also on disk at `<site-packages>/kumo_rfm_mcp/resources/predictive-query.md`.
 - **Static imputation entities are fact rows.** The target column must live in the entity's own table, so imputation over `career_metrics` uses `FOR EACH career_metrics.metric_id`, with `anchor_time='entity'` to prevent temporal leakage.
 - **Temporal entity filters are backward looking:** `start < 0`, `end <= 0`, `end > start`. Target windows are non-negative with `end > start`. Units: `seconds`, `minutes`, `hours`, `days`, `weeks`, `months`; default `days`.
 - **Measured, not asserted.** Every claim about accuracy comes from `evaluate` output pasted into the task report. No number reaches a document without the call that produced it.
-- **`data_parquet/`, `data_raw/`, `data_clean/` and `kumo/.venv/` stay gitignored.** Add `kumo/out/` to `.gitignore` as well; prediction outputs are regenerable.
+- **`data_parquet/`, `data_raw/` and `data_clean/` stay gitignored.** Add `kumo/out/` as well; prediction outputs are regenerable.
 
 ---
 
@@ -29,7 +32,7 @@ The spec flags local memory as an open risk: `materialize_graph` reads every tab
 
 **Files:**
 - Create: `kumo/__init__.py`
-- Create: `kumo/requirements.txt`
+- Modify: `requirements.txt`
 - Create: `kumo/tables.py`
 - Create: `kumo/measure_memory.py`
 - Modify: `.gitignore`
@@ -91,30 +94,36 @@ def test_load_applies_the_drops():
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_tables.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_tables.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'kumo.tables'`
 
-- [ ] **Step 3: Create the environment**
+- [ ] **Step 3: Add Kumo to the existing environment**
+
+Append one line to `requirements.txt`, leaving every existing pin untouched:
 
 ```
-# kumo/requirements.txt
 kumo-rfm-mcp==0.3.1
-pandas
-pyarrow
-pytest
 ```
 
 ```bash
-python3 -m venv kumo/.venv
-kumo/.venv/bin/pip install -r kumo/requirements.txt
+.venv/bin/pip install -r requirements.txt
 ```
 
-Confirm the split is real and intended:
+Then confirm the thing that makes this safe, which was verified before the plan was written but must be re-confirmed in this environment:
 
 ```bash
-kumo/.venv/bin/python -c "import pandas; print(pandas.__version__)"   # 3.x
-.venv/bin/python -c "import pandas; print(pandas.__version__)"        # 1.5.2
+.venv/bin/pip check
+.venv/bin/python -c "
+import pandas, numpy, pyarrow
+print(pandas.__version__, numpy.__version__, pyarrow.__version__)
+from kumoai.experimental import rfm
+print('rfm ok')
+"
 ```
+
+Expected: `pip check` reports no broken requirements, and the versions print `1.5.2 1.21.5 17.0.0` unchanged. Installing adds about 110 packages and 400 MB of site-packages, which is the real cost of this choice and is worth noting in the report.
+
+**If pip upgrades pandas, numpy or pyarrow, stop and report it.** That would mean the resolver behaves differently here than in verification, and the dashboard's 118 tests plus the verified pickle reproduction both rest on those pins.
 
 - [ ] **Step 4: Write `kumo/tables.py`**
 
@@ -268,13 +277,13 @@ def load(name: str) -> pd.DataFrame:
 
 Note: confirm the exact column names of `countries`, `fields` and `subfields`
 before writing their `stypes` -- read them with
-`kumo/.venv/bin/python -c "import pyarrow.parquet as pq; print(pq.ParquetFile('data_parquet/fields.parquet').schema_arrow.names)"`
+`.venv/bin/python -c "import pyarrow.parquet as pq; print(pq.ParquetFile('data_parquet/fields.parquet').schema_arrow.names)"`
 and correct the dictionary to match. Do not assume `country_name`,
 `field_name` and `subfield_id` are right.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_tables.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_tables.py -v`
 Expected: PASS, 5 tests. If `test_ns_columns_are_dropped_from_the_graph` fails on the count, correct `NS_COLUMNS` against the real schema rather than the assertion.
 
 - [ ] **Step 6: Write and run the memory measurement**
@@ -315,7 +324,7 @@ if __name__ == "__main__":
     main()
 ```
 
-Run: `kumo/.venv/bin/python -m kumo.measure_memory`
+Run: `.venv/bin/python -m kumo.measure_memory`
 
 Expected: the core graph total lands near 1,430 MB (career_metrics slim at roughly 1,096 MB, authors 307 MB, institutions 15 MB, dimensions negligible), against 3,664 MB for all ten tables. **Paste the real table into the task report.** If the core total exceeds 2,500 MB, stop and report it rather than proceeding: the graph schema in Task 2 would then need narrowing first.
 
@@ -324,26 +333,21 @@ Expected: the core graph total lands near 1,430 MB (career_metrics slim at rough
 Add to `.gitignore`:
 
 ```
-kumo/.venv/
 kumo/out/
 ```
 
 Add to the `Makefile`:
 
 ```makefile
-kumo-venv:
-	python3 -m venv kumo/.venv
-	kumo/.venv/bin/pip install -q -r kumo/requirements.txt
-
-kumo-memory: 
-	kumo/.venv/bin/python -m kumo.measure_memory
+kumo-memory:
+	.venv/bin/python -m kumo.measure_memory
 ```
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add kumo/ .gitignore Makefile
-git commit -m "kumo: the graph's tables, its own venv, and a memory budget"
+git add kumo/ .gitignore Makefile requirements.txt
+git commit -m "kumo: the graph's tables and a measured memory budget"
 ```
 
 ---
@@ -414,7 +418,7 @@ def test_no_link_targets_a_table_outside_the_core_graph():
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_graph.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_graph.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'kumo.graph'`
 
 - [ ] **Step 3: Write `kumo/graph.py`**
@@ -509,7 +513,7 @@ def validate_links() -> list[str]:
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_graph.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_graph.py -v`
 Expected: PASS, 4 tests. `test_referential_integrity_holds_in_the_data` is slow (it loads the fact table several times); that is acceptable for a correctness gate that runs rarely.
 
 If it fails, the Parquet export has drifted from the Postgres schema. Report which key fails and how many rows, and fix `pipeline/build_relational.py`, not the test.
@@ -609,7 +613,7 @@ def test_temporal_entity_filters_are_backward_looking():
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_queries.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_queries.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'kumo.queries'`
 
 - [ ] **Step 3: Write `kumo/queries.py`**
@@ -679,7 +683,7 @@ OWN_RETRACTIONS = (
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_queries.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_queries.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Write `kumo/session.py`**
@@ -728,11 +732,17 @@ def materialize(force: bool = False) -> rfm.KumoRFM:
     local_tables = {}
     for name, spec in tables.CORE_TABLES.items():
         df = tables.load(name)
-        table = rfm.LocalTable(df=df, name=name)
-        if spec.primary_key:
-            table.primary_key = spec.primary_key
-        if spec.time_column:
-            table.time_column = spec.time_column
+        # Verified signature:
+        #   LocalTable(df, name, primary_key=..., time_column=...,
+        #              end_time_column=...)
+        # primary_key and time_column are constructor arguments, not
+        # attributes to assign afterwards.
+        table = rfm.LocalTable(
+            df=df,
+            name=name,
+            primary_key=spec.primary_key,
+            time_column=spec.time_column,
+        )
         for column, stype in spec.stypes.items():
             if column in df.columns:
                 table[column].stype = stype
@@ -753,21 +763,30 @@ def materialize(force: bool = False) -> rfm.KumoRFM:
     return _model
 ```
 
-**The `rfm.LocalTable` / `rfm.LocalGraph` API above is written from the
-package's own usage and must be checked against the installed version before
-it is trusted.** Read the real signatures first:
+These signatures were read from the installed package rather than assumed:
+
+```
+LocalTable(df, name, primary_key=<MissingType|str|None>, time_column=None,
+           end_time_column=None)
+Graph(tables, edges=None)                      # rfm.LocalGraph is rfm.Graph
+Graph.link(src_table, fkey, dst_table) -> Self
+KumoRFM(graph, verbose=True, optimize=False)
+```
+
+Confirm them once more in this environment before relying on them, since the
+package is unpinned below `kumo-rfm-mcp`:
 
 ```bash
-kumo/.venv/bin/python -c "
+.venv/bin/python -c "
+import inspect
 from kumoai.experimental import rfm
-help(rfm.LocalTable)
-help(rfm.LocalGraph)
+print(inspect.signature(rfm.LocalTable.__init__))
+print(inspect.signature(rfm.LocalGraph.link))
 "
 ```
 
-Correct `materialize()` to whatever the installed API actually is. Record any
-difference in the task report; do not bend the rest of the plan around a
-guessed signature.
+If they differ, correct `materialize()` and record the difference in the task
+report rather than bending the rest of the plan around a guess.
 
 - [ ] **Step 6: Write `kumo/run_query.py`**
 
@@ -819,9 +838,16 @@ def main() -> None:
     model = session.materialize()
     indices = sample_entities(args.entity_table, args.n)
 
-    call = model.evaluate if args.evaluate else model.predict
-    result = call(query, indices=indices, run_mode=args.run_mode,
-                  anchor_time=args.anchor_time)
+    # evaluate() takes NO indices argument -- it selects its own in-context
+    # examples from the graph. Only predict() is entity-scoped, and only
+    # predict() is subject to the 1000-entity cap.
+    if args.evaluate:
+        result = model.evaluate(query, run_mode=args.run_mode,
+                                anchor_time=args.anchor_time)
+    else:
+        result = model.predict(query, indices=indices,
+                               run_mode=args.run_mode,
+                               anchor_time=args.anchor_time)
 
     OUT.mkdir(exist_ok=True)
     stem = f"{args.query.lower()}_{'eval' if args.evaluate else 'pred'}"
@@ -841,8 +867,8 @@ if __name__ == "__main__":
 - [ ] **Step 7: Run the dropout query for real**
 
 ```bash
-kumo/.venv/bin/python -m kumo.run_query DROPOUT --entity-table authors --n 1000
-kumo/.venv/bin/python -m kumo.run_query DROPOUT --entity-table authors --n 1000 --evaluate
+.venv/bin/python -m kumo.run_query DROPOUT --entity-table authors --n 1000
+.venv/bin/python -m kumo.run_query DROPOUT --entity-table authors --n 1000 --evaluate
 ```
 
 Expected: a binary classification frame with `ENTITY`, `ANCHOR_TIMESTAMP`, `TARGET_PRED`, `False_PROB`, `True_PROB`, and an evaluation carrying `auroc`, `auprc`, `precision`, `recall`, `f1`, `acc`.
@@ -896,7 +922,7 @@ def test_summarize_reads_metrics(tmp_path, monkeypatch):
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_report.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_report.py -v`
 Expected: FAIL, no module `kumo.report`.
 
 - [ ] **Step 3: Write `kumo/report.py`**
@@ -952,14 +978,14 @@ def write_results(stems: list[str]) -> Path:
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_report.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_report.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Run queries 2 and 3 for real**
 
 ```bash
-kumo/.venv/bin/python -m kumo.run_query NEXT_SCORE --n 1000 --evaluate
-kumo/.venv/bin/python -m kumo.run_query NEXT_AFFILIATION --n 1000 --evaluate
+.venv/bin/python -m kumo.run_query NEXT_SCORE --n 1000 --evaluate
+.venv/bin/python -m kumo.run_query NEXT_AFFILIATION --n 1000 --evaluate
 ```
 
 Expected: `NEXT_SCORE` returns regression metrics (`mae`, `rmse`, `r2`, `smape`); `NEXT_AFFILIATION` returns link-prediction metrics (`map@k`, `ndcg@k`, `mrr@k`, `hit_ratio@k`).
@@ -1039,7 +1065,7 @@ def test_null_count_matches_the_measured_total():
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_backfill.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_backfill.py -v`
 Expected: FAIL, no module `kumo.backfill`.
 
 - [ ] **Step 3: Write `kumo/backfill.py`**
@@ -1122,18 +1148,21 @@ def run(limit: int | None = None, run_mode: str = "fast") -> Path:
 
 
 def evaluate_on_known_years(run_mode: str = "fast") -> dict:
-    """Measure against 2023 and 2024, where nc_rw is actually known."""
-    df = tables.load("career_metrics")
-    known = df.loc[df["nc_rw"].notna(), "metric_id"]
-    indices = known.sample(n=MAX_ENTITIES, random_state=20260914).tolist()
+    """Measure where nc_rw is actually known.
 
+    evaluate() takes no indices: it draws its own in-context examples and
+    holds out labelled ones to score against. Since nc_rw is only non-NULL
+    for career-2023 and career-2024, those are the only rows that can carry
+    a label, so the evaluation is automatically confined to them without us
+    having to pass a sample.
+    """
     model = session.materialize()
     out = {}
     for name, query in [("regression", queries.RETRACTION_EXPOSURE),
                         ("binary", queries.RETRACTION_EXPOSED),
                         ("own_retractions", queries.OWN_RETRACTIONS)]:
-        result = model.evaluate(query, indices=indices,
-                                anchor_time="entity", run_mode=run_mode)
+        result = model.evaluate(query, anchor_time="entity",
+                                run_mode=run_mode)
         out[name] = dict(zip(result["metric"], result["value"]))
         logger.info("%s: %s", name, out[name])
 
@@ -1144,13 +1173,13 @@ def evaluate_on_known_years(run_mode: str = "fast") -> dict:
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_backfill.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_backfill.py -v`
 Expected: PASS. Record the real NULL count in the report.
 
 - [ ] **Step 5: Evaluate on the years where truth is known**
 
 ```bash
-kumo/.venv/bin/python -c "
+.venv/bin/python -c "
 import logging; logging.basicConfig(level=logging.INFO)
 from kumo import backfill
 backfill.evaluate_on_known_years()
@@ -1164,7 +1193,7 @@ Expected: three metric sets. The one that matters is `binary` (AUROC on `nc_rw >
 - [ ] **Step 6: Run a bounded backfill**
 
 ```bash
-kumo/.venv/bin/python -c "
+.venv/bin/python -c "
 import logging; logging.basicConfig(level=logging.INFO)
 from kumo import backfill
 backfill.run(limit=10000)
@@ -1232,7 +1261,7 @@ def test_score_prefers_an_orcid_match_over_a_name_match():
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_openalex_link.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_openalex_link.py -v`
 Expected: FAIL, no module `kumo.openalex`.
 
 - [ ] **Step 3: Write `kumo/openalex/link.py`**
@@ -1359,7 +1388,7 @@ def search_authors(query: str, per_page: int = 5) -> list[dict]:
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_openalex_link.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_openalex_link.py -v`
 Expected: PASS, 4 tests.
 
 - [ ] **Step 6: Link a stratified sample**
@@ -1437,7 +1466,7 @@ def test_a_left_author_with_no_block_partner_yields_nothing():
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_entity_resolution.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_entity_resolution.py -v`
 Expected: FAIL, no module `kumo.entity_resolution`.
 
 - [ ] **Step 3: Implement `kumo/entity_resolution.py`**
@@ -1448,7 +1477,7 @@ Note the asymmetry that makes this a real question: the baseline links 181,334 o
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_entity_resolution.py -v`
+Run: `.venv/bin/pytest kumo/tests/test_entity_resolution.py -v`
 Expected: PASS, 3 tests.
 
 - [ ] **Step 5: Register the candidate table and ask Kumo**
@@ -1473,136 +1502,206 @@ git commit -m "kumo: entity resolution as link prediction over candidate pairs"
 
 ---
 
-### Task 8: The agentic layer, as a sidecar
+### Task 8: The agentic layer, in the dashboard
 
-The dashboard cannot import `kumoai`: it pins pandas 1.5.2 and `kumoai` requires pandas 3.x. So the natural-language box talks to a small separate process over HTTP. That is a constraint discovered by measurement, not a design preference, and it is worth saying so in the code.
+The natural-language box turns a question into PQL, runs it, and charts the answer, with Kumo's own explanation rendered beside it. `predict()` takes an `explain` argument and returns an `Explanation`, so the reasoning comes from the same call rather than a second one.
+
+Because the dependency split turned out not to exist, this is an ordinary Dash page importing an ordinary module. The one real constraint left is memory: the materialized graph is roughly 1.4 GB resident, and gunicorn runs two workers, so a page that materializes on demand costs about 2.8 GB on a host already running five other dashboards. The page is therefore behind an environment flag that is off by default.
 
 **Files:**
-- Create: `kumo/sidecar.py`
+- Create: `kumo/service.py`
 - Create: `pages/predict.py`
-- Modify: `kumo/requirements.txt`
-- Modify: `docker-compose.yml`
-- Test: `kumo/tests/test_sidecar.py`, `tests/test_predict_page.py`
+- Test: `kumo/tests/test_service.py`, `tests/test_predict_page.py`
 
 **Interfaces:**
 - Produces:
-  - `POST /predict` with `{"query": "<PQL>", "entity_table": str, "n": int}` returning `{"predictions": [...], "logs": [...]}`.
-  - `GET /healthz` returning `{"status": "ok", "materialized": bool}`.
-  - `GET /schema` returning the mermaid ER diagram, so the page can show the graph the predictions come from.
+  - `kumo.service.validate(query: str, n: int) -> None`: raises `ValueError` with a specific message on a malformed query.
+  - `kumo.service.run(query: str, entity_table: str, n: int, explain: bool) -> dict`: returns `{"predictions": DataFrame, "explanation": str | None}`.
+  - `kumo.service.enabled() -> bool`: whether `KUMO_ENABLED` is set.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# kumo/tests/test_sidecar.py
+# kumo/tests/test_service.py
 import pytest
-from fastapi.testclient import TestClient
 
-from kumo import sidecar
-
-
-@pytest.fixture
-def client(monkeypatch):
-    monkeypatch.setattr(sidecar, "_model_or_none", lambda: None)
-    return TestClient(sidecar.app)
+from kumo import service
 
 
-def test_healthz_reports_unmaterialized_without_a_model(client):
-    body = client.get("/healthz").json()
-    assert body["status"] == "ok"
-    assert body["materialized"] is False
-
-
-def test_predict_rejects_sql(client):
+def test_rejects_sql():
     """A natural-language box will produce SQL sooner or later. Reject it
-    here with a clear message rather than after a slow round trip."""
-    r = client.post("/predict", json={
-        "query": "SELECT * FROM authors", "entity_table": "authors", "n": 10})
-    assert r.status_code == 400
-    assert "PQL" in r.json()["detail"]
+    locally with a clear message rather than after a slow round trip."""
+    with pytest.raises(ValueError, match="PQL"):
+        service.validate("SELECT * FROM authors", n=10)
 
 
-def test_predict_rejects_more_than_1000_entities(client):
-    r = client.post("/predict", json={
-        "query": "PREDICT career_metrics.nc_rw FOR EACH career_metrics.metric_id",
-        "entity_table": "career_metrics", "n": 5000})
-    assert r.status_code == 400
-    assert "1000" in r.json()["detail"]
+def test_rejects_more_than_1000_entities():
+    with pytest.raises(ValueError, match="1000"):
+        service.validate(
+            "PREDICT career_metrics.nc_rw FOR EACH career_metrics.metric_id",
+            n=5000)
 
 
-def test_predict_requires_the_two_keywords(client):
-    r = client.post("/predict", json={
-        "query": "PREDICT career_metrics.nc_rw", "entity_table": "career_metrics",
-        "n": 10})
-    assert r.status_code == 400
-    assert "FOR EACH" in r.json()["detail"]
+def test_requires_both_keywords():
+    with pytest.raises(ValueError, match="FOR EACH"):
+        service.validate("PREDICT career_metrics.nc_rw", n=10)
+    with pytest.raises(ValueError, match="PREDICT"):
+        service.validate("FOR EACH authors.author_id", n=10)
 
 
-def test_predict_503s_when_the_graph_is_not_materialized(client):
-    r = client.post("/predict", json={
-        "query": "PREDICT career_metrics.nc_rw FOR EACH career_metrics.metric_id",
-        "entity_table": "career_metrics", "n": 10})
-    assert r.status_code == 503
+def test_rejects_arithmetic():
+    with pytest.raises(ValueError, match="arithmetic"):
+        service.validate(
+            "PREDICT career_metrics.nc_rw + 1 FOR EACH career_metrics.metric_id",
+            n=10)
+
+
+def test_list_distinct_needs_rank_top_within_range():
+    base = ("PREDICT LIST_DISTINCT(career_metrics.institution_id, 0, 12, months) "
+            "FOR EACH authors.author_id")
+    with pytest.raises(ValueError, match="RANK TOP"):
+        service.validate(base, n=10)
+    with pytest.raises(ValueError, match="20"):
+        service.validate(base.replace("FOR EACH", "RANK TOP 50 FOR EACH"), n=10)
+
+
+def test_a_valid_query_passes():
+    service.validate(
+        "PREDICT COUNT(career_metrics.*, 0, 12, months) = 0 "
+        "FOR EACH authors.author_id", n=1000)
+
+
+def test_run_refuses_when_disabled(monkeypatch):
+    """The dashboard must keep working with Kumo switched off, which is the
+    normal state of the public deployment."""
+    monkeypatch.delenv("KUMO_ENABLED", raising=False)
+    assert service.enabled() is False
+    with pytest.raises(RuntimeError, match="KUMO_ENABLED"):
+        service.run("PREDICT x FOR EACH y.z", entity_table="authors", n=10)
 ```
-
-Note the order the validations must run in for these to pass: shape checks (keywords, SQL, entity cap) return 400 before the model is consulted, and only a well-formed request reaches the 503.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_sidecar.py -v`
-Expected: FAIL, no module `kumo.sidecar`.
+Run: `.venv/bin/pytest kumo/tests/test_service.py -v`
+Expected: FAIL, no module `kumo.service`.
 
-- [ ] **Step 3: Add FastAPI to `kumo/requirements.txt`**
+- [ ] **Step 3: Write `kumo/service.py`**
 
+Validate before doing anything expensive, in this order, raising `ValueError` with a message naming the specific problem: both `PREDICT` and `FOR EACH` present; no SQL keyword (`SELECT`, `JOIN`, `GROUP BY`, `UNION`); no `+` arithmetic; `n` at most 1000; `LIST_DISTINCT` accompanied by `RANK TOP k` with 1 <= k <= 20.
+
+```python
+"""Run a predictive query on behalf of the dashboard.
+
+Two things here are deliberate rather than incidental.
+
+Kumo is imported lazily, inside run(), never at module import. The dashboard
+must start and serve every other page on a host with no Kumo key and no
+memory for a graph.
+
+And the graph is materialized at most once per process, behind KUMO_ENABLED.
+It is roughly 1.4 GB resident and gunicorn runs two workers, so leaving this
+on by default would cost about 2.8 GB on a box that also runs five other
+dashboards.
+"""
+import os
+import re
+
+MAX_ENTITIES = 1000
+_SQL = ("SELECT", "JOIN", "GROUP BY", "UNION")
+
+
+def enabled() -> bool:
+    return os.getenv("KUMO_ENABLED", "").strip() not in ("", "0", "false")
+
+
+def validate(query: str, n: int) -> None:
+    upper = query.upper()
+    if "PREDICT" not in upper:
+        raise ValueError("A predictive query must contain PREDICT.")
+    if "FOR EACH" not in upper:
+        raise ValueError("A predictive query must contain FOR EACH.")
+    for word in _SQL:
+        if word in upper:
+            raise ValueError(
+                f"{word} is SQL, and PQL is not SQL. Joins, subqueries and "
+                f"grouping are not supported.")
+    if "+" in query:
+        raise ValueError("PQL supports no arithmetic operations.")
+    if n > MAX_ENTITIES:
+        raise ValueError(
+            f"Kumo accepts at most {MAX_ENTITIES} entities per query, "
+            f"got {n}.")
+    if "LIST_DISTINCT" in upper:
+        match = re.search(r"RANK TOP (\d+)", upper)
+        if not match:
+            raise ValueError("LIST_DISTINCT requires a RANK TOP k clause.")
+        if not 1 <= int(match.group(1)) <= 20:
+            raise ValueError("RANK TOP k requires k between 1 and 20.")
 ```
-fastapi
-uvicorn
-httpx
-```
 
-- [ ] **Step 4: Write `kumo/sidecar.py`**
+`run()` validates, checks `enabled()`, then imports `kumo.session` and calls
+`model.predict(query, indices=..., explain=explain)`. Return the frame and,
+when `explain` is on, the `Explanation`.
 
-Validate in this order, returning 400 with a specific message each time: both `PREDICT` and `FOR EACH` present; no SQL keyword (`SELECT`, `JOIN`, `GROUP BY`, `UNION`); `n` at most 1000; `LIST_DISTINCT` accompanied by `RANK TOP k` with k at most 20. Then, and only then, ask for the model; return 503 if it is not materialized.
+- [ ] **Step 4: Run the tests to verify they pass**
 
-The sidecar holds the materialized graph in memory, so it is a single long-lived process. Materialize lazily on the first request, not at import, so `/healthz` answers immediately while the graph is still loading.
+Run: `.venv/bin/pytest kumo/tests/test_service.py -v`
+Expected: PASS, 7 tests.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 5: Add the dashboard page**
 
-Run: `kumo/.venv/bin/pytest kumo/tests/test_sidecar.py -v`
-Expected: PASS, 5 tests.
+`pages/predict.py` offers the demo queries from `kumo.queries` as presets rather than only a free-text box, since a preset that works beats a blank box that usually does not. When `KUMO_ENABLED` is unset the page renders an explanation of what it would do instead of erroring.
 
-- [ ] **Step 6: Add the dashboard page**
+Two hazards from plan 1 apply directly and must not be repeated:
 
-`pages/predict.py` registers a route, offers the demo queries as presets rather than only a free-text box, and posts to the sidecar at `KUMO_SIDECAR_URL`. If that variable is unset the page renders an explanation instead of erroring: the dashboard must keep working with no sidecar at all, which is the normal state of the public deployment.
+- **Do not read the database or materialize anything at module import.** That is precisely what forced `close_db()` in `app.py` and the `post_fork` hook in `cfg.py`. `tests/test_no_shared_connection.py` holds that invariant and must still pass.
+- **Do not register the page at a guessable scratch route.** `pages/test.py` at `/keke` is the existing example of what not to do.
 
-Follow the existing pages' conventions rather than inventing new ones, and mind the two hazards plan 1 uncovered: do not read the database at module import (that is what forced `close_db` and the `post_fork` hook), and do not register the page at a guessable scratch route.
-
-Render `explain` output alongside each prediction where available. The reasoning is the part that makes this a demo of relational learning rather than a number.
-
-- [ ] **Step 7: Add the sidecar to docker-compose**
-
-A separate service with its own image built from `kumo/requirements.txt`, `KUMO_API_KEY` passed through from the environment and never baked into the image, `data_parquet/` mounted read-only. Give it a memory limit consistent with Task 1's measurement; the core graph measured about 1.4 GB in pandas and the container needs headroom above that.
-
-- [ ] **Step 8: Run the full test suite**
+- [ ] **Step 6: Verify the dashboard is unharmed**
 
 ```bash
-.venv/bin/pytest tests/ -v          # the dashboard's 118 tests, unchanged
-kumo/.venv/bin/pytest kumo/tests/ -v
+.venv/bin/pytest tests/ -v
+.venv/bin/pytest kumo/tests/ -v
 ```
 
-Expected: both green. The dashboard suite must be untouched by this work; if it is not, the environment separation has leaked and that is the bug to fix.
+Expected: the dashboard's 118 tests still pass, unchanged. This is the check that matters most in this task: adding roughly 110 packages to a shared environment is exactly the kind of change that breaks something at a distance, and the suite is what proves it did not.
 
-- [ ] **Step 9: Commit**
+Also confirm the app still imports without Kumo present in memory:
 
 ```bash
-git add kumo/sidecar.py pages/predict.py kumo/requirements.txt docker-compose.yml kumo/tests/test_sidecar.py tests/test_predict_page.py
-git commit -m "kumo: a prediction sidecar and the dashboard page that calls it"
+.venv/bin/python -c "
+import app, sys
+assert 'kumoai' not in sys.modules, 'kumoai imported at dashboard import time'
+print('clean import')
+"
+```
+
+- [ ] **Step 7: Measure what the page costs before enabling it anywhere**
+
+```bash
+KUMO_ENABLED=1 .venv/bin/python -c "
+import resource, sys
+from kumo import session
+session.materialize()
+peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+print('peak RSS bytes:', peak)
+"
+```
+
+Record the peak. Task 1 predicts roughly 1.4 GB for the tables themselves; whatever Kumo adds on top of that is the number that decides whether this page can ever run on the dokku host, and it belongs in the report.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add kumo/service.py pages/predict.py kumo/tests/test_service.py tests/test_predict_page.py
+git commit -m "kumo: a prediction page, off by default, with the memory measured"
 ```
 
 ---
 
 ## What this plan does not do
 
-- **It does not deploy the sidecar to dokku.** The public dashboard runs without it. Deploying a process that holds a 1.4 GB graph on a box already running five dashboards is a separate decision with its own capacity question.
+- **It does not enable predictions on dokku.** `KUMO_ENABLED` stays unset there. Two gunicorn workers each materializing a 1.4 GB graph on a box already running five dashboards is a capacity decision that needs Task 8's measured peak RSS first, and a separate process is the obvious answer if the number is bad.
 - **It does not run the full 856-call backfill.** Task 5 runs a bounded 10,000-row pass and extrapolates, because the free-tier rate limits are unknown until something hits them.
 - **It does not download the OpenAlex bulk snapshot.** Task 6 links a stratified 20,000-author sample through the API.
 - **It does not add `singleyr_metrics` to the graph.** None of the five queries asks a single-year question, and it is a second 1.2 GB table.
