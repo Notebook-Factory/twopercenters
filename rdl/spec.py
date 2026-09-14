@@ -105,10 +105,25 @@ TABLES: dict[str, TableSpec] = {
     ),
     "authors": TableSpec(
         pkey="author_id",
+        # The name columns are dropped, for two reasons that point the same
+        # way.
+        #
+        # Cardinality: authfull_display has 429,276 distinct values across
+        # 818,667 rows and name_normalized 389,666, so both are close to
+        # row-unique. surname has 143,733, far past what a categorical
+        # encoder can generalise over. RelBench's own guidance is to discard
+        # columns whose cardinality makes generalisation infeasible, and
+        # an author's actual signal comes from the career rows attached to
+        # them, not from the spelling of their name.
+        #
+        # Fairness: embedding names would let the model pick up name origin
+        # as a proxy. On a dataset that ranks scientists, that is a hazard
+        # worth refusing rather than measuring afterwards.
+        #
+        # Dropping them also means the graph needs no text embedder at all,
+        # which is why sentence-transformers is not a dependency.
+        drop_columns=["authfull_display", "name_normalized", "surname"],
         stypes={
-            "authfull_display": "text",
-            "name_normalized": "text",
-            "surname": "categorical",
             "first_initial": "categorical",
             "firstyr": "numerical",
             "collision_group_size": "numerical",
@@ -120,10 +135,12 @@ TABLES: dict[str, TableSpec] = {
     "institutions": TableSpec(
         pkey="institution_id",
         fkeys={"country_code": "countries"},
-        stypes={
-            "inst_name": "text",
-            "country_code": "categorical",
-        },
+        # inst_name has 66,079 distinct values across 66,079 rows: exactly
+        # one per institution, so it is an identifier spelled as words. The
+        # institution is already a node with an ID and a country, which is
+        # the structure the model can use.
+        drop_columns=["inst_name"],
+        stypes={"country_code": "categorical"},
     ),
     "editions": TableSpec(
         pkey="edition_id",

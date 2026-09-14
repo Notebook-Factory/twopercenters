@@ -59,3 +59,29 @@ def test_declared_columns_exist_in_the_exported_parquet():
             assert col in cols, f"{name}.{col} not in the parquet export"
         if t.pkey:
             assert t.pkey in cols, f"{name}.{t.pkey} missing"
+
+
+def test_no_column_needs_a_text_embedder():
+    """Every declared stype must be one the graph can encode without
+    sentence-transformers. A stray 'text' would reintroduce that dependency
+    silently at graph-build time."""
+    for name, t in spec.TABLES.items():
+        assert "text" not in t.stypes.values(), name
+
+
+def test_identity_columns_are_dropped_not_encoded():
+    """authfull_display is 52% row-unique, inst_name is 100% row-unique.
+    Encoding either teaches the model to memorise rather than generalise,
+    and the name columns additionally carry name-origin signal."""
+    assert "authfull_display" in spec.TABLES["authors"].drop_columns
+    assert "name_normalized" in spec.TABLES["authors"].drop_columns
+    assert "surname" in spec.TABLES["authors"].drop_columns
+    assert "inst_name" in spec.TABLES["institutions"].drop_columns
+
+
+def test_dropped_columns_are_never_also_typed():
+    """A column cannot be both dropped and given a semantic type; one of the
+    two would silently win."""
+    for name, t in spec.TABLES.items():
+        overlap = set(t.drop_columns) & set(t.stypes)
+        assert not overlap, f"{name}: {overlap}"
