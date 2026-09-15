@@ -42,7 +42,7 @@ tests/test_no_torch_in_app.py holds that line.
 import dash
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
-from dash import Input, Output, callback, dcc, html
+from dash import Input, Output, State, callback, dcc, html
 
 from citations_lib.utils import (author_options, get_es_results,
                                  prediction_run, retraction_by_edition,
@@ -60,6 +60,7 @@ ESTIMATED = '#A8B2C4'       # --ev-text-muted
 # survives being printed or screenshotted in greyscale.
 ESTIMATED_FILL = 'rgba(168,178,196,0.30)'
 TASK = 'retraction_exposed'
+DEFAULT_AUTHOR = 'Ioannidis, John P.A.'
 
 
 def _run_summary():
@@ -178,9 +179,15 @@ layout = dbc.Container(fluid=True, children=[
             'Search by name. Add an institution to separate people who share '
             'one, for example "Zhu Jianguo Sydney".',
             className='ev-caption'),
-        dcc.Dropdown(id='retraction-author', options=[], multi=False,
-                     placeholder='Search researchers',
-                     value='Ioannidis, John P.A.', searchable=True),
+        # Options are seeded with the current value. A Dash dropdown renders
+        # the label for whatever option matches its value, so with an empty
+        # options list it showed the placeholder instead of the name of the
+        # researcher actually being displayed below it.
+        dcc.Dropdown(id='retraction-author',
+                     options=[{'label': DEFAULT_AUTHOR,
+                               'value': DEFAULT_AUTHOR}],
+                     multi=False, placeholder='Search researchers',
+                     value=DEFAULT_AUTHOR, searchable=True),
         html.Div(id='retraction-author-panel'),
     ], className='ev-panel'), width=12)),
     html.Br(),
@@ -222,10 +229,17 @@ layout = dbc.Container(fluid=True, children=[
 
 
 @callback(Output('retraction-author', 'options'),
-          Input('retraction-author', 'search_value'))
-def _search(term):
-    return author_options(
-        get_es_results(term, ['career'], 'authfull'))
+          Input('retraction-author', 'search_value'),
+          State('retraction-author', 'value'))
+def _search(term, current):
+    options = author_options(get_es_results(term, ['career'], 'authfull'))
+    # Keep whoever is selected in the list. Dash renders a dropdown's label
+    # by looking its value up in options, so dropping the current name while
+    # the user types replaces the displayed name with the placeholder even
+    # though a researcher is still shown below.
+    if current and not any(o['value'] == current for o in options):
+        options = [{'label': current, 'value': current}] + options
+    return options
 
 
 @callback(Output('retraction-author-panel', 'children'),
@@ -262,29 +276,43 @@ def _author_panel(name):
             hovertemplate='%{x}: estimated %{y:.0f}% likely to have been '
                           'cited by a retracted paper<extra></extra>')
     if measured:
+        def _measured_text(row):
+            if not row['value']:
+                return 'none recorded'
+            share = row['share']
+            if share is None:
+                return f"recorded, {row['citations']:,} cites"
+            return f"{share:.2f}% of cites<br>({row['citations']:,} recorded)"
+
         figure.add_bar(
             x=[r['data_year'] for r in measured],
-            # A short stub rather than zero, so a "none recorded" year is
-            # visibly present and answered rather than looking like missing
-            # data, which is the state this whole page is about.
+            # Height is a likelihood, and for a recorded year the likelihood
+            # is simply known: 100% if it happened, and a short stub rather
+            # than zero if it did not, so the year reads as answered rather
+            # than missing. The magnitude goes in the label instead, because
+            # the share of citations involved averages 0.058% and drawn to
+            # scale here it would be an invisible sliver.
             y=[100 if r['value'] else 7 for r in measured],
-            name='Recorded in the published data',
-            text=['recorded' if r['value'] else 'none recorded'
-                  for r in measured],
+            name='Recorded, with the share of their citations',
+            text=[_measured_text(r) for r in measured],
             textposition='outside',
             marker=dict(color=MEASURED),
-            customdata=['cited by a retracted paper' if r['value']
-                        else 'not cited by any retracted paper'
-                        for r in measured],
-            hovertemplate='%{x}: %{customdata}, recorded<extra></extra>')
+            customdata=[
+                (f"{r['citations']:,} of their citations came from papers "
+                 f"later retracted"
+                 + (f", {r['share']:.2f}% of the total"
+                    if r['share'] is not None else ''))
+                if r['value'] else 'no citations from retracted papers'
+                for r in measured],
+            hovertemplate='%{x}: %{customdata}<extra></extra>')
 
     figure.update_layout(
         template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)', height=300,
         margin=dict(l=40, r=20, t=30, b=40),
         legend=dict(orientation='h', y=-0.2),
-        yaxis=dict(title=None, range=[0, 128], showticklabels=False,
-                   showgrid=False),
+        yaxis=dict(title='Likelihood of any', range=[0, 132],
+                   showticklabels=False, showgrid=False),
         xaxis=dict(title=None, dtick=1))
 
     known = ', '.join(str(r['data_year']) for r in measured)

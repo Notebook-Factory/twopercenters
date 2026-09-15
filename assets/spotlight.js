@@ -5,6 +5,15 @@
 // toggling the modal directly means there is exactly one code path that opens
 // the overlay, so the two entry points cannot drift apart.
 (function () {
+  // Measured, rather than inferred from offsetParent: a rect is a rect
+  // whatever the ancestor positioning is doing.
+  function spotlightIsOpen() {
+    var field = document.getElementById('spotlight-input');
+    if (!field) { return false; }
+    var box = field.getBoundingClientRect();
+    return box.width > 0 && box.height > 0;
+  }
+
   function onKeyDown(e) {
     var key = (e.key || '').toLowerCase();
 
@@ -18,10 +27,17 @@
     }
 
     if (key === 'escape') {
-      // Only steal Escape when the overlay is actually showing.
-      var field = document.getElementById('spotlight-input');
-      if (field && field.offsetParent !== null) {
-        var close = document.getElementById('spotlight-open');
+      // Escape appeared to do nothing, and the reason was that it was being
+      // handled twice. dbc.Modal closes itself on Escape and reports
+      // is_open=false back to Dash; this handler then clicked the navbar
+      // Search button, which TOGGLES, so the overlay closed and reopened in
+      // the same keystroke.
+      //
+      // Clicking the dedicated close button instead is idempotent: it only
+      // ever sets is_open false, so it agrees with whatever Bootstrap has
+      // already done rather than undoing it.
+      if (spotlightIsOpen()) {
+        var close = document.getElementById('spotlight-close');
         if (close) { close.click(); }
       }
     }

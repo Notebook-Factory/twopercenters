@@ -668,8 +668,19 @@ def retraction_for_author(authfull, task):
     if not author_ids:
         return []
 
+    # The recorded years carry a magnitude as well as a yes/no, and the
+    # magnitude is what a reader actually wants: `nc_rw` is a count of
+    # citations that arrived from papers later retracted, and its share of
+    # the author's total citations says how much of their record rests on
+    # withdrawn work. That share is small for almost everyone (mean 0.058%
+    # across career-2024, maximum 15%), which is why it is reported as text
+    # rather than as a bar height: drawn to scale beside a likelihood it
+    # would be invisible, and the two are not the same quantity anyway.
     measured = _fetch(
-        "select e.data_year, max(case when m.nc_rw > 0 then 1 else 0 end) "
+        "select e.data_year, "
+        "       max(case when m.nc_rw > 0 then 1 else 0 end), "
+        "       max(m.nc_rw), "
+        "       max(100.0 * m.nc_rw / nullif(m.nc, 0)) "
         "from career_metrics m join editions e using (edition_id) "
         "where m.author_id = any(%s) and m.nc_rw is not null "
         "group by e.data_year", (author_ids,))
@@ -678,9 +689,12 @@ def retraction_for_author(authfull, task):
         "from predictions p join editions e using (edition_id) "
         "where p.author_id = any(%s) and p.task = %s "
         "group by e.data_year", (author_ids, task))
-    rows = ([{'data_year': int(y), 'value': float(v), 'measured': True}
-             for y, v in measured]
-            + [{'data_year': int(y), 'value': float(v), 'measured': False}
+    rows = ([{'data_year': int(y), 'value': float(v), 'measured': True,
+              'citations': int(count or 0),
+              'share': float(share) if share is not None else None}
+             for y, v, count, share in measured]
+            + [{'data_year': int(y), 'value': float(v), 'measured': False,
+                'citations': None, 'share': None}
                for y, v in estimated])
     return sorted(rows, key=lambda r: r['data_year'])
 

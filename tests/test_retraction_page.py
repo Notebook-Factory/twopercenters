@@ -103,3 +103,72 @@ def test_no_chart_label_calls_a_researcher_exposed():
     assert 'retracted paper' in figure.layout.yaxis.title.text
     for trace in figure.data:
         assert 'exposed<' not in (trace.hovertemplate or '')
+
+
+def test_a_recorded_year_reports_the_magnitude_not_just_the_word():
+    """"recorded" alone says nothing. The bar label carries the share of the
+    author's citations that came from retracted papers, and the count."""
+    import app  # noqa: F401
+    import pages.retraction as retraction
+    figure = retraction._author_panel('Ioannidis, John P.A.').children[0].figure
+    recorded = [t for t in figure.data if 'Recorded' in (t.name or '')]
+    assert recorded, [t.name for t in figure.data]
+    labels = ' '.join(recorded[0].text)
+    assert '% of cites' in labels
+    assert 'recorded)' in labels
+
+
+def test_the_measured_share_comes_from_the_data():
+    """0.07% and 0.10% for Ioannidis in 2023 and 2024: 169 of 259,475 and
+    278 of 284,984 citations."""
+    from citations_lib.utils import retraction_for_author
+    rows = {r['data_year']: r for r in
+            retraction_for_author('Ioannidis, John P.A.', 'retraction_exposed')}
+    assert rows[2023]['citations'] == 169
+    assert rows[2024]['citations'] == 278
+    assert 0.06 < rows[2023]['share'] < 0.08
+
+
+def test_the_search_box_shows_who_is_being_displayed():
+    """A Dash dropdown renders its label by looking the value up in options,
+    so an empty options list showed the placeholder while a researcher was
+    charted underneath it."""
+    import app  # noqa: F401
+    import pages.retraction as retraction
+
+    found = []
+
+    def walk(node):
+        if isinstance(node, list):
+            for child in node:
+                walk(child)
+            return
+        if getattr(node, '_prop_names', None) is None:
+            return
+        if getattr(node, 'id', None) == 'retraction-author':
+            found.append(node)
+        walk(getattr(node, 'children', None))
+
+    walk(retraction.layout)
+    assert found, 'the author dropdown is gone'
+    dropdown = found[0]
+    assert any(o['value'] == dropdown.value for o in dropdown.options)
+
+
+def test_typing_does_not_drop_the_selected_name():
+    import app  # noqa: F401
+    import pages.retraction as retraction
+    options = retraction._search('Zhu Jianguo Sydney', 'Ioannidis, John P.A.')
+    assert any(o['value'] == 'Ioannidis, John P.A.' for o in options)
+
+
+def test_escape_closes_rather_than_toggles():
+    """Escape appeared dead because it was handled twice: dbc.Modal closes
+    itself on Escape, and the handler then clicked the navbar Search button,
+    which toggles, reopening the overlay in the same keystroke. Clicking the
+    dedicated close button is idempotent."""
+    source = open('assets/spotlight.js').read()
+    escape_block = source[source.index("if (key === 'escape')"):]
+    escape_block = escape_block[:escape_block.index('document.addEventListener')]
+    assert "getElementById('spotlight-close')" in escape_block
+    assert "getElementById('spotlight-open')" not in escape_block
