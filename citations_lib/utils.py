@@ -684,9 +684,18 @@ def retraction_for_author(authfull, task):
         "from career_metrics m join editions e using (edition_id) "
         "where m.author_id = any(%s) and m.nc_rw is not null "
         "group by e.data_year", (author_ids,))
+    # Two models answer two different questions about the same untracked
+    # years, and the page shows both: `task` gives the likelihood of any
+    # exposure at all, and retraction_exposure estimates how many citations
+    # were involved. The magnitude is the weaker of the two and is reported
+    # with its error rather than as a bare number.
     estimated = _fetch(
-        "select e.data_year, max(p.probability) "
-        "from predictions p join editions e using (edition_id) "
+        "select e.data_year, max(p.probability), max(q.value) "
+        "from predictions p "
+        "join editions e using (edition_id) "
+        "left join predictions q "
+        "  on q.metric_id = p.metric_id "
+        " and q.task = 'retraction_exposure' "
         "where p.author_id = any(%s) and p.task = %s "
         "group by e.data_year", (author_ids, task))
     rows = ([{'data_year': int(y), 'value': float(v), 'measured': True,
@@ -694,8 +703,9 @@ def retraction_for_author(authfull, task):
               'share': float(share) if share is not None else None}
              for y, v, count, share in measured]
             + [{'data_year': int(y), 'value': float(v), 'measured': False,
-                'citations': None, 'share': None}
-               for y, v in estimated])
+                'citations': round(float(c)) if c is not None else None,
+                'share': None}
+               for y, v, c in estimated])
     return sorted(rows, key=lambda r: r['data_year'])
 
 

@@ -80,6 +80,13 @@ def _run_summary():
             html.Span(' ROC AUC on career-2024, an edition the model never saw',
                       className='ev-metric-label'),
         ]),
+        html.Div('and how much weight the counts carry, which is less',
+                 className='ev-kicker', style={'marginTop': '.9rem'}),
+        html.Div([
+            html.Span('+/- 4', className='ev-metric'),
+            html.Span(' citations, the average error of the count estimate',
+                      className='ev-metric-label'),
+        ]),
         html.Ul([
             html.Li(f'Chance is {baseline:.2f}.' if baseline else ''),
             html.Li(
@@ -87,11 +94,19 @@ def _run_summary():
                 f'{majority:.1%} of the time, which is why accuracy is the '
                 f'wrong measure here and AUC is quoted instead.'
                 if majority else ''),
-            html.Li('This measures discrimination, whether researchers who '
-                    'were cited by a retracted paper are ranked above those '
-                    'who were not. It cannot '
-                    'validate the absolute level for years where nothing was '
-                    'recorded, because there is nothing to check against.'),
+            html.Li('The AUC measures discrimination, whether researchers '
+                    'who were cited by a retracted paper are ranked above '
+                    'those who were not. It cannot validate the absolute '
+                    'level for years where nothing was recorded, because '
+                    'there is nothing to check against.'),
+            html.Li('The counts come from a second, weaker model. Its mean '
+                    'error is 4.1 citations against a median true value of 2, '
+                    'so a count is a band rather than a figure. It beats the '
+                    'trivial baseline of 6.4, and it pulls large values toward '
+                    'the middle: Ioannidis is estimated at about 78 for 2022 '
+                    'and was recorded at 169 the following year.'),
+            html.Li('41% of that model\'s raw outputs were negative, which a '
+                    'citation count cannot be, and are stored as zero.'),
         ], className='ev-caveats'),
     ])
 
@@ -252,6 +267,20 @@ def _author_panel(name):
         return html.Div(f'No career record found for {name}.',
                         className='ev-note')
 
+    def _estimated_text(row):
+        """Both answers for an untracked year: whether, and roughly how many.
+
+        The count is deliberately prefixed "about" and never given a decimal.
+        Its mean absolute error on the held-out edition is 4.1 citations
+        against a median true value of 2, so it carries a band rather than a
+        figure, and it pulls high values toward the middle: Ioannidis is
+        estimated around 78 for 2022 and was recorded at 169 the next year.
+        """
+        likely = f"~{100 * row['value']:.0f}% likely"
+        if row['citations'] is None:
+            return likely
+        return f"{likely}<br>about {row['citations']:,} cites"
+
     figure = go.Figure()
     measured = [r for r in rows if r['measured']]
     estimated = [r for r in rows if not r['measured']]
@@ -267,14 +296,18 @@ def _author_panel(name):
             x=[r['data_year'] for r in estimated],
             y=[100 * r['value'] for r in estimated],
             name='Estimated likelihood',
-            text=[f"~{100 * r['value']:.0f}% likely" for r in estimated],
+            text=[_estimated_text(r) for r in estimated],
             textposition='outside',
             marker=dict(color=ESTIMATED_FILL,
                         line=dict(color=ESTIMATED, width=2),
                         pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
                                      solidity=0.25)),
-            hovertemplate='%{x}: estimated %{y:.0f}% likely to have been '
-                          'cited by a retracted paper<extra></extra>')
+            customdata=[('about {:,} citations, give or take about 4'
+                         .format(r['citations']))
+                        if r['citations'] is not None else 'count not estimated'
+                        for r in estimated],
+            hovertemplate='%{x}: estimated %{y:.0f}% likely, %{customdata}'
+                          '<extra></extra>')
     if measured:
         def _measured_text(row):
             if not row['value']:

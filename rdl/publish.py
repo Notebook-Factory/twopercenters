@@ -79,6 +79,18 @@ def publish(task: str, conn) -> int:
     frame = pd.read_parquet(PREDICTIONS_DIR / f"{task}_backfill.parquet")
     column = "probability" if "probability" in frame.columns else "value"
 
+    if column == "value":
+        # The regression head is unconstrained, so it happily predicts a
+        # negative count: 40.8% of the retraction_exposure backfill came out
+        # below zero. A count of citations cannot be negative, and storing an
+        # impossible value invites something downstream to average it. Zero
+        # is what a negative prediction means here.
+        negatives = int((frame[column] < 0).sum())
+        if negatives:
+            logger.info("clamping %d negative predictions to zero (%.1f%%)",
+                        negatives, 100 * negatives / len(frame))
+            frame[column] = frame[column].clip(lower=0)
+
     conn.execute("""
         insert into prediction_runs (task, task_type, target_column, epochs,
                                      metrics, baseline, graph_variant, notes)

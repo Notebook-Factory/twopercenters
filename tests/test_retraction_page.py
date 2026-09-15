@@ -172,3 +172,33 @@ def test_escape_closes_rather_than_toggles():
     escape_block = escape_block[:escape_block.index('document.addEventListener')]
     assert "getElementById('spotlight-close')" in escape_block
     assert "getElementById('spotlight-open')" not in escape_block
+
+
+def test_an_estimated_year_says_roughly_how_many_not_only_whether():
+    """The binary model answers "was there any"; a second regression answers
+    "how many". Only publishing the first left the estimated years saying
+    "~100% likely" beside recorded years saying "278 recorded"."""
+    import app  # noqa: F401
+    import pages.retraction as retraction
+    figure = retraction._author_panel('Ioannidis, John P.A.').children[0].figure
+    estimated = [t for t in figure.data if 'Estimated' in (t.name or '')]
+    assert estimated
+    labels = ' '.join(estimated[0].text)
+    assert 'likely' in labels and 'cites' in labels
+
+
+def test_no_published_count_is_negative():
+    """The regression head is unconstrained and produced negative counts for
+    41% of rows. A count of citations cannot be negative."""
+    from citations_lib.utils import _fetch
+    worst = _fetch("select min(value) from predictions "
+                   "where task = 'retraction_exposure'")[0][0]
+    assert worst is not None and worst >= 0
+
+
+def test_the_page_states_the_count_model_is_the_weaker_one():
+    """Its mean error is 4.1 citations against a median true value of 2. A
+    count shown without that reads as a measurement."""
+    source = open('pages/retraction.py').read()
+    assert '4.1 citations' in source
+    assert 'band rather than a figure' in source
