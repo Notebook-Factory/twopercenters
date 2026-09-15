@@ -183,7 +183,7 @@ layout = dbc.Container(fluid=True, children=[
         'how many. The decay is the signature of the subfield rule: the '
         'further down the overall ranking you go, the more exceptional you '
         'have to be within your own field to appear.',
-        className='ev-hint'), width=12)),
+        className='ev-caption'), width=12)),
     html.Br(),
 ])
 

@@ -165,12 +165,26 @@ layout = dbc.Container(fluid=True, children=[
             className='ev-lede'),
     ], width=12)),
     html.Br(),
-    dbc.Row([
-        dbc.Col(dcc.Graph(id='retraction-overview', figure=_overview_figure(),
-                          config={'displayModeBar': False}), md=8),
-        dbc.Col(html.Div(_run_summary(), className='ev-panel'), md=4),
-    ]),
-    html.Hr(),
+
+    # The search comes first, because looking up a person is what this page is
+    # for. It sat at the bottom under a second chart that looked like the one
+    # above it, so picking a researcher appeared to change a chart at the top
+    # that in fact never changes: that one is the whole list, this one is one
+    # person. Naming both sections plainly and putting the search directly
+    # above the thing it drives is the fix.
+    dbc.Row(dbc.Col(html.Div([
+        html.H5('One researcher', className='ev-subtitle'),
+        dcc.Markdown(
+            'Search by name. Add an institution to separate people who share '
+            'one, for example "Zhu Jianguo Sydney".',
+            className='ev-caption'),
+        dcc.Dropdown(id='retraction-author', options=[], multi=False,
+                     placeholder='Search researchers',
+                     value='Ioannidis, John P.A.', searchable=True),
+        html.Div(id='retraction-author-panel'),
+    ], className='ev-panel'), width=12)),
+    html.Br(),
+
     dbc.Row(dbc.Col(html.Div([
         html.Div('The three retraction columns, as the publishers define them',
                  className='ev-kicker'),
@@ -186,22 +200,23 @@ layout = dbc.Container(fluid=True, children=[
             html.Li([html.Code('nc_rw'), ' - citations they received ',
                      html.Strong('from'),
                      ' papers, by anyone, that were later retracted. This is '
-                     'what the chart above shows, and it is about who cited '
-                     'them rather than what they wrote.']),
+                     'the one charted here, and it is about who cited them '
+                     'rather than what they wrote.']),
         ], className='ev-caveats'),
     ], className='ev-panel'), width=12)),
-    html.Br(),
-    dbc.Row(dbc.Col([
-        html.H5('One researcher', className='ev-subtitle'),
-        dcc.Markdown(
-            'Search by name, or add an institution to separate people who '
-            'share one: "Zhu Jianguo Sydney".', className='ev-hint'),
-        dcc.Dropdown(id='retraction-author', options=[], multi=False,
-                     placeholder='Search researchers',
-                     value='Ioannidis, John P.A.', searchable=True),
-        html.Br(),
-        html.Div(id='retraction-author-panel'),
-    ], width=12)),
+    html.Hr(),
+
+    dbc.Row(dbc.Col(
+        html.H5('Everyone on the list', className='ev-subtitle'), width=12)),
+    dbc.Row(dbc.Col(dcc.Markdown(
+        'The share of listed researchers cited by at least one retracted '
+        'paper, per edition. This is the whole population and does not change '
+        'when you search above.', className='ev-caption'), width=12)),
+    dbc.Row([
+        dbc.Col(dcc.Graph(id='retraction-overview', figure=_overview_figure(),
+                          config={'displayModeBar': False}), md=8),
+        dbc.Col(html.Div(_run_summary(), className='ev-panel'), md=4),
+    ]),
     html.Br(),
 ])
 
@@ -226,39 +241,65 @@ def _author_panel(name):
     figure = go.Figure()
     measured = [r for r in rows if r['measured']]
     estimated = [r for r in rows if not r['measured']]
+
+    # A recorded fact and a likelihood are different kinds of statement, and
+    # drawing both as a bar height put them on a scale that does not exist: a
+    # year where retraction was simply recorded became "100%" and stood beside
+    # a 74% estimate as though the two were the same measurement. Every bar
+    # now says in words which it is, so its height is never read alone, and
+    # the axis ticks are gone because there is no single quantity to tick.
     if estimated:
         figure.add_bar(
             x=[r['data_year'] for r in estimated],
             y=[100 * r['value'] for r in estimated],
-            name='Estimated likelihood of exposure',
+            name='Estimated likelihood',
+            text=[f"~{100 * r['value']:.0f}% likely" for r in estimated],
+            textposition='outside',
             marker=dict(color=ESTIMATED_FILL,
                         line=dict(color=ESTIMATED, width=2),
                         pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
                                      solidity=0.25)),
-            hovertemplate='%{x}: %{y:.0f}% estimated likelihood'
-                          '<extra></extra>')
+            hovertemplate='%{x}: estimated %{y:.0f}% likely to have been '
+                          'cited by a retracted paper<extra></extra>')
     if measured:
         figure.add_bar(
             x=[r['data_year'] for r in measured],
-            y=[100 if r['value'] else 0 for r in measured],
-            name='Measured: exposure recorded',
+            # A short stub rather than zero, so a "none recorded" year is
+            # visibly present and answered rather than looking like missing
+            # data, which is the state this whole page is about.
+            y=[100 if r['value'] else 7 for r in measured],
+            name='Recorded in the published data',
+            text=['recorded' if r['value'] else 'none recorded'
+                  for r in measured],
+            textposition='outside',
             marker=dict(color=MEASURED),
-            hovertemplate='%{x}: %{customdata}<extra></extra>',
-            customdata=['exposure recorded' if r['value'] else 'none recorded'
-                        for r in measured])
+            customdata=['cited by a retracted paper' if r['value']
+                        else 'not cited by any retracted paper'
+                        for r in measured],
+            hovertemplate='%{x}: %{customdata}, recorded<extra></extra>')
+
     figure.update_layout(
         template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)', height=300,
         margin=dict(l=40, r=20, t=30, b=40),
         legend=dict(orientation='h', y=-0.2),
-        yaxis=dict(title='%', range=[0, 105]), xaxis_title=None)
+        yaxis=dict(title=None, range=[0, 128], showticklabels=False,
+                   showgrid=False),
+        xaxis=dict(title=None, dtick=1))
 
-    known = ', '.join(str(r['data_year']) for r in measured) or 'none'
-    guessed = ', '.join(str(r['data_year']) for r in estimated) or 'none'
+    known = ', '.join(str(r['data_year']) for r in measured)
+    guessed = ', '.join(str(r['data_year']) for r in estimated)
+    if estimated:
+        note = (f'Recorded in {known}. Estimated for {guessed}, where the '
+                f'published data records nothing.')
+    else:
+        # Not a gap in the estimates: this researcher has no rows at all in
+        # the untracked editions, so there is nothing to estimate. "Estimated
+        # for none" made that read as a failure of the model.
+        note = (f'Recorded in {known}. This researcher does not appear in the '
+                f'2017-2022 editions, so there is nothing to estimate for '
+                f'them.')
     return html.Div([
         dcc.Graph(figure=figure, config={'displayModeBar': False}),
-        dcc.Markdown(
-            f'**{name}**. Measured in {known}. Estimated for {guessed}, '
-            f'where the published data records nothing.',
-            className='ev-hint'),
+        dcc.Markdown(f'**{name}**. {note}', className='ev-caption'),
     ])

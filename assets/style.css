@@ -2619,3 +2619,16 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
     var(--ev-shadow),
     inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent);
 }
+
+/* ====== Caption text ======
+   NOT .ev-hint. That name was already taken by the floating card over the
+   world map, which is position:absolute with its own background, so reusing
+   it turned every caption on the new pages into a card floating over
+   whatever happened to be beneath it. This is plain small text and nothing
+   else. */
+.ev-caption {
+  color: var(--ev-text-muted);
+  font-size: .88rem;
+  max-width: 78ch;
+}
+.ev-caption p:last-child { margin-bottom: 0; }
