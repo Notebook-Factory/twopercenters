@@ -1,5 +1,18 @@
 """Retraction exposure, including six years that were never recorded.
 
+What the column means, because the name invites a wrong reading. The
+publishers define it as "total cites 1996-2024 from papers (by any author)
+marked as Retraction in RWDB": citations a researcher RECEIVED where the
+CITING paper was later retracted. It is not a measure of their own conduct.
+The database records that separately, in np_rw, and only 3 to 4% of listed
+researchers have any. This column is 71 to 76% non-zero, because with
+thousands of citations having at least one come from a paper that was later
+withdrawn is close to unavoidable. It mostly tracks being highly cited.
+
+That distinction is the reason the page spends as much space defining the
+quantity as charting it. A figure that reads as an accusation when it is not
+one does more harm than a figure nobody looks at.
+
 The three retraction columns arrived with Mendeley version 7. career-2023 and
 career-2024 carry them; career-2017 through career-2022 carry nothing at all,
 because tracking began in 2024, not because nothing had been retracted. That
@@ -17,8 +30,7 @@ which.
 
 The model's own score sits beside the chart rather than in a footnote. It was
 trained on career-2023 and evaluated on career-2024, an edition it never saw,
-where it reached ROC AUC 0.872 against 0.5 for chance. That number is the
-honest measure of how much weight these estimates carry, and it measures
+where it reached ROC AUC 0.872 against 0.5 for chance. That number measures
 discrimination only: whether the model ranks exposed researchers above
 unexposed ones. Nothing here can validate the absolute level for years where
 the truth was never recorded, and the page says so.
@@ -74,8 +86,9 @@ def _run_summary():
                 f'{majority:.1%} of the time, which is why accuracy is the '
                 f'wrong measure here and AUC is quoted instead.'
                 if majority else ''),
-            html.Li('This measures discrimination, whether exposed '
-                    'researchers are ranked above unexposed ones. It cannot '
+            html.Li('This measures discrimination, whether researchers who '
+                    'were cited by a retracted paper are ranked above those '
+                    'who were not. It cannot '
                     'validate the absolute level for years where nothing was '
                     'recorded, because there is nothing to check against.'),
         ], className='ev-caveats'),
@@ -98,14 +111,14 @@ def _overview_figure():
                     line=dict(color=ESTIMATED, width=2),
                     pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
                                  solidity=0.25)),
-        hovertemplate='%{x}: %{y:.1f}% estimated exposed<extra></extra>',
+        hovertemplate='%{x}: %{y:.1f}% estimated to have been cited by a retracted paper<extra></extra>',
     )
     figure.add_bar(
         x=[r['data_year'] for r in measured],
         y=[100 * r['share'] for r in measured],
         name='Measured (published)',
         marker=dict(color=MEASURED),
-        hovertemplate='%{x}: %{y:.1f}% measured exposed<extra></extra>',
+        hovertemplate='%{x}: %{y:.1f}% measured, cited by a retracted paper<extra></extra>',
     )
     if measured:
         boundary = min(r['data_year'] for r in measured) - 0.5
@@ -119,7 +132,8 @@ def _overview_figure():
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=40, r=20, t=40, b=40), height=360,
         legend=dict(orientation='h', y=-0.18),
-        yaxis_title='Researchers with any exposure (%)', xaxis_title=None,
+        yaxis_title='Cited by at least one retracted paper (%)',
+        xaxis_title=None,
     )
     return figure
 
@@ -129,15 +143,25 @@ layout = dbc.Container(fluid=True, children=[
     dbc.Row(dbc.Col([
         html.H3('Retraction exposure', className='ev-title'),
         dcc.Markdown(
-            'Whether a researcher has received citations from work that was '
-            'later retracted. The published databases record this for **2023 '
-            'and 2024 only**: tracking began with the seventh release, so the '
-            'six earlier editions carry nothing at all. That is **955,512 '
-            'author-editions** with a blank where a number should be.\n\n'
-            'The blanks below are filled by a model trained on 2023 and '
-            'tested on 2024. **They are estimates, not measurements**, and '
-            'are drawn differently throughout so the two can never be '
-            'mistaken for each other.',
+            'The publishers define this column as **"total cites 1996-2024 '
+            'from papers (by any author) marked as Retraction in RWDB"**. '
+            'Read that carefully: it counts citations a researcher '
+            '*received*, where the **citing** paper was later retracted.\n\n'
+            'It is **not** a measure of their own conduct. It does not say '
+            'they retracted anything; the database records that separately. '
+            'Someone else cited them, and that someone else\'s paper was '
+            'later withdrawn. With thousands of citations, having at least '
+            'one is close to unavoidable, which is why **71 to 76% of listed '
+            'researchers have a non-zero value**. A high count mostly tracks '
+            'being highly cited.\n\n'
+            'The published databases record this for **2023 and 2024 only**: '
+            'tracking began with the seventh release, so the six earlier '
+            'editions carry nothing at all. That is **955,512 '
+            'author-editions** with a blank where a number should be. The '
+            'blanks below are filled by a model trained on 2023 and tested '
+            'on 2024. **They are estimates, not measurements**, and are '
+            'drawn differently throughout so the two can never be mistaken '
+            'for each other.',
             className='ev-lede'),
     ], width=12)),
     html.Br(),
@@ -147,6 +171,26 @@ layout = dbc.Container(fluid=True, children=[
         dbc.Col(html.Div(_run_summary(), className='ev-panel'), md=4),
     ]),
     html.Hr(),
+    dbc.Row(dbc.Col(html.Div([
+        html.Div('The three retraction columns, as the publishers define them',
+                 className='ev-kicker'),
+        html.Ul([
+            html.Li([html.Code('np_rw'), ' - papers ',
+                     html.Strong('by this author'),
+                     ' marked as Retraction. This is the one about their own '
+                     'work, and only 3 to 4% of listed researchers have any.'
+                     ]),
+            html.Li([html.Code('nc_to_rw'), ' - citations ',
+                     html.Strong('to'),
+                     ' those retracted papers of theirs. Also 3 to 4%.']),
+            html.Li([html.Code('nc_rw'), ' - citations they received ',
+                     html.Strong('from'),
+                     ' papers, by anyone, that were later retracted. This is '
+                     'what the chart above shows, and it is about who cited '
+                     'them rather than what they wrote.']),
+        ], className='ev-caveats'),
+    ], className='ev-panel'), width=12)),
+    html.Br(),
     dbc.Row(dbc.Col([
         html.H5('One researcher', className='ev-subtitle'),
         dcc.Markdown(

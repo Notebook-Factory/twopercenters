@@ -935,6 +935,13 @@ spotlight = dbc.Modal(
                     ],
                     className="ev-spotlight-hint",
                 ),
+                # "esc to close" told a reader how to leave but gave them
+                # nothing to click, which is a keyboard instruction standing
+                # in for a control. Anyone reaching for a mouse, or on a
+                # touch screen where there is no esc key at all, was stuck.
+                html.Button("\u00d7", id="spotlight-close", n_clicks=0,
+                            title="Close", **{"aria-label": "Close search"},
+                            className="ev-overlay-close"),
             ],
             className="ev-spotlight-body",
         ),
@@ -979,15 +986,18 @@ def spotlight_results(term):
 @callback(
     Output("spotlight", "is_open"),
     Input("spotlight-open", "n_clicks"),
+    Input("spotlight-close", "n_clicks"),
     Input({"type": "spotlight-hit", "index": ALL}, "n_clicks"),
     State("spotlight", "is_open"),
     prevent_initial_call=True,
 )
-def toggle_spotlight(_clicks, hits, is_open):
-    """Open on the navbar button, close once a result has been clicked."""
+def toggle_spotlight(_clicks, _close, hits, is_open):
+    """Open on the navbar button, close on the X or once a result is picked."""
     triggered = callback_context.triggered_id
     if triggered == "spotlight-open":
         return not is_open
+    if triggered == "spotlight-close":
+        return False
     if isinstance(triggered, dict) and any(hits or []):
         return False
     raise PreventUpdate

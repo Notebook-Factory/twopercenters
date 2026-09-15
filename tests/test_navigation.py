@@ -49,3 +49,18 @@ def test_the_links_are_named_not_pathed():
     """A nav reading '/ranking' tells a reader nothing."""
     for label, href in _nav_links():
         assert label and not label.startswith('/'), (label, href)
+
+
+def test_the_spotlight_overlay_has_a_close_control():
+    """"esc to close" is an instruction, not a control. It leaves anyone on a
+    mouse, or a touch screen with no esc key, with no way out of the
+    overlay."""
+    source = open("pages/home.py").read()
+    assert 'id="spotlight-close"' in source
+    assert 'ev-overlay-close' in source
+    assert 'Input("spotlight-close", "n_clicks")' in source
+
+
+def test_the_close_control_is_labelled_for_a_screen_reader():
+    source = open("pages/home.py").read()
+    assert 'aria-label' in source

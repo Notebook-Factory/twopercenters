@@ -2534,3 +2534,88 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   background: var(--ev-surface);
   text-decoration: none;
 }
+
+/* ====== Glass overlays ======
+   The spotlight and the intro panel sit on top of the dashboard, so they
+   should read as a pane of glass over it rather than an opaque card that
+   hides it. Three things together make that work, and all three are needed:
+   a background that is genuinely translucent, a blur behind it so what shows
+   through is suggestion rather than clutter, and a light top edge so the
+   pane catches an implied light source and does not look like a hole.
+
+   The translucency is deliberately kept above 70% opaque. Any thinner and
+   the text behind starts competing with the text in front, which is the
+   usual way this effect turns unreadable.
+
+   backdrop-filter is unsupported in a few engines and degrades to a plain
+   translucent panel there, which is why the background colour alone is still
+   legible. */
+.ev-spotlight,
+.ev-intro {
+  background-color: color-mix(in srgb, var(--ev-surface) 74%, transparent);
+  backdrop-filter: blur(26px) saturate(165%);
+  -webkit-backdrop-filter: blur(26px) saturate(165%);
+  border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 16%, transparent);
+}
+
+.ev-spotlight { border-radius: 18px; }
+
+/* The offcanvas is anchored to an edge, so it keeps square outer corners and
+   only rounds the edge that floats over the page. */
+.ev-intro {
+  border-right: none;
+  border-radius: 0 0 0 18px;
+}
+
+/* The backdrop is part of the effect: too dark and the blur has nothing to
+   work with, since there is nothing left to see through the glass. */
+.modal-backdrop.show,
+.offcanvas-backdrop.show { opacity: 0.38; }
+
+/* ====== The close control on an overlay ======
+   "esc to close" is an instruction, not a control. It leaves anyone using a
+   mouse, or a touch screen with no esc key, with no way out. */
+.ev-overlay-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--ev-text-muted);
+  background: color-mix(in srgb, #ffffff 8%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 12%, transparent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease;
+}
+.ev-overlay-close:hover {
+  color: var(--ev-text);
+  background: color-mix(in srgb, #ffffff 16%, transparent);
+}
+.ev-overlay-close:focus-visible {
+  outline: 2px solid var(--ev-accent);
+  outline-offset: 2px;
+}
+
+/* The body is positioned so the close control can sit inside it. */
+.ev-spotlight-body { position: relative; }
+
+/* The panels on the retraction and ranking pages get the same glass, at a
+   lower intensity: they sit in the page rather than over it. */
+.ev-panel {
+  background: color-mix(in srgb, var(--ev-surface) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in srgb, #ffffff 10%, transparent);
+  box-shadow:
+    var(--ev-shadow),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent);
+}

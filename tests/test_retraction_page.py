@@ -79,3 +79,27 @@ def test_publishing_refuses_a_run_with_no_evaluation():
         validate({"task": "x", "metrics": {}, "baseline": {}})
     with pytest.raises(ValueError, match="baseline"):
         validate({"task": "x", "metrics": {"roc_auc": 0.9}})
+
+
+def test_the_page_says_what_the_column_actually_counts():
+    """nc_rw counts citations RECEIVED where the CITING paper was retracted.
+    Calling that "exposure" without unpacking it invites a reader to think a
+    listed researcher retracted something, which the data does not say and
+    which np_rw records separately. 71 to 76% have a non-zero value; framed
+    carelessly that reads as an accusation against three quarters of the
+    field."""
+    source = open("pages/retraction.py").read()
+    assert 'by any author' in source
+    assert 'not** a measure of their own conduct' in source
+    assert 'np_rw' in source and 'nc_to_rw' in source
+
+
+def test_no_chart_label_calls_a_researcher_exposed():
+    """The axis and hover text are what a reader screenshots, so they carry
+    the careful wording rather than the shorthand."""
+    import app  # noqa: F401
+    import pages.retraction as retraction
+    figure = retraction._overview_figure()
+    assert 'retracted paper' in figure.layout.yaxis.title.text
+    for trace in figure.data:
+        assert 'exposed<' not in (trace.hovertemplate or '')
