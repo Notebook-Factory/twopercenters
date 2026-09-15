@@ -35,6 +35,10 @@ dash.register_page(__name__, path='/ranking', name='How the list is built',
 FULL = '#00B4D8'        # --ev-accent, bands that are wholly present
 PARTIAL = '#F09048'     # --ev-orange, bands that are only partly present
 MUTED = '#A8B2C4'       # --ev-text-muted
+# See pages/retraction.py: plotly takes a hover label's background from the
+# trace's marker colour, which makes a pale bar's tooltip unreadable.
+HOVER = dict(bgcolor='#303C54', bordercolor='#4A5670',
+             font=dict(color='#E8ECF2', size=12))
 
 
 def _years():
@@ -92,6 +96,7 @@ def _coverage_figure(year, highlight=None):
         yaxis=dict(title='Share of that rank range on the list (%)',
                    range=[0, 108]),
         xaxis=dict(title='Overall rank among all scientists scored'),
+        hoverlabel=HOVER,
     )
     figure.add_annotation(
         xref='paper', x=0.02, yref='y', y=104, showarrow=False,

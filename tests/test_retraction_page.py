@@ -232,3 +232,30 @@ def test_the_estimated_population_mean_is_below_the_measured_one():
     estimated = [r['mean'] for r in rows if not r['measured']]
     measured = [r['mean'] for r in rows if r['measured']]
     assert max(estimated) < min(measured)
+
+
+def test_hover_labels_are_readable_on_the_pale_bars():
+    """Plotly takes a hover label's background from the trace's marker
+    colour. The estimated bars are a pale translucent grey, so their tooltip
+    came out near-white with white text on it and could not be read."""
+    import app  # noqa: F401
+    import pages.ranking as ranking
+    import pages.retraction as retraction
+    figures = [retraction._overview_figure(), retraction._counts_figure(),
+               retraction._author_panel('Ioannidis, John P.A.').children[0].figure,
+               ranking._coverage_figure(2019)]
+    for figure in figures:
+        label = figure.layout.hoverlabel
+        assert label.bgcolor == '#303C54', figure.layout.title
+        assert label.font.color == '#E8ECF2'
+
+
+def test_the_population_charts_show_their_numbers_without_a_hover():
+    """A value nobody can read without hovering is a value most readers never
+    see, and it is invisible in a screenshot."""
+    import app  # noqa: F401
+    import pages.retraction as retraction
+    for figure in (retraction._overview_figure(), retraction._counts_figure()):
+        for trace in figure.data:
+            assert trace.text, trace.name
+            assert trace.textposition == 'outside'

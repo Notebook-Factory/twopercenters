@@ -60,6 +60,15 @@ ESTIMATED = '#A8B2C4'       # --ev-text-muted
 # pattern carries the same "this one is not solid ground" reading and
 # survives being printed or screenshotted in greyscale.
 ESTIMATED_FILL = 'rgba(168,178,196,0.30)'
+
+# Plotly derives a hover label's background from the trace's marker colour.
+# The estimated bars are a pale translucent grey, so their tooltip came out
+# near-white with white text on it and was unreadable. Pinning the label to
+# the page's own recessed navy fixes every trace at once, and has to be
+# repeated on each figure because it is a layout property rather than a
+# theme one.
+HOVER = dict(bgcolor='#303C54', bordercolor='#4A5670',
+             font=dict(color='#E8ECF2', size=12))
 TASK = 'retraction_exposed'
 DEFAULT_AUTHOR = 'Ioannidis, John P.A.'
 
@@ -124,6 +133,8 @@ def _overview_figure():
         x=[r['data_year'] for r in estimated],
         y=[100 * r['share'] for r in estimated],
         name='Estimated (never recorded)',
+        text=[f"{100 * r['share']:.0f}%" for r in estimated],
+        textposition='outside',
         marker=dict(color=ESTIMATED_FILL,
                     line=dict(color=ESTIMATED, width=2),
                     pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
@@ -134,6 +145,8 @@ def _overview_figure():
         x=[r['data_year'] for r in measured],
         y=[100 * r['share'] for r in measured],
         name='Measured (published)',
+        text=[f"{100 * r['share']:.0f}%" for r in measured],
+        textposition='outside',
         marker=dict(color=MEASURED),
         hovertemplate='%{x}: %{y:.1f}% measured, cited by a retracted paper<extra></extra>',
     )
@@ -149,8 +162,9 @@ def _overview_figure():
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=40, r=20, t=40, b=40), height=360,
         legend=dict(orientation='h', y=-0.18),
+        yaxis=dict(range=[0, 100]),
         yaxis_title='Cited by at least one retracted paper (%)',
-        xaxis_title=None,
+        xaxis_title=None, hoverlabel=HOVER,
     )
     return figure
 
@@ -205,7 +219,7 @@ def _counts_figure():
         # label was clipped by the plot edge.
         yaxis=dict(title='Mean citations from retracted papers',
                    range=[0, max(r['mean'] for r in rows) * 1.25]),
-        xaxis=dict(title=None, dtick=1))
+        xaxis=dict(title=None, dtick=1), hoverlabel=HOVER)
     return figure
 
 
@@ -416,7 +430,7 @@ def _author_panel(name):
         legend=dict(orientation='h', y=-0.2),
         yaxis=dict(title='Likelihood of any', range=[0, 132],
                    showticklabels=False, showgrid=False),
-        xaxis=dict(title=None, dtick=1))
+        xaxis=dict(title=None, dtick=1), hoverlabel=HOVER)
 
     known = ', '.join(str(r['data_year']) for r in measured)
     guessed = ', '.join(str(r['data_year']) for r in estimated)
