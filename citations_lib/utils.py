@@ -648,6 +648,34 @@ def retraction_by_edition(task):
     return sorted(rows, key=lambda r: r['data_year'])
 
 
+def retraction_counts_by_edition(task='retraction_exposure'):
+    """Mean citations from retracted papers per researcher, per data year.
+
+    The companion to retraction_by_edition, which reports how many
+    researchers have any. This reports how many citations are involved, which
+    is the quantity a reader asks for next.
+
+    Measured years come from career_metrics.nc_rw; estimated years from the
+    regression's published output. `measured` says which, and the step
+    between the two at the tracking boundary is the regression being
+    conservative rather than a real jump. Anything drawing this has to say
+    so.
+    """
+    measured = _fetch(
+        "select e.data_year, avg(m.nc_rw) "
+        "from career_metrics m join editions e using (edition_id) "
+        "where m.nc_rw is not null group by e.data_year")
+    estimated = _fetch(
+        "select e.data_year, avg(p.value) "
+        "from predictions p join editions e using (edition_id) "
+        "where p.task = %s group by e.data_year", (task,))
+    rows = ([{'data_year': int(y), 'mean': float(v), 'measured': True}
+             for y, v in measured]
+            + [{'data_year': int(y), 'mean': float(v), 'measured': False}
+               for y, v in estimated])
+    return sorted(rows, key=lambda r: r['data_year'])
+
+
 def retraction_for_author(authfull, task):
     """One researcher's exposure across every career edition.
 

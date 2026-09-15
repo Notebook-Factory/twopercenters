@@ -46,6 +46,7 @@ from dash import Input, Output, State, callback, dcc, html
 
 from citations_lib.utils import (author_options, get_es_results,
                                  prediction_run, retraction_by_edition,
+                                 retraction_counts_by_edition,
                                  retraction_for_author)
 
 dash.register_page(__name__, path='/retraction', name='Retraction exposure',
@@ -154,6 +155,60 @@ def _overview_figure():
     return figure
 
 
+def _counts_figure():
+    """How many citations, not how many researchers.
+
+    Same measured/estimated language as the chart beside it. The step at the
+    tracking boundary is the regression pulling large values toward the
+    middle, not retractions doubling in 2023, and the caption under the chart
+    says exactly that: a reader who reads the step as real would draw the
+    wrong conclusion from an honest chart.
+    """
+    rows = retraction_counts_by_edition()
+    if not rows:
+        return go.Figure()
+    measured = [r for r in rows if r['measured']]
+    estimated = [r for r in rows if not r['measured']]
+
+    figure = go.Figure()
+    figure.add_bar(
+        x=[r['data_year'] for r in estimated],
+        y=[r['mean'] for r in estimated],
+        name='Estimated',
+        text=[f"{r['mean']:.1f}" for r in estimated],
+        textposition='outside',
+        marker=dict(color=ESTIMATED_FILL,
+                    line=dict(color=ESTIMATED, width=2),
+                    pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
+                                 solidity=0.25)),
+        hovertemplate='%{x}: about %{y:.1f} citations per researcher, '
+                      'estimated<extra></extra>')
+    figure.add_bar(
+        x=[r['data_year'] for r in measured],
+        y=[r['mean'] for r in measured],
+        name='Measured',
+        text=[f"{r['mean']:.1f}" for r in measured],
+        textposition='outside',
+        marker=dict(color=MEASURED),
+        hovertemplate='%{x}: %{y:.2f} citations per researcher, '
+                      'recorded<extra></extra>')
+    if measured:
+        boundary = min(r['data_year'] for r in measured) - 0.5
+        figure.add_vline(x=boundary, line=dict(color=ESTIMATED, dash='dot'))
+    figure.update_layout(
+        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)', height=300,
+        margin=dict(l=40, r=20, t=30, b=40),
+        legend=dict(orientation='h', y=-0.22),
+        # textposition='outside' draws the value above the bar, and plotly
+        # does not extend the axis to make room for it, so the tallest bar's
+        # label was clipped by the plot edge.
+        yaxis=dict(title='Mean citations from retracted papers',
+                   range=[0, max(r['mean'] for r in rows) * 1.25]),
+        xaxis=dict(title=None, dtick=1))
+    return figure
+
+
 layout = dbc.Container(fluid=True, children=[
     html.Br(),
     dbc.Row(dbc.Col([
@@ -239,6 +294,21 @@ layout = dbc.Container(fluid=True, children=[
                           config={'displayModeBar': False}), md=8),
         dbc.Col(html.Div(_run_summary(), className='ev-panel'), md=4),
     ]),
+    html.Br(),
+    dbc.Row(dbc.Col([
+        dcc.Markdown(
+            'And how many citations that involves, per researcher.',
+            className='ev-caption'),
+        dcc.Graph(id='retraction-counts', figure=_counts_figure(),
+                  config={'displayModeBar': False}),
+        dcc.Markdown(
+            'The step at the boundary is **the model being cautious, not '
+            'retractions doubling in 2023**. The regression pulls large '
+            'values toward the middle, so the estimated years sit low: they '
+            'average about 3 citations against 5.5 recorded in 2023. Read '
+            'the estimated bars as a floor rather than a level.',
+            className='ev-caption'),
+    ], width=12)),
     html.Br(),
 ])
 

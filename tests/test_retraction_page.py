@@ -202,3 +202,33 @@ def test_the_page_states_the_count_model_is_the_weaker_one():
     source = open('pages/retraction.py').read()
     assert '4.1 citations' in source
     assert 'band rather than a figure' in source
+
+
+def test_the_population_view_reports_citation_counts_too():
+    """"How many researchers" and "how many citations" are different
+    questions and the page answers both."""
+    from citations_lib.utils import retraction_counts_by_edition
+    rows = retraction_counts_by_edition()
+    years = {r['data_year'] for r in rows}
+    assert years == set(range(2017, 2025))
+    measured = {r['data_year'] for r in rows if r['measured']}
+    assert measured == {2023, 2024}
+
+
+def test_the_step_at_the_boundary_is_explained_not_left_hanging():
+    """Estimated years average about 3 citations against 5.5 recorded in
+    2023. A reader who takes that step as real concludes retractions doubled,
+    when it is the regression pulling large values toward the middle."""
+    source = open('pages/retraction.py').read()
+    assert 'not' in source and 'retractions doubling in 2023' in source
+    assert 'floor rather than a level' in source
+
+
+def test_the_estimated_population_mean_is_below_the_measured_one():
+    """The conservatism the caption describes, asserted against the data so
+    the caption cannot quietly stop being true."""
+    from citations_lib.utils import retraction_counts_by_edition
+    rows = retraction_counts_by_edition()
+    estimated = [r['mean'] for r in rows if not r['measured']]
+    measured = [r['mean'] for r in rows if r['measured']]
+    assert max(estimated) < min(measured)
