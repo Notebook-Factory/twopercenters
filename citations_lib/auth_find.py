@@ -1005,7 +1005,14 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 // barGap -100% overlays this on the band instead of letting
                 // echarts set it beside as a second bar group, which is what
                 // put every value bar below the band it belongs to.
+                // The bar sits in a track that runs the full width of the
+                // axis, so the edition maximum is a visible edge every row
+                // ends against. Without it a bar just stopped somewhere and
+                // there was nothing to read its length against.
                 {type: 'bar', barWidth: 8, barGap: '-100%', z: 3,
+                 showBackground: true,
+                 backgroundStyle: {color: band, opacity: 0.65,
+                                   borderRadius: 2},
                  itemStyle: {color: accent, borderRadius: 2},
                  data: rows.map(function (r) {
                      return r.composite
@@ -1049,9 +1056,10 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                           textStyle: {color: '#E8ECF2', fontSize: 12}},
                 xAxis: {type: 'value', min: 0, max: 1, position: 'top',
                     axisLine: {show: false}, axisTick: {show: false},
-                    axisLabel: {color: muted, fontSize: 10, formatter:
-                        function (v) { return v === 1 ? 'edition max' : ''; }},
-                    splitLine: {lineStyle: {color: band, opacity: 0.3}}},
+                    axisLabel: {color: muted, fontSize: 10, align: 'right',
+                        formatter: function (v) {
+                            return v === 1 ? 'edition max' : ''; }},
+                    splitLine: {show: false}},
                 yAxis: {type: 'category', inverse: true,
                     data: rows.map(function (r) {
                         return r.composite ? {value: r.label, textStyle:
