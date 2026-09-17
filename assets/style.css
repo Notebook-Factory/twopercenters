@@ -2776,42 +2776,6 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    focused input. Cyan stays the colour of what the publishers actually
    printed, so a reader can tell at a glance which they are looking at. */
 
-.ev-whatif-cell {
-  /* Below the gauge, never over it: the plotly figure is a fixed 200px and
-     a negative margin here put the box on top of the arc. */
-  margin: .25rem auto 1rem;
-  max-width: 190px;
-  text-align: center;
-}
-.ev-whatif-input {
-  background: var(--ev-bg-deep) !important;
-  color: var(--ev-text) !important;
-  border: 1px solid var(--ev-surface-2) !important;
-  border-radius: var(--ev-radius) !important;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  font-size: 1rem;
-  padding: .35rem .5rem !important;
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-.ev-whatif-input:focus {
-  border-color: #D86CB4 !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #D86CB4 22%, transparent) !important;
-  outline: none;
-}
-/* A disabled box is still worth reading: it is the published value. It just
-   must not look like somewhere to type. */
-.ev-whatif-input:disabled {
-  opacity: .55;
-  cursor: not-allowed;
-}
-.ev-whatif-label {
-  color: var(--ev-text-muted);
-  font-size: .72rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  margin-top: .3rem;
-}
 .ev-whatif-note {
   color: var(--ev-text-muted);
   font-size: .82rem;
@@ -3192,4 +3156,49 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   border-bottom: none;
   border-radius: 8px 8px 0 0;
   opacity: .7;
+}
+
+/* ==========================================================================
+   The bullet rows in the author card
+   ==========================================================================
+   Six half-donut gauges in a 3x2 grid became six rows on one axis. The gauges
+   each had their own scale -- 250k for citations, 200 for the h-index, 80 for
+   hm -- so nothing could be read across them, and the group median was a 3px
+   tick near zero on the wide ones. Every row here is that indicator's term in
+   the composite score, so one axis serves all six and they add up to the
+   number the formula produces.
+
+   The geometry is shared with the drawing callback in auth_find.py: rows are
+   34px apart starting 26px down, and the input column below positions its
+   boxes to match. If one changes the other has to. */
+.ev-bullets {
+  position: relative;
+  margin-top: .9rem;
+  padding-top: .8rem;
+  border-top: 1px solid color-mix(in srgb, var(--ev-surface-2) 60%, transparent);
+}
+.ev-bullet-chart {
+  /* 26 top + six 34px rows + 8 bottom. */
+  height: 238px;
+  width: 100%;
+}
+
+/* The boxes are the readout as well as the control: the value used to appear
+   twice, once inside the gauge arc and again in a box underneath it. */
+.ev-bullet-inputs {
+  position: absolute;
+  right: 0;
+  /* 26px grid offset + (34 - 26) / 2 to centre the box on its row, plus the
+     8px of padding on the container above. */
+  top: calc(.8rem + 30px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 104px;
+}
+.ev-bullet-inputs > div { height: 26px; }
+.ev-bullet-inputs .ev-whatif-input {
+  height: 26px;
+  padding: 0 .5rem !important;
+  font-size: .82rem;
 }

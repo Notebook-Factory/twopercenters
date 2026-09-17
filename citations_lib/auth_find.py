@@ -139,6 +139,55 @@ def gauge_figure(title, value, max_metric, whatif=False, reference=None):
     return fig
 
 
+def bullet_rows(values, maxima, quartiles):
+    """One row per indicator for the bullet chart in the author card.
+
+    The six gauges this replaces each had their own axis -- 250k for
+    citations, 200 for the h-index, 80 for hm -- so nothing could be compared
+    across them and the group median landed as a 3px tick near zero on the
+    wide ones.
+
+    Every row here is that indicator's own term in the composite score,
+    ln(v+1)/ln(max+1), which is between 0 and 1 for all six and sums to the
+    published score. So one axis serves all of them, the median sits where it
+    can be seen, and the parts visibly add up to the number the formula under
+    the card produces.
+    """
+    rows = []
+    for metric, label in WHATIF_METRICS:
+        ceiling = maxima.get(metric)
+        value = values.get(metric)
+        if not ceiling or value is None:
+            continue
+
+        def share(x):
+            return math.log(max(float(x), 0.0) + 1) / math.log(ceiling + 1)
+
+        quarters = quartiles.get(metric) or {}
+        rows.append({
+            'key': metric,
+            'label': label,
+            'value': float(value),
+            'share': round(share(value), 4),
+            'q1': round(share(quarters.get('q1') or 0), 4),
+            'median': round(share(quarters.get('median') or 0), 4),
+            'q3': round(share(quarters.get('q3') or 0), 4),
+            'median_raw': quarters.get('median'),
+        })
+    return rows
+
+
+def bullet_payload(rows, group_label, whatif=False, published=None):
+    """What the clientside bullet chart draws.
+
+    `published` is the untouched set of rows, carried only in what-if mode so
+    each bar can show where the real value sat before the reader moved it.
+    """
+    return {'rows': rows, 'group': str(group_label or ''),
+            'whatif': bool(whatif),
+            'published': published if whatif else None}
+
+
 def gauge_legend(group_label):
     """What the gauges are measured against, in words and in colour.
 
@@ -614,6 +663,18 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             html.Div(id = 'rankDisplay' + SUFFIX, className = 'ev-id-ranks'),
             html.Div(id = 'rankChart' + SUFFIX, className = 'ev-rank-chart'),
         ], className = 'ev-id-body'),
+        # The six indicators. The chart div is static for the same reason
+        # #rankChart is: echarts attaches an instance to the element, and an
+        # element Dash replaces on every author change is an element that
+        # instance no longer points at. The input column beside it IS rebuilt
+        # per author, because its values, caps and steps are the author's.
+        html.Div([
+            html.Div(id = 'bulletChart' + SUFFIX, className = 'ev-bullet-chart'),
+            html.Div(id = 'bulletInputs' + SUFFIX,
+                     className = 'ev-bullet-inputs'),
+        ], className = 'ev-bullets'),
+        dcc.Store(id = 'bulletStore' + SUFFIX),
+        html.Div(id = 'bulletSink' + SUFFIX, style = {'display': 'none'}),
         html.Div(id = 'cardChips' + SUFFIX, className = 'ev-id-chips'),
         share_row(SUFFIX),
         dcc.Store(id = 'shareStore' + SUFFIX),
@@ -630,9 +691,13 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         function (payload, elementId) {
             var el = document.getElementById(elementId);
             if (!el || !window.echarts) { return ''; }
+
+            // See the bullet chart above: named so a theme change can re-run
+            // it, because the colours are read from CSS at draw time.
+            function draw() {
             var chart = window.echarts.getInstanceByDom(el)
                         || window.echarts.init(el, null, {renderer: 'svg'});
-            if (!payload) { chart.clear(); return ''; }
+            if (!payload) { chart.clear(); return; }
 
             var css = getComputedStyle(document.documentElement);
             function token(name, fallback) {
@@ -721,6 +786,12 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 ]
             }, true);
             chart.resize();
+            }
+
+            el.__evRedraw = draw;
+            window.__evCharts = window.__evCharts || [];
+            if (window.__evCharts.indexOf(el) < 0) { window.__evCharts.push(el); }
+            draw();
             return '';
         }
         """,
@@ -896,6 +967,145 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         State('rankChartStore' + SUFFIX, 'data'),
         prevent_initial_call=True)
 
+    # The bullet rows.
+    #
+    # Drawn in the browser so a what-if keystroke redraws without waiting on a
+    # figure to come back over the wire, and so the colours can be read from
+    # the CSS custom properties at draw time, which means the chart follows a
+    # theme switch where the server-rendered plotly figures cannot.
+    #
+    # The geometry here is shared with assets/style.css: ROW and TOP set where
+    # each bar sits, and .ev-bullet-inputs positions its boxes to match. If one
+    # changes the other has to.
+    dash.clientside_callback(
+        """
+        function (payload, elementId) {
+            var el = document.getElementById(elementId);
+            if (!el || !window.echarts) { return ''; }
+
+            // Named so assets/charts.js can call it again when the theme
+            // changes: the colours below are read from CSS at draw time, and
+            // a chart already on screen does not redraw itself.
+            function draw() {
+            var chart = window.echarts.getInstanceByDom(el)
+                        || window.echarts.init(el, null, {renderer: 'svg'});
+            if (!payload || !payload.rows || !payload.rows.length) {
+                chart.clear();
+                return;
+            }
+
+            var ROW = 34, TOP = 26;
+            var rows = payload.rows;
+            var css = getComputedStyle(document.documentElement);
+            function token(name, fallback) {
+                var v = css.getPropertyValue(name);
+                return (v && v.trim()) || fallback;
+            }
+            var accent = payload.whatif ? '#D86CB4'
+                                        : token('--ev-accent', '#00B4D8');
+            var orange = token('--ev-orange', '#F09048');
+            var muted = token('--ev-text-muted', '#A8B2C4');
+            var text = token('--ev-text', '#E8ECF2');
+            var band = token('--ev-surface-2', '#4A5670');
+
+            function commas(v) {
+                var n = (Math.round(v * 10) / 10);
+                var whole = Math.floor(n);
+                var s = whole.toLocaleString();
+                return (n - whole) ? s + (n - whole).toFixed(1).slice(1) : s;
+            }
+
+            var series = [
+                // Spacer, then the group's middle half. A band drawn from q1
+                // rather than from zero says where most of the group actually
+                // sits, which a gauge could not show at all.
+                // The group's middle half, drawn as a custom rect rather than
+                // as a stacked bar. A stacked pair is its own bar group, and
+                // echarts offsets bar groups within the category slot, so the
+                // band sat half a row below the value it belongs to no matter
+                // what barGap said. A custom series is positioned by hand
+                // against the category centre, which is where the value bar
+                // and the median tick already are.
+                {type: 'custom', silent: true, z: 1,
+                 renderItem: function (params, api) {
+                     var row = api.value(0);
+                     var a = api.coord([api.value(1), row]);
+                     var b = api.coord([api.value(2), row]);
+                     return {type: 'rect',
+                             shape: {x: a[0], y: a[1] - 9,
+                                     width: Math.max(b[0] - a[0], 1),
+                                     height: 18},
+                             style: {fill: band, opacity: 0.5}};
+                 },
+                 encode: {x: [1, 2], y: 0},
+                 data: rows.map(function (r, i) { return [i, r.q1, r.q3]; })},
+                // barGap -100% overlays this on the band instead of letting
+                // echarts set it beside as a second bar group, which is what
+                // put every value bar below the band it belongs to.
+                {type: 'bar', barWidth: 8, barGap: '-100%', z: 3,
+                 itemStyle: {color: accent, borderRadius: 2},
+                 data: rows.map(function (r) { return r.share; }),
+                 tooltip: {formatter: function (p) {
+                     var r = rows[p.dataIndex];
+                     return r.label + '<br/>' + commas(r.value)
+                          + '<br/>contributes ' + r.share.toFixed(3)
+                          + ' to the score'; }}},
+                {type: 'scatter', symbol: 'rect', symbolSize: [3, 22], z: 4,
+                 itemStyle: {color: orange},
+                 data: rows.map(function (r, i) { return [r.median, i]; }),
+                 tooltip: {formatter: function (p) {
+                     var r = rows[p.dataIndex];
+                     return 'median in ' + payload.group + '<br/>'
+                          + (r.median_raw === null || r.median_raw === undefined
+                             ? '-' : commas(r.median_raw)); }}}
+            ];
+            if (payload.whatif && payload.published) {
+                // Where the real value sat before it was moved.
+                series.push({type: 'scatter', symbol: 'circle', symbolSize: 7,
+                    z: 5, itemStyle: {color: 'transparent',
+                                      borderColor: token('--ev-accent', '#00B4D8'),
+                                      borderWidth: 2},
+                    data: payload.published.map(function (r, i) {
+                        return [r.share, i]; }),
+                    tooltip: {formatter: function (p) {
+                        return 'published<br/>'
+                             + commas(payload.published[p.dataIndex].value); }}});
+            }
+
+            chart.setOption({
+                animationDuration: 260,
+                // Room on the right for the input column, which is laid out
+                // by CSS and sits over the chart.
+                grid: {left: 150, right: 116, top: TOP, bottom: 8,
+                       height: rows.length * ROW},
+                tooltip: {trigger: 'item', backgroundColor: '#303C54',
+                          borderColor: '#4A5670',
+                          textStyle: {color: '#E8ECF2', fontSize: 12}},
+                xAxis: {type: 'value', min: 0, max: 1, position: 'top',
+                    axisLine: {show: false}, axisTick: {show: false},
+                    axisLabel: {color: muted, fontSize: 10, formatter:
+                        function (v) { return v === 1 ? 'edition max' : ''; }},
+                    splitLine: {lineStyle: {color: band, opacity: 0.3}}},
+                yAxis: {type: 'category', inverse: true,
+                    data: rows.map(function (r) { return r.label; }),
+                    axisLine: {show: false}, axisTick: {show: false},
+                    axisLabel: {color: text, fontSize: 12}},
+                series: series
+            }, true);
+            chart.resize();
+            }
+
+            el.__evRedraw = draw;
+            window.__evCharts = window.__evCharts || [];
+            if (window.__evCharts.indexOf(el) < 0) { window.__evCharts.push(el); }
+            draw();
+            return '';
+        }
+        """,
+        Output('bulletSink' + SUFFIX, 'children'),
+        Input('bulletStore' + SUFFIX, 'data'),
+        State('bulletChart' + SUFFIX, 'id'))
+
     # =============== C score figure, beside the card
     metricsFigAuthor_c = dbc.Row([
         dbc.Col([html.Center(dcc.Graph(id = 'metricsFigGraphAuthor_c' + SUFFIX,
@@ -907,38 +1117,42 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     formulaRow = dbc.Row(dbc.Col(id = 'c_score_formula' + SUFFIX,
                                  width = {'offset': 1, 'size': 10}))
 
-    # =============== One gauge, with its what-if input underneath
-    def _gauge_cell(index, figure, state):
-        metric, label = WHATIF_METRICS[index]
-        value = state['actual'].get(metric)
-        # The h-index counts papers, so it cannot exceed the number of
-        # papers. That ceiling is real and we know it, so the input enforces
-        # it rather than letting someone claim an h-index of 900 from 120
-        # papers. (It holds in the data too: h > np in 912 of 1,402,942
-        # published rows, so the cap is set above the published value on the
-        # rare row where the publishers' own figure breaks it.)
-        maximum = None
-        if metric == 'h' and state.get('np'):
-            maximum = max(int(state['np']), int(value or 0))
-        # Hm is a fractional h-index and the only one of the six that is not
-        # a whole number. Everything else is a count, and a count in a box
-        # reading 284984.0 looks like a bug.
-        if value is not None:
-            value = round(value, 1) if metric == 'hm' else int(value)
-        step = 0.1 if metric == 'hm' else 1
-        return dbc.Col([
-            html.Center(dcc.Graph(id = 'gauge-' + metric + SUFFIX,
-                                  figure = figure,
-                                  config = {'displayModeBar': False})),
-            html.Div([
-                dbc.Input(id = 'whatIf-' + metric + SUFFIX, type = 'number',
-                          value = value, min = 0, max = maximum, step = step,
-                          disabled = True, debounce = False,
-                          className = 'ev-whatif-input'),
-                html.Div(label + (f'  (max {maximum:,})' if maximum else ''),
-                         className = 'ev-whatif-label'),
-            ], className = 'ev-whatif-cell'),
-        ], width = 4)
+    # =============== The what-if boxes, one per bullet row
+    def _bullet_inputs(state):
+        """The six number boxes, aligned with the rows of the chart.
+
+        They are the readout as well as the control: the value used to appear
+        twice, once inside the gauge arc and again in a box underneath it.
+        """
+        cells = []
+        for metric, label in WHATIF_METRICS:
+            value = state['actual'].get(metric)
+            # The h-index counts papers, so it cannot exceed the number of
+            # papers. That ceiling is real and we know it, so the input
+            # enforces it rather than letting someone claim an h-index of 900
+            # from 120 papers. (It holds in the data too: h > np in 912 of
+            # 1,402,942 published rows, so the cap is set above the published
+            # value on the rare row where the publishers' own figure breaks
+            # it.)
+            maximum = None
+            if metric == 'h' and state.get('np'):
+                maximum = max(int(state['np']), int(value or 0))
+            # Hm is a fractional h-index and the only one of the six that is
+            # not a whole number. Everything else is a count, and a count in a
+            # box reading 284984.0 looks like a bug.
+            if value is not None:
+                value = round(value, 1) if metric == 'hm' else int(value)
+            # The tooltip goes on a wrapper: dbc.Input 1.3.1 rejects `title`
+            # outright rather than passing it through to the <input>.
+            cells.append(html.Div(
+                dbc.Input(
+                    id = 'whatIf-' + metric + SUFFIX, type = 'number',
+                    value = value, min = 0, max = maximum,
+                    step = 0.1 if metric == 'hm' else 1,
+                    disabled = True, debounce = False,
+                    className = 'ev-whatif-input'),
+                title = label + (f' (max {maximum:,})' if maximum else '')))
+        return cells
 
     def _whatif_note(state):
         if not state['reproducible']:
@@ -972,6 +1186,8 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         Output('idCard' + SUFFIX, 'className'),
         Output('shareStore' + SUFFIX, 'data'),
         Output('gaugeLegend' + SUFFIX, 'children'),
+        Output('bulletStore' + SUFFIX, 'data'),
+        Output('bulletInputs' + SUFFIX, 'children'),
         [Input('careerORSingleYrA1' + SUFFIX, 'value'),
         Input('selectYrRadioA1' + SUFFIX,'value'),
         Input('selfCToggle' + SUFFIX, 'on'), 
@@ -995,7 +1211,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         elif group1_name == None:
             return (["No dataset selected"], empty_fig, '', None, False,
                     card_header(None, None, None, None), [], [], None,
-                    'ev-id-card', None, [])
+                    'ev-id-card', None, [], None, [])
         else:
             metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
             prefix1 = 'career' if career1 else 'singleyr'
@@ -1074,6 +1290,16 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                                                            cntry_full)
 
             max_metrics = {mt:[kek[f'{prefix1}_{yr1}'][mt][2],kek[f'{prefix1}_{yr1}'][mt][4]] for mt in metrics_list}
+            # get_es_aggregate returns [min, q1, median, q3, max, n]. The
+            # gauges only ever read the median and the max; the bullet rows
+            # draw the group's middle half, so they need the quartiles too.
+            quartiles = {
+                metric: {'q1': kek[f'{prefix1}_{yr1}'][metric + suffix][1],
+                         'median': kek[f'{prefix1}_{yr1}'][metric + suffix][2],
+                         'q3': kek[f'{prefix1}_{yr1}'][metric + suffix][3]}
+                for metric, _ in WHATIF_METRICS
+                for suffix in [' (ns)' if ns else '']
+            }
         # if career2 == True:
         #     dfs = dfs_career.copy()
         #     dfs_log = dfs_career_log.copy()
@@ -1081,12 +1307,11 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         #     dfs = dfs_singleyr.copy()
         #     dfs_log = dfs_singleyr_log.copy()
 
-            fig_list, new_rank_1 = main_1_author_figs(data1, data1_log, group1_name, ns, logTransf, max_metrics, g1c = g1c, g2c = g2c, 
-                #author1_metrics = {'nc': nc1, 'h': h1, 'hm': hm1, 'ncs': ncs1, 'ncsf': ncsf1, 'ncsfl': ncsfl1}, 
-                author1_metrics = {},
+            composite_fig, new_rank_1 = main_1_author_figs(
+                data1, data1_log, group1_name, ns, logTransf, max_metrics,
+                g1c = g1c, g2c = g2c, author1_metrics = {},
                 author2_metrics = {})
-            for i in range(6): fig_list[i].update_layout(height = 200)
-            fig_list[6].update_layout(height = 200)
+            composite_fig.update_layout(height = 200)
 
             # Title
             title = 'Ranking based on composite score C and bar plots of metrics used to compute C'
@@ -1131,16 +1356,13 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 'c_limits': [_number(v) for v in max_metrics['c' + suffix_ns]],
                 'standing': rank_standing,
                 'reproducible': composite_is_reproducible(prefix1, yr1),
+                'quartiles': {m: {k: _number(v) for k, v in q.items()}
+                              for m, q in quartiles.items()},
+                'group_label': str(group_label or ''),
             }
 
-            figures = html.Div([
-                dbc.Row([_gauge_cell(i, fig_list[i], whatif_state)
-                         for i in range(3)], justify='around'),
-                html.Hr(),
-                dbc.Row([_gauge_cell(i, fig_list[i], whatif_state)
-                         for i in range(3, 6)], justify='around'),
-                _whatif_note(whatif_state),
-            ])
+            figures = html.Div([_whatif_note(whatif_state)])
+            rows = bullet_rows(actual, whatif_state['maxima'], quartiles)
             c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
                 r'''
 $$
@@ -1152,7 +1374,7 @@ C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
 \;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
 $$
 ''', mathjax=True, className='ev-formula'))])
-            return (figures, fig_list[6], c_img, whatif_state, False,
+            return (figures, composite_fig, c_img, whatif_state, False,
                     card_header(group1_name, names['inst'], cntry_full,
                                 names['field'], f'{span} {yr1}'),
                     card_chips(round(data1['self%'] * 100, 2), standing),
@@ -1168,7 +1390,9 @@ $$
                                   rank_standing,
                                   round(data1['self%'] * 100, 2),
                                   standing_text),
-                    gauge_legend(group_label))
+                    gauge_legend(group_label),
+                    bullet_payload(rows, group_label),
+                    _bullet_inputs(whatif_state))
 
     def main_1_author_figs(df_in, df_in_log, group1_name, ns, logTransf, max_metrics, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue'], author1_metrics = {}, author2_metrics = {}, weights = [1, 1, 1, 1, 1, 1]):
         metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
@@ -1220,11 +1444,13 @@ $$
         # The gauges are built by gauge_figure at module level, which the
         # what-if callback calls too. One builder means a hypothetical gauge
         # cannot drift away from the published one it replaces.
-        fig_list = []
-        for i, m in enumerate(metrics_list):
-            fig_list.append(gauge_figure(GAUGE_TITLES[i], new_y_values_1[i],
-                                         max_metrics[m]))
-        return(fig_list, new_rank_1)
+        # Only the composite gauge is built here. The six indicator gauges it
+        # used to return became the bullet rows in the author card, which are
+        # drawn in the browser from a small payload; building six plotly
+        # figures per author load and discarding them is pure cost.
+        composite = gauge_figure(GAUGE_TITLES[6], new_y_values_1[6],
+                                 max_metrics[metrics_list[6]])
+        return(composite, new_rank_1)
 
     # ==========================================================================================
     # The what-if calculator
@@ -1237,10 +1463,9 @@ $$
     # wrong in a way the page cannot show.
 
     @callback(
-        [Output('gauge-' + metric + SUFFIX, 'figure')
-         for metric, _ in WHATIF_METRICS]
-        + [Output('metricsFigGraphAuthor_c' + SUFFIX, 'figure',
-                  allow_duplicate = True),
+        [Output('bulletStore' + SUFFIX, 'data', allow_duplicate = True),
+         Output('metricsFigGraphAuthor_c' + SUFFIX, 'figure',
+                allow_duplicate = True),
            Output('rankDisplay' + SUFFIX, 'children', allow_duplicate = True),
            Output('rankChartStore' + SUFFIX, 'data', allow_duplicate = True),
            Output('idCard' + SUFFIX, 'className', allow_duplicate = True)]
@@ -1259,17 +1484,16 @@ $$
         live = bool(on) and state['reproducible']
         locked = [not live] * len(WHATIF_METRICS)
         standing = state['standing']
-        limits = state['group_limits']
+
+        published_rows = bullet_rows(state['actual'], state['maxima'],
+                                     state['quartiles'])
 
         if not live:
-            # Back to what was published, on every gauge and on the rank at
-            # once. Leaving one of them magenta is the failure this guards.
-            gauges = [gauge_figure(GAUGE_TITLES[i],
-                                   state['actual'][metric],
-                                   limits[metric])
-                      for i, (metric, _) in enumerate(WHATIF_METRICS)]
+            # Back to what was published, on the rows and on the rank at once.
+            # Leaving one of them magenta is the failure this guards.
             published_c = composite_score(state['actual'], state['maxima'])
-            return gauges + [
+            return [
+                bullet_payload(published_rows, state['group_label']),
                 gauge_figure(GAUGE_TITLES[6], published_c, state['c_limits']),
                 rank_stats(standing['scopus_rank'], standing['within_list'],
                            standing['published']),
@@ -1299,12 +1523,12 @@ $$
         new_standing = score_standing(state['kind'], state['year'], new_c,
                                       ns = state['ns'])
 
-        gauges = [gauge_figure(GAUGE_TITLES[i], values[metric],
-                               limits[metric], whatif = True,
-                               reference = state['actual'][metric])
-                  for i, (metric, _) in enumerate(WHATIF_METRICS)]
         published_c = composite_score(state['actual'], state['maxima'])
-        return gauges + [
+        return [
+            bullet_payload(bullet_rows(values, state['maxima'],
+                                       state['quartiles']),
+                           state['group_label'], whatif = True,
+                           published = published_rows),
             gauge_figure(GAUGE_TITLES[6], new_c, state['c_limits'],
                          whatif = True, reference = published_c),
             rank_stats(new_standing['scopus_rank'],
