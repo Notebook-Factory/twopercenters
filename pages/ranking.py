@@ -27,8 +27,8 @@ from dash import Input, Output, callback, dcc, html
 
 from citations_lib.utils import RANK_CUTOFF, edition_years, rank_coverage
 
-dash.register_page(__name__, path='/ranking', name='How the list is built',
-                   title='How the list is built')
+dash.register_page(__name__, path='/ranking', name='About rankings',
+                   title='About rankings')
 
 # Repeated from assets/style.css as hex: plotly renders to SVG and does not
 # resolve CSS custom properties.

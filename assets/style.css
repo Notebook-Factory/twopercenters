@@ -528,7 +528,7 @@ color: var(--ev-bg);
    look equally important. The remaining three leaves are put to work here on
    things that are genuinely different kinds of thing. */
 
-/* The two sections get a leaf each, matching their navbar buttons. */
+/* Each section gets a leaf, matching its navbar button. */
 .accordion-item:nth-of-type(1) .accordion-button:not(.collapsed) {
   color: var(--ev-accent);
   box-shadow: inset 4px 0 0 var(--ev-accent);
@@ -537,9 +537,14 @@ color: var(--ev-bg);
   color: var(--ev-green);
   box-shadow: inset 4px 0 0 var(--ev-green);
 }
+.accordion-item:nth-of-type(3) .accordion-button:not(.collapsed) {
+  color: var(--ev-orange);
+  box-shadow: inset 4px 0 0 var(--ev-orange);
+}
 
-#jump-compare:hover { border-color: var(--ev-accent); color: var(--ev-accent); }
+#jump-explore:hover { border-color: var(--ev-accent); color: var(--ev-accent); }
 #jump-trends:hover  { border-color: var(--ev-green);  color: var(--ev-green); }
+#jump-compare:hover { border-color: var(--ev-orange); color: var(--ev-orange); }
 
 /* Career vs single-year is a binary choice, so it gets orange to separate it
    from the year picker's cyan sitting next to it. */
@@ -640,6 +645,20 @@ color: var(--ev-bg);
 }
 .ev-spotlight-input::placeholder { color: var(--ev-text-muted); opacity: 0.8; }
 .ev-spotlight-input:focus { outline: none; box-shadow: none; }
+
+/* A search field with no magnifier reads as a text box that happens to be
+   large. Same glyph and the same idiom as the in-tab author search, scaled to
+   this field's type size. */
+.ev-spotlight-input {
+  background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' \
+fill='none' stroke='%23A8B2C4' stroke-width='2' stroke-linecap='round' \
+stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+  background-size: 22px 22px;
+  padding-left: 48px;
+}
 
 .ev-spotlight-results {
   max-height: 46vh;
@@ -1592,73 +1611,156 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
    which edition of it on the right, divided by a hairline. Previously these
    were two separately captioned controls, which read as unrelated.
    ========================================================================== */
+/* ==========================================================================
+   The edition picker
+   ==========================================================================
+   Two questions in one track: which dataset (career or single year), and
+   which edition of it. It used to be two rows of bordered buttons that wrapped
+   onto a second line, with a solid orange pill on one side and a solid cyan
+   one on the other.
+
+   It is a segmented control now. The selected option is marked by ONE pill
+   that slides between segments rather than by a background on each button,
+   which is the difference between a row of buttons and a control: the motion
+   is what tells a reader the two halves are each a single choice. The pill is
+   positioned by assets/segmented.js; everything else here is static, so the
+   control is still usable and still legible if that script never runs.
+   ========================================================================== */
 .ev-picker {
   display: inline-flex;
   align-items: stretch;
   gap: 0;
   background-color: color-mix(in srgb, var(--ev-bg-deep) 70%, transparent);
-  border: 1px solid var(--ev-surface-2);
-  border-radius: 12px;
-  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--ev-surface-2) 55%, transparent);
+  border-radius: 10px;
+  padding: 3px;
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   max-width: 100%;
   overflow: hidden;
 }
 
+/* The wrappers never wrap: a segmented control that reflows onto a second
+   line stops reading as one choice. */
 .ev-picker-left,
-.ev-picker-right { display: flex; align-items: center; }
-
-.ev-picker-right { overflow-x: auto; scrollbar-width: none; }
+.ev-picker-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.ev-picker-right {
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
 .ev-picker-right::-webkit-scrollbar { display: none; }
 
 .ev-picker-sep {
   width: 1px;
   align-self: stretch;
-  margin: 2px 10px;
-  background-color: var(--ev-surface-2);
+  margin: 4px 8px;
+  background-color: color-mix(in srgb, var(--ev-surface-2) 70%, transparent);
   flex: 0 0 1px;
 }
 
-/* Inside the track the segments are pills, not bordered buttons: the track
-   already draws the edge, so per-button borders only add noise. */
-.ev-picker .btn-group { border-radius: 0; }
+/* ====== The selection pill ======
+   A flat filled rectangle, the way a segmented control has always worked:
+   the track is recessed, the selected segment is the raised surface, and
+   there is no border and no glow. The earlier version had both and looked
+   like a toy.
+
+   It is a pseudo-element on the BUTTON GROUP, not on the wrapper. The wrapper
+   is the scroll container, so a pill positioned against it stayed put while
+   the years scrolled underneath and ended up marking the wrong one. The group
+   is the thing that scrolls, so a pill inside it travels with the segment it
+   marks. Absolute positioning takes it out of the flex flow, so it adds no
+   column of its own.
+
+   Only custom properties are written from script (assets/segmented.js), so
+   nothing is inserted into a tree React manages. Until it runs the pill has
+   zero width and is invisible, and the checked label's own colour carries the
+   selection on its own. */
+.ev-picker .btn-group::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 28px;
+  width: var(--seg-w, 0px);
+  transform: translate(var(--seg-x, 0px), -50%);
+  border-radius: 7px;
+  pointer-events: none;
+  opacity: var(--seg-o, 0);
+  background: var(--ev-surface);
+  /* One hairline of lift, which is what separates the raised segment from the
+     recessed track. Not a shadow effect. */
+  box-shadow: 0 1px 2px color-mix(in srgb, #000000 20%, transparent);
+  transition: transform .28s cubic-bezier(.32, .72, 0, 1),
+              width .28s cubic-bezier(.32, .72, 0, 1),
+              opacity .15s ease;
+  z-index: 0;
+}
+
+.ev-picker .btn-group {
+  border-radius: 0;
+  flex-wrap: nowrap;
+  /* The positioning context for the pill above. */
+  position: relative;
+  /* Two rules elsewhere put 14px above these radio rows, from when each was
+     its own row under the search box. Inside the track that is padding on one
+     side only: it made the picker taller than the search box beside it and sat
+     the segments low in their own track.
+
+     The 4px of vertical padding here and Bootstrap's 2px under each
+     .form-check are the rest of that difference: 36 + 8 + 2 made the inner
+     block 46 where the track expects 36. */
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.ev-picker .btn-group > .form-check {
+  margin: 0 !important;
+  min-height: 0;
+}
 .ev-picker .radio-group { margin: 0 !important; }
 
 .ev-picker .btn,
 .ev-picker .btn-group > .form-check > .btn {
   border: none !important;
-  border-radius: 8px !important;
-  margin: 0 2px !important;
-  padding: 8px 14px !important;
+  border-radius: 7px !important;
+  margin: 0 !important;
+  /* 36 + 3 + 3 padding + 1 + 1 border = 44, the height of a .Select-control,
+     so the picker and the search box beside it are the same object. */
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px !important;
   background-color: transparent !important;
+  color: var(--ev-text-muted) !important;
+  font-weight: 500;
+  font-size: .82rem;
+  white-space: nowrap;
+  /* Above the pill, which is at z-index 0 on their shared parent. */
+  position: relative;
+  z-index: 1;
+  transition: color .18s ease;
+}
+
+.ev-picker .btn:hover:not(.active):not(:disabled) {
   color: var(--ev-text) !important;
-  font-weight: 550;
-}
-
-.ev-picker .btn:hover:not(.active) {
-  background-color: var(--ev-surface-2) !important;
-}
-
-/* Dataset keeps orange, years keep cyan, so the two halves stay legible as
-   two different questions inside one control. */
-.ev-picker-left .btn.active {
-  background-color: var(--ev-orange) !important;
-  color: #10151D !important;
-}
-.ev-picker-right .btn.active {
-  background-color: var(--ev-accent) !important;
-  color: #10151D !important;
 }
 
 .ev-picker .btn:disabled {
   color: var(--ev-text-muted) !important;
-  opacity: 0.4;
+  opacity: 0.32;
 }
 
-/* The equal-width rule for the dataset halves still applies inside the track. */
-.ev-picker-left .btn-group > .form-check { flex: 1 1 0; min-width: 112px; }
-.ev-picker-left .btn-group > .form-check > .btn { width: 100%; }
+/* Every year segment is the same width, so the row reads as a timeline and
+   the pill travels a regular distance. The first label carries a "TO"/"IN"
+   prefix and is the widest, which sets the measure. */
+.ev-picker-right .btn-group > .form-check > .btn { min-width: 52px; }
+.ev-picker-left .btn-group > .form-check > .btn { min-width: 76px; }
 
 /* ==========================================================================
    Glass
@@ -1669,7 +1771,7 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
    and this is a reading surface as much as a control surface.
    ========================================================================== */
 .navbar {
-  background-color: color-mix(in srgb, var(--ev-bg-deep) 78%, transparent) !important;
+  background-color: color-mix(in srgb, var(--ev-bg-deep) 7%, transparent) !important;
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
 }
@@ -1706,8 +1808,10 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
   border: 1px solid color-mix(in srgb, var(--ev-text) 14%, transparent);
 }
 
+/* Dim enough to push the page back, light enough that it is still there to
+   be seen through the panel. */
 #spotlight .modal-backdrop,
-.modal-backdrop.show { backdrop-filter: blur(3px); opacity: 0.45; }
+.modal-backdrop.show { backdrop-filter: blur(6px); opacity: 0.3; }
 
 /* Browsers without backdrop-filter would show near-transparent panels with
    text floating over the page, so those fall back to opaque. */
@@ -1719,21 +1823,26 @@ stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2=
   .ev-picker, .nav-tabs { background-color: var(--ev-bg-deep); }
 }
 
-/* The selected-segment colours have to out-specify the transparent rule above
+/* The selected-segment rules have to out-specify the transparent one above
    them, which is written as .ev-picker .btn-group > .form-check > .btn and so
    carries four classes. A plain .ev-picker-left .btn.active carries three and
-   silently lost, which is why the dataset half rendered with nothing
-   selected. These match its shape and add .active on top. */
+   silently lost. These match its shape and add .active on top.
+
+   They set colour and weight only. The surface behind the selected segment is
+   the sliding pill, and a solid fill here would sit on top of it and cancel
+   the one thing that makes this a control rather than a row of buttons. */
 .ev-picker-left .btn-group > .form-check > .btn.active,
 .ev-picker-left .btn.active {
-  background-color: var(--ev-orange) !important;
-  color: #10151D !important;
+  background-color: transparent !important;
+  color: var(--ev-orange) !important;
+  font-weight: 600;
 }
 
 .ev-picker-right .btn-group > .form-check > .btn.active,
 .ev-picker-right .btn.active {
-  background-color: var(--ev-accent) !important;
-  color: #10151D !important;
+  background-color: transparent !important;
+  color: var(--ev-accent) !important;
+  font-weight: 600;
 }
 
 /* The in-panel picker sits under a search box rather than in a toolbar, so it
@@ -1795,10 +1904,13 @@ body, body * {
 .ev-nav-btn { display: inline-flex; align-items: center; }
 .accordion-button > span { display: inline-flex; align-items: center; }
 
-/* dbc's AccordionItem takes a plain string for `title`, so an icon cannot be
-   put in the markup there. These are the same two Lucide glyphs drawn as CSS
-   masks instead: a mask painted with currentColor inherits the header's text
-   colour, so they follow the theme exactly as an inline SVG would. */
+/* dbc 1.3.1's AccordionItem renders nothing at all if `title` is given a
+   list of components: it type-checks in Python and breaks in React, which
+   silently removed the whole accordion. So the titles stay plain strings and
+   the icons are the Lucide glyphs drawn as CSS masks. A mask painted with
+   currentColor inherits the header's text colour, so they follow the theme.
+   Keyed by nth-of-type, so a rule is needed for EVERY section: adding a
+   third without one is what left it showing a blank square. */
 .accordion-button::before {
   content: "";
   width: 19px;
@@ -1811,16 +1923,23 @@ body, body * {
   -webkit-mask-size: contain;     mask-size: contain;
 }
 
-/* lucide "users" */
+
+/* lucide "user" */
 .accordion-item:nth-of-type(1) .accordion-button::before {
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
-          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>");
 }
 
 /* lucide "trending-up" */
 .accordion-item:nth-of-type(2) .accordion-button::before {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 7 13.5 15.5 8.5 10.5 2 17'/><polyline points='16 7 22 7 22 13'/></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 7 13.5 15.5 8.5 10.5 2 17'/><polyline points='16 7 22 7 22 13'/></svg>");
+}
+
+/* lucide "users" */
+.accordion-item:nth-of-type(3) .accordion-button::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
 }
 
 /* Inline code came from SLATE as bright pink, which is loud on dark and
@@ -2038,14 +2157,16 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    It was taller than the one above the map, because the buttons inside it
    kept the panel's larger padding. Same height and the same track thickness
    as the toolbar picker now. */
-.ev-picker-inline { padding: 3px; border-radius: 11px; }
-.ev-picker-inline .btn,
-.ev-picker-inline .btn-group > .form-check > .btn {
-  padding: 6px 13px !important;
-  font-size: 0.86rem;
-}
+.ev-picker-inline { padding: 3px; border-radius: 10px; }
 .ev-picker-inline .ev-picker-sep { margin: 2px 8px; }
-.ev-picker-inline .btn-group > .form-check { min-width: 104px; }
+
+/* The matched-pair minimum belongs to the dataset halves, which are two
+   labels of different lengths that should look like one control. It used to
+   be written for every .form-check in the track, which gave each of the eight
+   years a 104px box as well: 832px of segments in a track a panel wide, so
+   the strip overflowed and the first and last years were cut off. The years
+   take their width from their own text. */
+.ev-picker-inline .ev-picker-left .btn-group > .form-check { min-width: 96px; }
 
 /* ==========================================================================
    The animation slider under the map
@@ -2516,7 +2637,13 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   gap: .4rem;
   align-items: center;
   padding: .55rem 1rem;
-  background: var(--ev-bg-deep);
+  /* Same glass as .navbar directly below it. A solid fill here put an opaque
+     strip across the top of a page whose other floating layers are all
+     translucent, so the bar read as a different material from the toolbar it
+     sits against. */
+  background-color: color-mix(in srgb, var(--ev-bg-deep) 7%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
   border-bottom: 1px solid var(--ev-surface-2);
   position: sticky;
   top: 0;
@@ -2552,13 +2679,17 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    legible. */
 .ev-spotlight,
 .ev-intro {
-  background-color: color-mix(in srgb, var(--ev-surface) 74%, transparent);
-  backdrop-filter: blur(26px) saturate(165%);
-  -webkit-backdrop-filter: blur(26px) saturate(165%);
-  border: 1px solid color-mix(in srgb, #ffffff 14%, transparent);
+  /* 74% over a backdrop dimmed to 45% black left nothing behind the panel to
+     refract, so the blur did no work and it read as a flat grey box. The fill
+     is lighter now and the backdrop darker by less; between them the page
+     shows through as soft colour, which is the whole effect. */
+  background-color: color-mix(in srgb, var(--ev-surface) 55%, transparent);
+  backdrop-filter: blur(30px) saturate(190%);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
+  border: 1px solid color-mix(in srgb, #ffffff 18%, transparent);
   box-shadow:
     0 24px 64px rgba(0, 0, 0, 0.48),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 16%, transparent);
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent);
 }
 
 .ev-spotlight { border-radius: 18px; }
@@ -2632,3 +2763,433 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   max-width: 78ch;
 }
 .ev-caption p:last-child { margin-bottom: 0; }
+
+/* The nav links carry a Lucide glyph, so they lay out as icon + label. */
+.ev-nav-link { display: inline-flex; align-items: center; gap: .45rem; }
+.ev-nav-link svg { width: 16px; height: 16px; }
+
+/* ==========================================================================
+   The what-if calculator
+   ==========================================================================
+   Six number boxes under six gauges, and the two ranks above them. Magenta
+   is the calculator's colour throughout: the gauge bars, the rank, the
+   focused input. Cyan stays the colour of what the publishers actually
+   printed, so a reader can tell at a glance which they are looking at. */
+
+.ev-whatif-cell {
+  /* Below the gauge, never over it: the plotly figure is a fixed 200px and
+     a negative margin here put the box on top of the arc. */
+  margin: .25rem auto 1rem;
+  max-width: 190px;
+  text-align: center;
+}
+.ev-whatif-input {
+  background: var(--ev-bg-deep) !important;
+  color: var(--ev-text) !important;
+  border: 1px solid var(--ev-surface-2) !important;
+  border-radius: var(--ev-radius) !important;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 1rem;
+  padding: .35rem .5rem !important;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.ev-whatif-input:focus {
+  border-color: #D86CB4 !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #D86CB4 22%, transparent) !important;
+  outline: none;
+}
+/* A disabled box is still worth reading: it is the published value. It just
+   must not look like somewhere to type. */
+.ev-whatif-input:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.ev-whatif-label {
+  color: var(--ev-text-muted);
+  font-size: .72rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  margin-top: .3rem;
+}
+.ev-whatif-note {
+  color: var(--ev-text-muted);
+  font-size: .82rem;
+  max-width: 78ch;
+  margin: .6rem auto 0;
+  padding-left: .7rem;
+  border-left: 3px solid #D86CB4;
+}
+.ev-whatif-note-off { border-left-color: var(--ev-orange); }
+
+/* ====== The author card ======
+   Identity, the two ranks, the rank strip and two small facts, in one panel.
+   This replaced a bare LED number beside a markdown bullet list: the numbers
+   and the person they belong to were laid out as though unrelated, and the
+   two ranks had no picture to explain why they differ. */
+.ev-id-card {
+  background: color-mix(in srgb, var(--ev-surface) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in srgb, #ffffff 10%, transparent);
+  border-radius: var(--ev-radius);
+  box-shadow:
+    var(--ev-shadow),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent);
+  padding: 1.1rem 1.3rem 1rem;
+  /* The author section sits inside an html.Center, which computes to
+     text-align: -webkit-center. That value centres block children as well as
+     text, so the name and the self-citation bar both arrived centred. */
+  text-align: left;
+  transition: border-left-color .2s ease;
+  /* The accent edge is the card's one flourish: it marks the panel as the
+     subject of the page without adding another box inside it. */
+  border-left: 3px solid var(--ev-accent);
+}
+
+/* In what-if mode the edge changes with everything else, so the card itself
+   says whose numbers these are before a reader looks at any of them. */
+.ev-id-card-whatif { border-left-color: #D86CB4; }
+
+.ev-id-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .6rem;
+}
+/* Which edition every number on this card comes from. */
+.ev-id-edition {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  flex: 0 0 auto;
+  padding: .25rem .6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ev-bg-deep) 55%, transparent);
+  color: var(--ev-text-muted);
+  font-size: .74rem;
+  white-space: nowrap;
+}
+.ev-id-edition svg { width: 13px; height: 13px; }
+.ev-id-name {
+  color: var(--ev-text);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ev-id-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem 1.1rem;
+  margin-top: .35rem;
+}
+.ev-id-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  color: var(--ev-text-muted);
+  font-size: .86rem;
+}
+.ev-id-meta-item svg { width: 14px; height: 14px; opacity: .8; }
+
+.ev-id-body {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  flex-wrap: wrap;
+}
+.ev-id-ranks { flex: 0 0 auto; }
+/* The ECharts strip. A fixed height because echarts measures its container,
+   and a container sized by its contents measures as zero. */
+.ev-rank-chart {
+  flex: 1 1 260px;
+  min-width: 240px;
+  /* Sized to the strip and its two labels and nothing more: echarts fills
+     whatever it is given, so a taller box is just dead space under the
+     axis. */
+  height: 96px;
+}
+
+.ev-rank-row { display: flex; gap: 1.6rem; align-items: flex-start; }
+.ev-rank-cell { min-width: 112px; }
+.ev-rank-value {
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.ev-rank-label {
+  color: var(--ev-text);
+  font-size: .82rem;
+  font-weight: 600;
+}
+.ev-rank-detail { color: var(--ev-text-muted); font-size: .74rem; }
+.ev-rank-was {
+  color: var(--ev-text-muted);
+  font-size: .78rem;
+  margin-top: .6rem;
+}
+/* Says the numbers beside it are invented. It appears only in what-if mode,
+   which is also the only time they are. */
+.ev-id-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  align-self: center;
+  padding: .2rem .5rem;
+  border-radius: 999px;
+  border: 1px solid #D86CB4;
+  color: #D86CB4;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+.ev-id-badge svg { width: 12px; height: 12px; }
+
+/* ====== The two small facts ====== */
+.ev-id-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .9rem;
+  margin-top: 1rem;
+  padding-top: .9rem;
+  border-top: 1px solid color-mix(in srgb, var(--ev-surface-2) 60%, transparent);
+}
+.ev-chip { flex: 1 1 200px; min-width: 190px; }
+.ev-chip-head {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  color: var(--ev-text-muted);
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.ev-chip-head svg { width: 13px; height: 13px; }
+.ev-chip-head strong {
+  margin-left: auto;
+  color: var(--ev-text);
+  font-size: .95rem;
+  font-variant-numeric: tabular-nums;
+}
+.ev-chip-body { color: var(--ev-text); font-size: .92rem; margin-top: .35rem; }
+/* Self-citation as a share of a whole, because the number alone says
+   nothing: 10.59% means one thing next to an empty bar and another next to
+   a full one. */
+.ev-chip-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ev-surface-2) 70%, transparent);
+  margin-top: .45rem;
+  overflow: hidden;
+}
+.ev-chip-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ev-accent), var(--ev-orange));
+}
+
+
+
+/* ====== Icons inside content that callbacks replace ======
+   These are drawn as CSS masks rather than as <i data-lucide> elements, and
+   the reason is a bug rather than a preference.
+
+   lucide.createIcons() REPLACES each <i> with an <svg>, which React knows
+   nothing about. The author card's rank row changes length when the what-if
+   badge appears and disappears, and on the next render React was patching
+   against a virtual DOM that no longer matched the page: the badge survived
+   its own removal and accumulated a second stranded <svg>, which is what put
+   two flasks where a rank should have been.
+
+   A mask is painted by CSS on an element React created and still owns, so
+   nothing mutates the tree behind its back. The accordion headers use the
+   same technique for the same reason. Paths are lucide's own, read out of
+   the loaded library rather than redrawn. */
+.ev-ic {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center;  mask-position: center;
+  -webkit-mask-size: contain;     mask-size: contain;
+}
+.ev-ic-building-2 {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 12h4'></path><path d='M10 8h4'></path><path d='M14 21v-3a2 2 0 0 0-4 0v3'></path><path d='M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2'></path><path d='M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16'></path></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 12h4'></path><path d='M10 8h4'></path><path d='M14 21v-3a2 2 0 0 0-4 0v3'></path><path d='M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2'></path><path d='M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16'></path></svg>");
+}
+.ev-ic-map-pin {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0'></path><circle cx='12' cy='10' r='3'></circle></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0'></path><circle cx='12' cy='10' r='3'></circle></svg>");
+}
+.ev-ic-microscope {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 18h8'></path><path d='M3 22h18'></path><path d='M14 22a7 7 0 1 0 0-14h-1'></path><path d='M9 14h2'></path><path d='M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z'></path><path d='M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3'></path></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 18h8'></path><path d='M3 22h18'></path><path d='M14 22a7 7 0 1 0 0-14h-1'></path><path d='M9 14h2'></path><path d='M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z'></path><path d='M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3'></path></svg>");
+}
+.ev-ic-calendar {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'></path><path d='M16 2v3'></path><rect x='3' y='3' width='18' height='18' rx='2'></rect><path d='M3 9h18'></path></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'></path><path d='M16 2v3'></path><rect x='3' y='3' width='18' height='18' rx='2'></rect><path d='M3 9h18'></path></svg>");
+}
+.ev-ic-quote {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path><path d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path><path d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path></svg>");
+}
+.ev-ic-target {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><circle cx='12' cy='12' r='6'></circle><circle cx='12' cy='12' r='2'></circle></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><circle cx='12' cy='12' r='6'></circle><circle cx='12' cy='12' r='2'></circle></svg>");
+}
+.ev-ic-flask-conical {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2'></path><path d='M6.453 15h11.094'></path><path d='M8.5 2h7'></path></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2'></path><path d='M6.453 15h11.094'></path><path d='M8.5 2h7'></path></svg>");
+}
+
+.ev-ic-share-2 {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='18' cy='5' r='3'></circle><circle cx='6' cy='12' r='3'></circle><circle cx='18' cy='19' r='3'></circle><line x1='8.59' x2='15.42' y1='13.51' y2='17.49'></line><line x1='15.41' x2='8.59' y1='6.51' y2='10.49'></line></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='18' cy='5' r='3'></circle><circle cx='6' cy='12' r='3'></circle><circle cx='18' cy='19' r='3'></circle><line x1='8.59' x2='15.42' y1='13.51' y2='17.49'></line><line x1='15.41' x2='8.59' y1='6.51' y2='10.49'></line></svg>");
+}
+.ev-ic-download {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 15V3'></path><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'></path><path d='m7 10 5 5 5-5'></path></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 15V3'></path><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'></path><path d='m7 10 5 5 5-5'></path></svg>");
+}
+.ev-ic-clipboard-copy {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='8' height='4' x='8' y='2' rx='1' ry='1'></rect><path d='M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2'></path><path d='M16 4h2a2 2 0 0 1 2 2v4'></path><path d='M21 14H11'></path><path d='m15 10-4 4 4 4'></path></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='8' height='4' x='8' y='2' rx='1' ry='1'></rect><path d='M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2'></path><path d='M16 4h2a2 2 0 0 1 2 2v4'></path><path d='M21 14H11'></path><path d='m15 10-4 4 4 4'></path></svg>");
+}
+
+/* ====== Taking the card somewhere else ====== */
+.ev-share-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-top: .9rem;
+  padding-top: .8rem;
+  border-top: 1px solid color-mix(in srgb, var(--ev-surface-2) 60%, transparent);
+}
+.ev-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .35rem .7rem;
+  border-radius: 999px;
+  border: 1px solid var(--ev-surface-2);
+  background: color-mix(in srgb, var(--ev-bg-deep) 45%, transparent);
+  color: var(--ev-text-muted);
+  font-size: .78rem;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.ev-share-btn:hover {
+  color: var(--ev-text);
+  border-color: var(--ev-accent);
+  background: color-mix(in srgb, var(--ev-accent) 14%, transparent);
+}
+.ev-share-status {
+  color: var(--ev-text-muted);
+  font-size: .76rem;
+  margin-left: .2rem;
+}
+
+
+/* ==========================================================================
+   The explore panel's controls
+   ==========================================================================
+   The search box, the edition picker and the four controls under them used to
+   take three full-width rows between the heading and the first gauge: a search
+   field stretched across eight columns to hold one name, the picker on its own
+   line below it, then four Bootstrap columns spread across the width with the
+   longest label in the app sitting in the middle of them.
+
+   They are three flex rows now, each only as wide as its contents. */
+.ev-explore-bar,
+.ev-explore-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.ev-explore-bar { margin-bottom: 4px; }
+/* Neither control may shrink. The row is a flex container, and a dropdown
+   renders <div class="dash-dropdown"><div class="Select">: an intermediate
+   wrapper with no width of its own collapsed to its content as soon as it
+   became a flex item, which left the search box 120px wide with the name
+   clipped inside it. */
+.ev-explore-bar > * { flex: 0 0 auto; }
+.ev-explore-controls { margin-top: 10px; }
+
+/* The picker centres itself with auto side margins when it stands alone. As a
+   flex item beside the search box those margins become a 250px gap, so inside
+   this row it sits where the row puts it. */
+.ev-explore-bar .ev-picker-inline { margin: 0; }
+
+/* A name is not a paragraph. Wide enough for the longest one, not for the
+   column it happens to sit in. */
+.ev-author-search { width: 300px; max-width: 100%; }
+
+/* The toggles carry their own labels underneath, so they need no column. */
+.ev-explore-controls > div { flex: 0 0 auto; }
+
+.ev-compare {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The two switches label themselves underneath, which made the control row
+   twice as tall as the things next to it and left the labels floating below a
+   line they belong on. daq only offers top or bottom, so the label block is
+   turned on its side here instead. */
+.ev-explore-controls [class*="daq-booleanswitch"][class*="__label"] {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px;
+}
+.ev-explore-controls [class*="daq-booleanswitch"] label {
+  margin: 0 !important;
+  font-size: .82rem;
+  color: var(--ev-text-muted);
+  white-space: nowrap;
+}
+.ev-compare .Select { min-width: 132px; }
+.ev-control-label {
+  color: var(--ev-text-muted);
+  font-size: .78rem;
+  white-space: nowrap;
+}
+
+/* ====== What the gauges are measured against ======
+   Both facts came from one choice and neither was written down: the top of
+   each arc is the highest value in the selected group, and the line across it
+   is that group's median. The option text used to carry the explanation and
+   called the line red; it is orange. */
+.ev-gauge-legend {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 8px 0 14px;
+  color: var(--ev-text-muted);
+  font-size: .78rem;
+}
+.ev-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.ev-legend-item strong { color: var(--ev-text); font-weight: 600; }
+.ev-legend-line {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ev-orange);
+}
+.ev-legend-cap {
+  width: 16px;
+  height: 10px;
+  border: 1px solid var(--ev-text-muted);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  opacity: .7;
+}

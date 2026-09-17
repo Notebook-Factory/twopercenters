@@ -300,29 +300,34 @@ layout = dbc.Container(fluid=True, children=[
     dbc.Row(dbc.Col(
         html.H5('Everyone on the list', className='ev-subtitle'), width=12)),
     dbc.Row(dbc.Col(dcc.Markdown(
-        'The share of listed researchers cited by at least one retracted '
-        'paper, per edition. This is the whole population and does not change '
-        'when you search above.', className='ev-caption'), width=12)),
+        'The whole population, not the researcher above. Neither chart '
+        'changes when you search.', className='ev-caption'), width=12)),
+
+    # Both population charts stack in one column with the panel beside them,
+    # rather than the counts chart sitting in its own full-width row below.
+    # That put it past the end of the panel, leaving a tall empty gap to its
+    # right and separating the two halves of one comparison: how many
+    # researchers, and how many citations.
     dbc.Row([
-        dbc.Col(dcc.Graph(id='retraction-overview', figure=_overview_figure(),
-                          config={'displayModeBar': False}), md=8),
+        dbc.Col([
+            dcc.Markdown('Share of researchers cited by at least one '
+                         'retracted paper.', className='ev-caption'),
+            dcc.Graph(id='retraction-overview', figure=_overview_figure(),
+                      config={'displayModeBar': False}),
+            dcc.Markdown('And how many citations that involves, per '
+                         'researcher.', className='ev-caption'),
+            dcc.Graph(id='retraction-counts', figure=_counts_figure(),
+                      config={'displayModeBar': False}),
+            dcc.Markdown(
+                'The step at the boundary is **the model being cautious, not '
+                'retractions doubling in 2023**. The regression pulls large '
+                'values toward the middle, so the estimated years sit low: '
+                'they average about 3 citations against 5.5 recorded in '
+                '2023. Read the estimated bars as a floor rather than a '
+                'level.', className='ev-caption'),
+        ], md=8),
         dbc.Col(html.Div(_run_summary(), className='ev-panel'), md=4),
     ]),
-    html.Br(),
-    dbc.Row(dbc.Col([
-        dcc.Markdown(
-            'And how many citations that involves, per researcher.',
-            className='ev-caption'),
-        dcc.Graph(id='retraction-counts', figure=_counts_figure(),
-                  config={'displayModeBar': False}),
-        dcc.Markdown(
-            'The step at the boundary is **the model being cautious, not '
-            'retractions doubling in 2023**. The regression pulls large '
-            'values toward the middle, so the estimated years sit low: they '
-            'average about 3 citations against 5.5 recorded in 2023. Read '
-            'the estimated bars as a floor rather than a level.',
-            className='ev-caption'),
-    ], width=12)),
     html.Br(),
 ])
 

@@ -15,7 +15,16 @@ app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
            # Lucide: the icon set the dashboard uses. It replaces any
            # <i data-lucide="name"> with an inline SVG that inherits
            # currentColor, so icons follow the theme like text does.
-           external_scripts=["https://unpkg.com/lucide@latest/dist/umd/lucide.js"],
+           external_scripts=[
+               "https://unpkg.com/lucide@latest/dist/umd/lucide.js",
+               # ECharts draws the rank strip on the author card, which is
+               # the one picture on the site that has to put two numbers
+               # 15,000 apart on the same axis and stay readable. It is
+               # loaded from the CDN and driven by a clientside callback, so
+               # nothing new is installed on the Python side and no other
+               # chart on the site changes.
+               "https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js",
+           ],
            suppress_callback_exceptions=True)
 server = app.server
 app.title = "Evidence"
@@ -26,14 +35,36 @@ app.title = "Evidence"
 # edit; the scratch page at /keke is excluded by name.
 _HIDDEN_ROUTES = {'/keke'}
 
+# A Lucide glyph per route. Keyed by path rather than by name so renaming a
+# page does not silently drop its icon.
+_NAV_ICONS = {
+    '/': 'home',
+    '/ranking': 'list-ordered',      # the list, and where you sit in it
+    '/retraction': 'file-x',         # a paper withdrawn
+    '/predictions': 'waypoints',     # a graph, which is what the model reads
+}
+
+# The order the bar reads in, rather than alphabetical: home, then the two
+# explanatory pages.
+_NAV_ORDER = ['/', '/ranking', '/retraction', '/predictions']
+
 
 def _nav():
+    def rank(page):
+        try:
+            return _NAV_ORDER.index(page['path'])
+        except ValueError:
+            return len(_NAV_ORDER)
+
     links = []
     for page in sorted(dash.page_registry.values(),
-                       key=lambda p: (p['path'] != '/', p['name'])):
+                       key=lambda p: (rank(p), p['name'])):
         if page['path'] in _HIDDEN_ROUTES:
             continue
-        links.append(dcc.Link(page['name'], href=page['path'],
+        icon = _NAV_ICONS.get(page['path'])
+        label = [html.I(**{'data-lucide': icon})] if icon else []
+        label.append(html.Span(page['name']))
+        links.append(dcc.Link(label, href=page['path'],
                               className='ev-nav-link'))
     return html.Nav(links, className='ev-nav')
 

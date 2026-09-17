@@ -1649,3 +1649,191 @@ def get_world_df(year,sts,prefix):
                     df.loc[kk] = ([code.upper()]) + [cur_name] + [0] + [''] + [str(metric)] + ['lel']
                 kk = kk +1
     return df
+
+# The tables the model reads, in the order the graph joins them. Kept here
+# rather than imported from rdl/spec.py because the web process must never
+# import anything that pulls in torch.
+GRAPH_TABLES = ('career_metrics', 'authors', 'editions', 'institutions',
+                'countries', 'fields', 'subfields')
+
+
+def graph_table_sizes():
+    """How many rows each table in the training graph holds.
+
+    The schema picture on the predictions page is drawn from the live
+    database rather than from a caption someone has to remember to update,
+    so a node whose table grows gets bigger on its own.
+    """
+    parts = ' union all '.join(
+        f"select '{name}' as t, count(*) from {name}"
+        for name in GRAPH_TABLES)
+    return {name: int(count) for name, count in _fetch(parts)}
+
+
+def prediction_coverage(task):
+    """How many estimates one published run put in the database.
+
+    Returns the row count, how many researchers they cover, and which data
+    years, because the honest sentence about a set of estimates names all
+    three.
+    """
+    rows = _fetch(
+        "select count(*), count(distinct p.author_id), "
+        "       min(e.data_year), max(e.data_year), "
+        "       count(distinct p.edition_id) "
+        "from predictions p join editions e using (edition_id) "
+        "where p.task = %s", (task,))
+    if not rows or not rows[0][0]:
+        return None
+    total, authors, first_year, last_year, editions = rows[0]
+    return {'rows': int(total), 'authors': int(authors),
+            'first_year': int(first_year), 'last_year': int(last_year),
+            'editions': int(editions)}
+
+
+# ---------------------------------------------------------------------------
+# The composite score, recomputed
+# ---------------------------------------------------------------------------
+#
+# The published `c` is not an opaque number. It is the sum of six
+# log-transformed ratios, each indicator against the largest value of that
+# indicator in the same edition:
+#
+#   c = ln(nc+1)/ln(nc_max+1) + ln(h+1)/ln(h_max+1) + ln(hm+1)/ln(hm_max+1)
+#     + ln(ncs+1)/ln(ncs_max+1) + ln(ncsf+1)/ln(ncsf_max+1)
+#     + ln(ncsfl+1)/ln(ncsfl_max+1)
+#
+# This was checked against every published row rather than taken on faith.
+# Recomputing `c` from the six columns and the maxima in metric_maxima
+# reproduces the published value with a maximum absolute error of 0.0 across
+# career-2019 through career-2024, and 5e-7 in career-2017, which is the
+# rounding in the source file.
+#
+# career-2018 is the exception: all 105,000 of its rows disagree, by up to
+# 0.228. Whatever maxima that edition's scores were computed with are not the
+# ones recorded for it, and the same holds for its self-citation-excluded
+# score. So the calculator refuses that edition rather than showing a reader
+# a score that will not match the one printed beside it.
+
+COMPOSITE_METRICS = ('nc', 'h', 'hm', 'ncs', 'ncsf', 'ncsfl')
+
+# Every other edition of both kinds reproduces exactly, career and
+# single-year alike, which was checked the same way over all 2.7 million
+# rows.
+_COMPOSITE_BROKEN = {('career', 2018)}
+
+
+def composite_is_reproducible(kind, year):
+    """Whether this edition's published score can be recomputed from its
+    parts. False only for career-2018, where the recorded maxima are not the
+    ones the published scores were computed with."""
+    return (kind, int(year)) not in _COMPOSITE_BROKEN
+
+
+def composite_maxima(kind, year, ns=False):
+    """The six per-edition maxima the composite score divides by."""
+    suffix = '_ns' if ns else ''
+    wanted = [f'{metric}{suffix}' for metric in COMPOSITE_METRICS]
+    rows = _fetch(
+        "select metric, max_value from metric_maxima "
+        "where edition_id = %s and metric = any(%s)",
+        (f'{kind}-{year}', wanted))
+    found = {metric: float(value) for metric, value in rows}
+    return {metric: found[f'{metric}{suffix}'] for metric in COMPOSITE_METRICS
+            if f'{metric}{suffix}' in found}
+
+
+def composite_score(values, maxima):
+    """Sum the six log ratios. Returns None if any input is missing."""
+    import math
+    total = 0.0
+    for metric in COMPOSITE_METRICS:
+        value = values.get(metric)
+        ceiling = maxima.get(metric)
+        if value is None or not ceiling:
+            return None
+        total += math.log(max(float(value), 0.0) + 1) / math.log(ceiling + 1)
+    return total
+
+
+def score_standing(kind, year, score, ns=False):
+    """Where a composite score would sit in one published edition.
+
+    Two numbers, because they answer different questions and the dashboard
+    used to conflate them. `within_list` is the position among the people
+    actually published in that edition, which is what a reader means by "what
+    number am I". `scopus_rank` is the rank Scopus assigned, and it counts
+    everyone the publishers scored rather than only the ones who made the cut.
+
+    Both are read off the researcher this score lands beside, in one index
+    lookup. Counting the rows above the score answers the same question and
+    took 30 ms; the what-if calculator asks on every keystroke.
+    """
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None or score is None:
+        return None
+    suffix = '_ns' if ns else ''
+    edition_id = f'{kind}-{year}'
+    published = edition_size(kind, year)
+
+    # The highest-scoring researcher this score does not beat. Displacing them
+    # means taking their position on the list.
+    neighbour = _fetch(
+        f"select rank{suffix}, list_position{suffix} from {table} "
+        f"where edition_id = %s and c{suffix} <= %s "
+        f"order by c{suffix} desc limit 1", (edition_id, score))
+    if not neighbour or neighbour[0][1] is None:
+        # Either the score beats everyone published, or this edition's
+        # positions were never filled (pipeline/list_position.py). Counting is
+        # slower but always right, so it is the fallback rather than the
+        # answer.
+        rows = _fetch(
+            f"select count(*) from {table} "
+            f"where edition_id = %s and c{suffix} > %s", (edition_id, score))
+        ahead = int(rows[0][0])
+        rank_rows = _fetch(
+            f"select rank{suffix} from {table} "
+            f"where edition_id = %s and c{suffix} <= %s "
+            f"and rank{suffix} is not null "
+            f"order by c{suffix} desc limit 1", (edition_id, score))
+        return {'within_list': ahead + 1,
+                'scopus_rank': int(rank_rows[0][0]) if rank_rows else 1,
+                'published': published}
+
+    scopus_rank, position = neighbour[0]
+    return {'within_list': int(position),
+            'scopus_rank': int(scopus_rank) if scopus_rank else None,
+            'published': published}
+
+
+def edition_size(kind, year):
+    """How many researchers one edition published."""
+    return edition_sizes(kind).get(f'{kind}-{year}')
+
+
+# Edition sizes change only when a new edition is loaded, and counting them
+# is a full scan of 1.4 million rows. Counted once per process.
+_EDITION_SIZES: dict[str, dict[str, int]] = {}
+
+
+def edition_sizes(kind):
+    """{edition_id: published rows} for one kind, counted once per process."""
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None:
+        return {}
+    if kind not in _EDITION_SIZES:
+        # Read off the edition, not counted. Counting is a sequential scan of
+        # 1.4 million rows; pipeline/list_position.py records the figure when
+        # it walks each edition. An edition it has not reached yet is counted
+        # once here rather than left out.
+        sizes = {}
+        for edition_id, published in _fetch(
+                "select edition_id, published_rows from editions "
+                "where kind = %s", (kind,)):
+            if published is None:
+                published = _fetch(
+                    f"select count(*) from {table} where edition_id = %s",
+                    (edition_id,))[0][0]
+            sizes[edition_id] = int(published)
+        _EDITION_SIZES[kind] = sizes
+    return _EDITION_SIZES[kind]

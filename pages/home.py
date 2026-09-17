@@ -222,8 +222,14 @@ def update_world(yr,sts,career):
         # geo_bgcolor is the rectangle behind the globe itself, which is what
         # stayed dark in the light theme.
         fig.update_layout(geo_bgcolor=bgc,margin={'l':0, 'r':0,'b':0,'t':0})
-        fig.update_layout(sliders=[ dict(bgcolor='rgba(0,0,0,0)')])
-        fig.update_geos(projection=dict(scale = 1), center=dict(lat=30),showframe=False)
+        # bgcolor is the grip's fill, not merely a backdrop: transparent
+        # drew it as an empty ring. activebgcolor only applies while the grip
+        # is being dragged, which is why setting that alone changed nothing.
+        fig.update_layout(sliders=[dict(bgcolor='#00B4D8',
+                                activebgcolor='#00B4D8',
+                                bordercolor='#7E8AA0')])
+        fig.update_geos(projection=dict(scale = 1.25), center=dict(lat=22),
+                showframe=False)
     return fig
 
 
@@ -327,13 +333,20 @@ fig.update_layout(#width=900,
                 coloraxis_colorbar_y = -0.1,
                 plot_bgcolor= bgc,
                 paper_bgcolor= bgc)
-fig.update_layout(sliders=[ dict(bgcolor='rgba(0,0,0,0)',
+fig.update_layout(sliders=[ dict(# bgcolor is the grip's fill, not merely a
+                                 # backdrop: transparent drew it as an empty
+                                 # ring. activebgcolor applies only while
+                                 # dragging, so setting it alone did nothing.
+                                 bgcolor='#00B4D8',
+                                 activebgcolor='#00B4D8',
+                                 bordercolor='#7E8AA0',
                                  steps = [{'label':'H-index'}, {'label':'#cites'}, {'label':'#pprs'}, {'label':'Hm-index'}, {'label':'#pprs-s'}, {'label':'#pprs-sf'},{'label':'#pprs-sfl'},{'label':'C'}],
                                  )
                             ],
                 updatemenus = [dict(bgcolor = '#ECAB4C')])
 fig.update_layout(geo_bgcolor=bgc,margin={'l':0, 'r':0,'b':0,'t':0})
-fig.update_geos(projection=dict(scale = 1), center=dict(lat=30),showframe=False)
+fig.update_geos(projection=dict(scale = 1.25), center=dict(lat=22),
+                showframe=False)
 
 careerORSingleYr = html.Div([
     dbc.RadioItems(id = "careerORSingleYrRadio" + SUFFIX, value = True, className = "btn-group", inputClassName = "btn-check", labelClassName = "btn btn-outline-primary",
@@ -375,10 +388,6 @@ zort = html.Div([dbc.RadioItems(id='selectYrRadio' + SUFFIX,
                       value = _MAP_DEFAULT_YEAR)], className = "radio-group year-picker")
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
 explain  =  f'''
-                    <h3 style='color:#ECAB4C;'> Bird's eye view of the top 2% </h3>
-
-                    ---
-
                     This dashboard section provides a zoomed-out look at the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
                     You can explore the researchers and institutions that made the cut in each country.
 
@@ -642,6 +651,9 @@ dede = dbc.Navbar(
                         id="spotlight-open", className="ev-nav-search",
                         n_clicks=0),
                     html.Span(className="ev-nav-sep"),
+                    dbc.Button([html.I(**{"data-lucide": "user"}), "Explore"],
+                               id="jump-explore", className="ev-nav-btn",
+                               n_clicks=0),
                     dbc.Button([html.I(**{"data-lucide": "users"}), "Compare"],
                                id="jump-compare", className="ev-nav-btn",
                                n_clicks=0),
@@ -665,25 +677,79 @@ dede = dbc.Navbar(
 )
 
 
+# Button id -> the section it opens, by item_id rather than by position in
+# ACCORDION_SECTIONS. Reordering the sections used to silently repoint these:
+# "Compare" returned SECTIONS[0], so once "explore" took first place the
+# multi-person icon opened the single-researcher section.
+_JUMP_TARGETS = {
+    "jump-explore": "explore",
+    "jump-trends": "trends",
+    "jump-compare": "compare",
+}
+
+
 @callback(
     Output("accordion", "active_item"),
-    Input("jump-compare", "n_clicks"),
+    Input("jump-explore", "n_clicks"),
     Input("jump-trends", "n_clicks"),
+    Input("jump-compare", "n_clicks"),
     prevent_initial_call=True,
 )
-def jump_to_section(_compare, _trends):
+def jump_to_section(_explore, _trends, _compare):
     """Open the section whose navbar button was pressed.
 
     Which button fired is read from the trigger rather than from the click
     counts, because comparing counts breaks as soon as one button is pressed
     twice in a row.
     """
-    triggered = callback_context.triggered_id
-    if triggered == "jump-compare":
-        return ACCORDION_SECTIONS[0][0]
-    if triggered == "jump-trends":
-        return ACCORDION_SECTIONS[1][0]
-    raise PreventUpdate
+    target = _JUMP_TARGETS.get(callback_context.triggered_id)
+    if target is None:
+        raise PreventUpdate
+    return target
+
+
+# Opening the section is not the same as going to it.
+#
+# "explore" is the section the accordion starts on, so pressing Explore set
+# active_item to the value it already held: the callback above returned, Dash
+# saw no change, and nothing at all happened on screen. The other two buttons
+# did open their section, but left the reader at the top of the page with the
+# change happening somewhere below the fold.
+#
+# Scrolling belongs in the browser rather than in a server callback, and it is
+# safe here in a way it was not in the picker: this runs on a click, not on
+# every DOM mutation.
+dash.clientside_callback(
+    """
+    function (explore, trends, compare) {
+        var trigger = (dash_clientside.callback_context.triggered || [])[0];
+        if (!trigger || !trigger.value) { return window.dash_clientside.no_update; }
+        var order = {'jump-explore': 0, 'jump-trends': 1, 'jump-compare': 2};
+        var index = order[trigger.prop_id.split('.')[0]];
+        if (index === undefined) { return window.dash_clientside.no_update; }
+
+        // After the section has opened, so the header is where it will stay.
+        setTimeout(function () {
+            var items = document.querySelectorAll('#accordion .accordion-item');
+            var item = items[index];
+            if (!item) { return; }
+            // The toolbar is sticky, so scrolling the header to the top of the
+            // viewport would put it underneath.
+            var bar = document.querySelector('.ev-toolbar');
+            var clearance = (bar ? bar.getBoundingClientRect().height : 0) + 14;
+            var top = item.getBoundingClientRect().top + window.scrollY;
+            window.scrollTo({top: Math.max(0, top - clearance),
+                             behavior: 'smooth'});
+        }, 160);
+        return '';
+    }
+    """,
+    Output("jump-sink", "children"),
+    Input("jump-explore", "n_clicks"),
+    Input("jump-trends", "n_clicks"),
+    Input("jump-compare", "n_clicks"),
+    prevent_initial_call=True,
+)
 
 
 info_button = dbc.Button("More info", id='off', n_clicks=0,
@@ -752,13 +818,12 @@ tabs = [
             # "comparison" on three of four labels is the word they have in
             # common, so it carries no information and only makes the row wide
             # enough to wrap.
-            dbc.Tab(label="Find an author", tab_id="tab-0"),
             dbc.Tab(label="Author vs author", tab_id="tab-1"),
             dbc.Tab(label="Author vs group", tab_id="tab-2"),
             dbc.Tab(label="Group vs group", tab_id="tab-3"),
         ],
         id="tabs",
-        active_tab="tab-0",
+        active_tab="tab-1",
     ),
     html.Div(id="content"),
 ]
@@ -776,13 +841,23 @@ def switch_tab(at, picked):
         return html.Center(author_vs_group_layout(picked))
     elif at == "tab-3":
         return html.Center(group_vs_group_layout())
-    elif at == 'tab-0':
-        # The tab is built on demand, so a name chosen in the spotlight is
-        # handed over by seeding the layout rather than by a callback writing
-        # into a dropdown that does not exist until this returns.
-        return html.Center(author_find_layout(picked)
-                           if picked else author_find_layout())
     return html.P("This shouldn't ever be displayed...")
+
+
+@callback(Output("explore-content", "children"),
+          Input("accordion", "active_item"),
+          State("spotlight-selection", "data"))
+def build_explore(active, picked):
+    """Build "Find an author" when its section is opened.
+
+    Same on-demand rule as the tabs: the panel is built here rather than at
+    import, so a name chosen in the spotlight is handed to it at build time
+    instead of a callback writing into a dropdown that does not exist yet.
+    """
+    if active != ACCORDION_SECTIONS[0][0]:
+        raise PreventUpdate
+    return html.Center(author_find_layout(picked) if picked
+                       else author_find_layout())
 
 
 # item_id lets the navbar's jump buttons open a section directly. The
@@ -790,18 +865,24 @@ def switch_tab(at, picked):
 # say it, and a title that has to explain its own widget is a sign the widget
 # is not reading as one.
 ACCORDION_SECTIONS = [
-    ("compare", "Compare researchers, fields and countries",
-     "Put two researchers, or a researcher and a group, side by side"),
+    ("explore", "One researcher, explore metrics",
+     "Every metric for one researcher, against the field they work in",
+     "user"),
     ("trends", "One researcher, year by year",
-     "How a single researcher's metrics move across editions"),
+     "How a single researcher's metrics move across editions",
+     "trending-up"),
+    ("compare", "Compare researchers, fields and countries",
+     "Put two researchers, or a researcher and a group, side by side",
+     "users"),
 ]
+
 
 accordion = html.Div(
     dbc.Accordion(
         [
             dbc.AccordionItem(
                 [
-                    html.Div(tabs),
+                    html.Div(id="explore-content"),
                 ],
                 title = ACCORDION_SECTIONS[0][1],
                 item_id = ACCORDION_SECTIONS[0][0],
@@ -812,6 +893,13 @@ accordion = html.Div(
                 ],
                 title = ACCORDION_SECTIONS[1][1],
                 item_id = ACCORDION_SECTIONS[1][0],
+            ),
+            dbc.AccordionItem(
+                [
+                    html.Div(tabs),
+                ],
+                title = ACCORDION_SECTIONS[2][1],
+                item_id = ACCORDION_SECTIONS[2][0],
             )
         ],
         flush = False,
@@ -820,6 +908,10 @@ accordion = html.Div(
     ),
     id='accordion-anchor',
 )
+
+# Clientside callbacks need somewhere to return to; this is that and nothing
+# else.
+jump_sink = html.Div(id="jump-sink", style={"display": "none"})
 
 
 def _footer_link(icon, label, href):
@@ -1005,7 +1097,6 @@ def toggle_spotlight(_clicks, _close, hits, is_open):
 
 @callback(
     Output("accordion", "active_item", allow_duplicate=True),
-    Output("tabs", "active_tab"),
     Output("spotlight-selection", "data"),
     Input({"type": "spotlight-hit", "index": ALL}, "n_clicks"),
     State("spotlight-results", "children"),
@@ -1026,7 +1117,9 @@ def spotlight_pick(hits, rendered):
         chosen = rendered[index]["props"]["children"]
     except (TypeError, IndexError, KeyError):
         raise PreventUpdate
-    return ACCORDION_SECTIONS[0][0], "tab-0", chosen
+    # "Find an author" is its own accordion section now rather than a tab, so
+    # this opens the section and no longer selects a tab that is gone.
+    return ACCORDION_SECTIONS[0][0], chosen
 
 
 # The theme switch is clientside for two reasons: it must not wait on a server
@@ -1084,6 +1177,7 @@ layout = dbc.Container(fluid = True, children = [
         html.Br(),
         html.Hr(),
         dbc.Row(accordion),
+        jump_sink,
         footer
         ], className = 'ev-page ev-shell')
     # dbc.Tooltip("Options selected in this row determine what dataset NC metrics are obtained from.", target = "selectStep1Card", placement = "right"), 

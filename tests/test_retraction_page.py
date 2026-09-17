@@ -215,13 +215,36 @@ def test_the_population_view_reports_citation_counts_too():
     assert measured == {2023, 2024}
 
 
+def _rendered_text(node, out=None):
+    """Every string in the built layout, which is what a reader sees.
+
+    Asserting against the source file does not work: these captions are
+    written as adjacent Python string literals, so the concatenation leaves
+    quote characters between the fragments and a literal match fails on text
+    that renders perfectly.
+    """
+    out = [] if out is None else out
+    if isinstance(node, str):
+        out.append(node)
+    elif isinstance(node, (list, tuple)):
+        for child in node:
+            _rendered_text(child, out)
+    elif getattr(node, '_prop_names', None) is not None:
+        for prop in ('children', 'text'):
+            if prop in node._prop_names:
+                _rendered_text(getattr(node, prop, None), out)
+    return out
+
+
 def test_the_step_at_the_boundary_is_explained_not_left_hanging():
     """Estimated years average about 3 citations against 5.5 recorded in
     2023. A reader who takes that step as real concludes retractions doubled,
     when it is the regression pulling large values toward the middle."""
-    source = open('pages/retraction.py').read()
-    assert 'not' in source and 'retractions doubling in 2023' in source
-    assert 'floor rather than a level' in source
+    import app  # noqa: F401
+    import pages.retraction as retraction
+    text = ' '.join(_rendered_text(retraction.layout))
+    assert 'retractions doubling in 2023' in text
+    assert 'floor rather than a level' in text
 
 
 def test_the_estimated_population_mean_is_below_the_measured_one():
