@@ -29,18 +29,6 @@ from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
 from citations_lib.callback_templates import *
 import dash_loading_spinners as dls
-# The gauge outline has to read on BOTH pages. Charts here are drawn once and
-# set transparent (bgc), so the page background shows through and a theme
-# switch never redraws them; a colour picked for one theme is therefore stuck
-# on the other. Plotly's default gauge border is #444, which is clear on the
-# light ground (#F4F6FA) and all but invisible on the dark one (#394459),
-# which is why the dark gauges looked unfinished.
-#
-# #7E8AA0 sits between the two grounds in luminance, so it separates from
-# each. bgcolor is transparent for the same reason as bgc: the arc's interior
-# should be whatever the page is.
-GAUGE_EDGE = '#7E8AA0'
-
 # The what-if calculator.
 #
 # The composite score is not a black box: it is the sum of six log ratios,
@@ -72,74 +60,7 @@ WHATIF_METRICS = (
 )
 
 
-# The heading over each gauge, in the order they are drawn. Module level
-# because the what-if callback redraws them without going near the function
-# that built them the first time.
-GAUGE_TITLES = (
-    'Number of citations',
-    'H-index',
-    'Hm-index',
-    'Number of citations to single<br> authored papers',
-    'Number of citations to single<br> and first authored papers',
-    'Number of citations to single,<br> first and last authored papers',
-    'Composite score',
-)
-
-
-def gauge_figure(title, value, max_metric, whatif=False, reference=None):
-    """One indicator gauge, published or hypothetical.
-
-    max_metric is [median, ceiling] for the selected group: the median is the
-    line across the arc, the ceiling is the top of the axis. A what-if value
-    can exceed the ceiling, so the axis grows to fit rather than pegging the
-    needle and quietly lying about the size of the change.
-
-    `reference` is what the delta underneath counts from. For a published
-    gauge that is the group median, which is the comparison the page has
-    always made. In what-if mode it becomes the researcher's real value, so
-    the delta reads as the size of the change the reader just made.
-    """
-    median, ceiling = max_metric[0], max_metric[1]
-    if reference is None:
-        reference = median
-    try:
-        ceiling = max(ceiling, value * 1.05)
-    except TypeError:
-        pass
-
-    fig = make_subplots(rows=1, cols=1, specs=[[{'type': 'indicator'}]])
-    fig.add_trace(go.Indicator(
-        mode='gauge+number+delta', value=value,
-        delta={'reference': reference,
-               'increasing': {'color': '#84B460'},
-               'decreasing': {'color': '#D86CB4'}},
-        gauge={'threshold': {'line': {'color': '#F09048', 'width': 3},
-                             'thickness': 0.75, 'value': median},
-               'axis': {'tickmode': 'auto', 'range': [None, ceiling],
-                        'tickwidth': 1, 'tickcolor': '#A8B2C4'},
-               'bar': {'color': WHATIF_BAR if whatif else GAUGE_BAR},
-               # Bar and outline together, because those are the only two
-               # parts of a gauge the page's theme rules leave alone. The
-               # title and the big number are restyled by assets/style.css
-               # to follow the theme (.gtitle and .number), deliberately and
-               # for their own good reasons, so a colour set on either here
-               # would never reach the browser.
-               'bordercolor': WHATIF_BAR if whatif else GAUGE_EDGE,
-               'borderwidth': 2 if whatif else 1,
-               'bgcolor': 'rgba(0,0,0,0)'}),
-        row=1, col=1)
-    fig.update_layout(
-        height=200, title_x=0.5, title_y=0.85,
-        title={'text': title, 'font': {'size': 14, 'color': '#E8ECF2'}},
-        font={'size': 12, 'color': '#A8B2C4'},
-        plot_bgcolor=bgc, paper_bgcolor=bgc,
-        margin={'l': 10, 'r': 5, 'b': 10, 't': 100}, showlegend=False)
-    fig.update_xaxes(automargin=True, showgrid=True, gridcolor=darkAccent2,
-                     linecolor=darkAccent2, tickmode='array', tickvals=[])
-    return fig
-
-
-def bullet_rows(values, maxima, quartiles):
+def bullet_rows(values, maxima, quartiles, composite_quartiles=None):
     """One row per indicator for the bullet chart in the author card.
 
     The six gauges this replaces each had their own axis -- 250k for
@@ -173,6 +94,33 @@ def bullet_rows(values, maxima, quartiles):
             'median': round(share(quarters.get('median') or 0), 4),
             'q3': round(share(quarters.get('q3') or 0), 4),
             'median_raw': quarters.get('median'),
+        })
+
+    # The composite score as a seventh row.
+    #
+    # It belongs on the same axis as the six because it IS them: the score is
+    # the sum of the six terms, so dividing by six puts it at their mean and
+    # 1.0 keeps the meaning it has on every other row -- at the edition
+    # ceiling on everything. The group's own quartiles for the score come from
+    # the database rather than from summing the six medians, which would be
+    # wrong: a median is not additive.
+    if rows:
+        total = sum(row['share'] for row in rows)
+        quarters = composite_quartiles or {}
+
+        def composite_share(x):
+            return 0.0 if x is None else float(x) / len(WHATIF_METRICS)
+
+        rows.append({
+            'key': 'c',
+            'label': 'Composite score',
+            'value': round(total, 4),
+            'share': round(total / len(WHATIF_METRICS), 4),
+            'q1': round(composite_share(quarters.get('q1')), 4),
+            'median': round(composite_share(quarters.get('median')), 4),
+            'q3': round(composite_share(quarters.get('q3')), 4),
+            'median_raw': quarters.get('median'),
+            'composite': True,
         })
     return rows
 
@@ -790,7 +738,10 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
 
             el.__evRedraw = draw;
             window.__evCharts = window.__evCharts || [];
-            if (window.__evCharts.indexOf(el) < 0) { window.__evCharts.push(el); }
+            if (window.__evCharts.indexOf(el) < 0) {
+                window.__evCharts.push(el);
+                if (window.__evObserveSize) { window.__evObserveSize(el); }
+            }
             draw();
             return '';
         }
@@ -1003,6 +954,13 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             }
             var accent = payload.whatif ? '#D86CB4'
                                         : token('--ev-accent', '#00B4D8');
+            // The composite row keeps its own colour when published, because
+            // it is a different kind of quantity from the six that make it
+            // up. In what-if mode it goes magenta with everything else: the
+            // distinction that matters there is invented against published,
+            // and nothing hypothetical may be left looking published.
+            var composite = payload.whatif ? '#D86CB4'
+                                           : token('--ev-green', '#84B460');
             var orange = token('--ev-orange', '#F09048');
             var muted = token('--ev-text-muted', '#A8B2C4');
             var text = token('--ev-text', '#E8ECF2');
@@ -1044,7 +1002,10 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 // put every value bar below the band it belongs to.
                 {type: 'bar', barWidth: 8, barGap: '-100%', z: 3,
                  itemStyle: {color: accent, borderRadius: 2},
-                 data: rows.map(function (r) { return r.share; }),
+                 data: rows.map(function (r) {
+                     return r.composite
+                         ? {value: r.share, itemStyle: {color: composite}}
+                         : r.share; }),
                  tooltip: {formatter: function (p) {
                      var r = rows[p.dataIndex];
                      return r.label + '<br/>' + commas(r.value)
@@ -1087,7 +1048,9 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                         function (v) { return v === 1 ? 'edition max' : ''; }},
                     splitLine: {lineStyle: {color: band, opacity: 0.3}}},
                 yAxis: {type: 'category', inverse: true,
-                    data: rows.map(function (r) { return r.label; }),
+                    data: rows.map(function (r) {
+                        return r.composite ? {value: r.label, textStyle:
+                            {color: composite, fontWeight: 600}} : r.label; }),
                     axisLine: {show: false}, axisTick: {show: false},
                     axisLabel: {color: text, fontSize: 12}},
                 series: series
@@ -1097,7 +1060,10 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
 
             el.__evRedraw = draw;
             window.__evCharts = window.__evCharts || [];
-            if (window.__evCharts.indexOf(el) < 0) { window.__evCharts.push(el); }
+            if (window.__evCharts.indexOf(el) < 0) {
+                window.__evCharts.push(el);
+                if (window.__evObserveSize) { window.__evObserveSize(el); }
+            }
             draw();
             return '';
         }
@@ -1106,14 +1072,12 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         Input('bulletStore' + SUFFIX, 'data'),
         State('bulletChart' + SUFFIX, 'id'))
 
-    # =============== C score figure, beside the card
-    metricsFigAuthor_c = dbc.Row([
-        dbc.Col([html.Center(dcc.Graph(id = 'metricsFigGraphAuthor_c' + SUFFIX,
-                                       figure = empty_fig,
-                                       config = {'displayModeBar': False}))],
-                md = 3),
-        dbc.Col(identityCard, md = 8),
-    ], justify = 'around')
+    # =============== The card, across the row
+    #
+    # It shared this row with a plotly gauge of the composite score. The score
+    # is the seventh bullet row now, which is where it belongs -- beside the
+    # six terms it is the sum of -- so the card has the width to itself.
+    metricsFigAuthor_c = dbc.Row(dbc.Col(identityCard, width = 12))
     formulaRow = dbc.Row(dbc.Col(id = 'c_score_formula' + SUFFIX,
                                  width = {'offset': 1, 'size': 10}))
 
@@ -1152,6 +1116,17 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                     disabled = True, debounce = False,
                     className = 'ev-whatif-input'),
                 title = label + (f' (max {maximum:,})' if maximum else '')))
+
+        # The composite box is a readout, not a control: the score is the sum
+        # of the six above it, so it is never typed into. It is the fastest
+        # thing on the card to watch while a what-if is being edited.
+        total = composite_score(state['actual'], state['maxima'])
+        cells.append(html.Div(
+            dbc.Input(id = 'whatIf-c' + SUFFIX, type = 'text',
+                      value = '' if total is None else f'{total:.2f}',
+                      disabled = True, readonly = True,
+                      className = 'ev-whatif-input ev-whatif-derived'),
+            title = 'Composite score, the sum of the six above'))
         return cells
 
     def _whatif_note(state):
@@ -1175,7 +1150,6 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
 
     @callback(
         Output('2author_figs' + SUFFIX, 'children'), 
-        Output('metricsFigGraphAuthor_c' + SUFFIX, 'figure'), 
         Output('c_score_formula' + SUFFIX, 'children'),
         Output('whatIfStore' + SUFFIX, 'data'),
         Output('whatIfToggle' + SUFFIX, 'on'),
@@ -1293,25 +1267,28 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             # get_es_aggregate returns [min, q1, median, q3, max, n]. The
             # gauges only ever read the median and the max; the bullet rows
             # draw the group's middle half, so they need the quartiles too.
-            quartiles = {
-                metric: {'q1': kek[f'{prefix1}_{yr1}'][metric + suffix][1],
-                         'median': kek[f'{prefix1}_{yr1}'][metric + suffix][2],
-                         'q3': kek[f'{prefix1}_{yr1}'][metric + suffix][3]}
-                for metric, _ in WHATIF_METRICS
-                for suffix in [' (ns)' if ns else '']
-            }
+            group_stats = kek[f'{prefix1}_{yr1}']
+            # Which set of columns this reader is looking at. Defined here
+            # because the quartiles below need it, and again where the store
+            # is built; both must agree.
+            suffix_ns = ' (ns)' if ns else ''
+
+            def _quartiles(metric):
+                vector = group_stats[metric + suffix_ns]
+                return {'q1': vector[1], 'median': vector[2], 'q3': vector[3]}
+
+            quartiles = {metric: _quartiles(metric)
+                         for metric, _ in WHATIF_METRICS}
+            # The score's own quartiles, read rather than summed from the six:
+            # a median is not additive, so summing them would not give the
+            # group's median score.
+            composite_quartiles = _quartiles('c')
         # if career2 == True:
         #     dfs = dfs_career.copy()
         #     dfs_log = dfs_career_log.copy()
         # else:
         #     dfs = dfs_singleyr.copy()
         #     dfs_log = dfs_singleyr_log.copy()
-
-            composite_fig, new_rank_1 = main_1_author_figs(
-                data1, data1_log, group1_name, ns, logTransf, max_metrics,
-                g1c = g1c, g2c = g2c, author1_metrics = {},
-                author2_metrics = {})
-            composite_fig.update_layout(height = 200)
 
             # Title
             title = 'Ranking based on composite score C and bar plots of metrics used to compute C'
@@ -1336,8 +1313,6 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             # Everything the calculator needs, carried in the browser, so
             # moving an input does not repeat the Elasticsearch lookup that
             # found the author in the first place.
-            suffix_ns = ' (ns)' if ns else ''
-
             def _number(value):
                 return None if value is None else float(value)
 
@@ -1358,11 +1333,14 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 'reproducible': composite_is_reproducible(prefix1, yr1),
                 'quartiles': {m: {k: _number(v) for k, v in q.items()}
                               for m, q in quartiles.items()},
+                'composite_quartiles': {k: _number(v)
+                                        for k, v in composite_quartiles.items()},
                 'group_label': str(group_label or ''),
             }
 
             figures = html.Div([_whatif_note(whatif_state)])
-            rows = bullet_rows(actual, whatif_state['maxima'], quartiles)
+            rows = bullet_rows(actual, whatif_state['maxima'], quartiles,
+                               composite_quartiles)
             c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
                 r'''
 $$
@@ -1374,7 +1352,7 @@ C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
 \;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
 $$
 ''', mathjax=True, className='ev-formula'))])
-            return (figures, composite_fig, c_img, whatif_state, False,
+            return (figures, c_img, whatif_state, False,
                     card_header(group1_name, names['inst'], cntry_full,
                                 names['field'], f'{span} {yr1}'),
                     card_chips(round(data1['self%'] * 100, 2), standing),
@@ -1394,64 +1372,6 @@ $$
                     bullet_payload(rows, group_label),
                     _bullet_inputs(whatif_state))
 
-    def main_1_author_figs(df_in, df_in_log, group1_name, ns, logTransf, max_metrics, g1c = ['lightcoral', 'red'], g2c = ['lightblue', 'blue'], author1_metrics = {}, author2_metrics = {}, weights = [1, 1, 1, 1, 1, 1]):
-        metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
-        
-        if ns:
-            cname  = 'c (ns)'
-            rname  = 'rank (ns)'
-        else:
-            cname  = 'c'
-            rname  = 'rank'
-        
-        logTransf = False
-        # Get author 1 metrics to plot
-        if group1_name != None:
-            metrics_dict = get_initial_metrics_list(df_in, group1_name, ns)
-            metrics_dict_log = get_initial_metrics_list(df_in_log, group1_name, ns)
-            for key, value in author1_metrics.items():
-                if ns: key += ' (ns)'
-                metrics_dict[key] = value
-            new_rank_1 = df_in[rname]
-            new_y_values_1 = list(metrics_dict.values())
-            new_y_values_1.append(df_in[cname])
-            new_y_values_1_log = list(metrics_dict_log.values())
-            new_y_values_1_log.append(df_in_log[cname])
-            #print(new_y_values_1)
-            # _, new_rank_1, new_y_values_1, _ = update_c_and_rank(df_in, author = group1_name, metrics_dict = metrics_dict, ns = ns, logTransf = False, weights = weights)
-            # _, _, new_y_values_1_log, _ = update_c_and_rank(df_in, author = group1_name, metrics_dict = metrics_dict, ns = ns, logTransf = True, weights = weights)
-        else:
-            new_rank_1 = 0
-            new_y_values_1 = [0]*7
-            new_y_values_1_log = [0]*7
-        
-        def sizeof_number(number):
-            """
-            format values per thousands : K-thousands, M-millions, B-billions. 
-            
-            parameters:
-            -----------
-            number is the number you want to format
-            currency is the prefix that is displayed if provided (€, $, £...)
-            
-            """
-            if number >= 1000:
-                return f"{int(number/1000)}k"
-            else:
-                return f"{int(number)}"
-
-
-        # The gauges are built by gauge_figure at module level, which the
-        # what-if callback calls too. One builder means a hypothetical gauge
-        # cannot drift away from the published one it replaces.
-        # Only the composite gauge is built here. The six indicator gauges it
-        # used to return became the bullet rows in the author card, which are
-        # drawn in the browser from a small payload; building six plotly
-        # figures per author load and discarding them is pure cost.
-        composite = gauge_figure(GAUGE_TITLES[6], new_y_values_1[6],
-                                 max_metrics[metrics_list[6]])
-        return(composite, new_rank_1)
-
     # ==========================================================================================
     # The what-if calculator
     # ==========================================================================================
@@ -1464,8 +1384,7 @@ $$
 
     @callback(
         [Output('bulletStore' + SUFFIX, 'data', allow_duplicate = True),
-         Output('metricsFigGraphAuthor_c' + SUFFIX, 'figure',
-                allow_duplicate = True),
+         Output('whatIf-c' + SUFFIX, 'value'),
            Output('rankDisplay' + SUFFIX, 'children', allow_duplicate = True),
            Output('rankChartStore' + SUFFIX, 'data', allow_duplicate = True),
            Output('idCard' + SUFFIX, 'className', allow_duplicate = True)]
@@ -1486,7 +1405,8 @@ $$
         standing = state['standing']
 
         published_rows = bullet_rows(state['actual'], state['maxima'],
-                                     state['quartiles'])
+                                     state['quartiles'],
+                                     state.get('composite_quartiles'))
 
         if not live:
             # Back to what was published, on the rows and on the rank at once.
@@ -1494,7 +1414,7 @@ $$
             published_c = composite_score(state['actual'], state['maxima'])
             return [
                 bullet_payload(published_rows, state['group_label']),
-                gauge_figure(GAUGE_TITLES[6], published_c, state['c_limits']),
+                '' if published_c is None else f'{published_c:.2f}',
                 rank_stats(standing['scopus_rank'], standing['within_list'],
                            standing['published']),
                 rank_chart_payload(standing['within_list'],
@@ -1526,11 +1446,11 @@ $$
         published_c = composite_score(state['actual'], state['maxima'])
         return [
             bullet_payload(bullet_rows(values, state['maxima'],
-                                       state['quartiles']),
+                                       state['quartiles'],
+                                       state.get('composite_quartiles')),
                            state['group_label'], whatif = True,
                            published = published_rows),
-            gauge_figure(GAUGE_TITLES[6], new_c, state['c_limits'],
-                         whatif = True, reference = published_c),
+            '' if new_c is None else f'{new_c:.2f}',
             rank_stats(new_standing['scopus_rank'],
                        new_standing['within_list'],
                        new_standing['published'], whatif = True,

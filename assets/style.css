@@ -3178,8 +3178,8 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   border-top: 1px solid color-mix(in srgb, var(--ev-surface-2) 60%, transparent);
 }
 .ev-bullet-chart {
-  /* 26 top + six 34px rows + 8 bottom. */
-  height: 238px;
+  /* 26 top + seven 34px rows + 8 bottom. */
+  height: 272px;
   width: 100%;
 }
 
@@ -3197,8 +3197,41 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   width: 104px;
 }
 .ev-bullet-inputs > div { height: 26px; }
+/* ====== The what-if boxes ======
+   One per bullet row, aligned with it, and the row's readout as well as its
+   control: the value used to appear twice, once inside a gauge arc and again
+   in a box underneath it. */
+.ev-whatif-input {
+  background: var(--ev-bg-deep) !important;
+  color: var(--ev-text) !important;
+  border: 1px solid var(--ev-surface-2) !important;
+  border-radius: 8px !important;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.ev-whatif-input:focus {
+  border-color: #D86CB4 !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #D86CB4 22%, transparent) !important;
+  outline: none;
+}
+/* A disabled box is still worth reading: it is the published value. It just
+   must not look like somewhere to type. */
+.ev-whatif-input:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
 .ev-bullet-inputs .ev-whatif-input {
   height: 26px;
   padding: 0 .5rem !important;
   font-size: .82rem;
+}
+/* The composite box is a readout: it shows the score the six above it add up
+   to and is never typed into, so it does not carry the dimmed look the other
+   five get when the calculator is off. */
+.ev-whatif-derived {
+  opacity: 1 !important;
+  font-weight: 600;
+  cursor: default;
 }

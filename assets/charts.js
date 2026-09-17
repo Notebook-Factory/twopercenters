@@ -32,4 +32,24 @@
     attributes: true,
     attributeFilter: ['data-theme'],
   });
+
+  // And follow their container. echarts measures the element once, at draw
+  // time, and keeps that size: a chart drawn while its panel was narrow -- or
+  // one whose column changed width -- kept painting at the old width and its
+  // bars ran out past the edge of the card.
+  if (window.ResizeObserver) {
+    var sizes = new ResizeObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var el = entries[i].target;
+        if (!window.echarts) { continue; }
+        var chart = window.echarts.getInstanceByDom(el);
+        // Width only: the height is set in CSS, and reacting to it as well
+        // makes a resize that changes height loop.
+        if (chart && el.clientWidth) {
+          try { chart.resize({width: el.clientWidth}); } catch (e) {}
+        }
+      }
+    });
+    window.__evObserveSize = function (el) { sizes.observe(el); };
+  }
 })();
