@@ -136,14 +136,17 @@ def bullet_payload(rows, group_label, whatif=False, published=None):
             'published': published if whatif else None}
 
 
-def gauge_legend(group_label):
-    """What the gauges are measured against, in words and in colour.
+def comparison_legend(group_label):
+    """What the comparison group does and does not set.
 
-    Two things on every gauge came from the same choice and neither was
-    labelled: the top of the arc is the highest value in the selected group,
-    and the line across it is that group's median. The control that picks the
-    group used to carry the explanation in its own option text, where it said
-    the line was red. It is orange.
+    This said "gauge maximum: the highest in <group>", which was true of the
+    gauges and is true of nothing now. The bars divide by the EDITION maximum,
+    the same denominator the published formula uses, which is why the six add
+    up to the score and why a bar does not change length when the reader picks
+    a different group to compare against.
+
+    What the group sets is the two reference marks: the median and the middle
+    half. The band was drawn from the first day and never named.
     """
     if not group_label:
         return []
@@ -151,10 +154,12 @@ def gauge_legend(group_label):
         html.Span([html.Span(className='ev-legend-line'),
                    html.Span('median in '), html.Strong(str(group_label))],
                   className='ev-legend-item'),
-        html.Span([html.Span(className='ev-legend-cap'),
-                   html.Span('gauge maximum: the highest in '),
-                   html.Strong(str(group_label))],
+        html.Span([html.Span(className='ev-legend-band'),
+                   html.Span('middle half of '), html.Strong(str(group_label))],
                   className='ev-legend-item'),
+        html.Span([html.Span('bar length is the share of the edition maximum, '
+                             'the same denominator the composite score uses')],
+                  className='ev-legend-item ev-legend-note'),
     ]
 
 
@@ -1159,7 +1164,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         Output('rankChartStore' + SUFFIX, 'data'),
         Output('idCard' + SUFFIX, 'className'),
         Output('shareStore' + SUFFIX, 'data'),
-        Output('gaugeLegend' + SUFFIX, 'children'),
+        Output('comparisonLegend' + SUFFIX, 'children'),
         Output('bulletStore' + SUFFIX, 'data'),
         Output('bulletInputs' + SUFFIX, 'children'),
         [Input('careerORSingleYrA1' + SUFFIX, 'value'),
@@ -1368,7 +1373,7 @@ $$
                                   rank_standing,
                                   round(data1['self%'] * 100, 2),
                                   standing_text),
-                    gauge_legend(group_label),
+                    comparison_legend(group_label),
                     bullet_payload(rows, group_label),
                     _bullet_inputs(whatif_state))
 
@@ -1507,8 +1512,8 @@ $$
             dbc.Button("More info", id="open-offcanvas22", n_clicks=0,
                        className="ev-info-btn"),
         ], className="ev-explore-controls"), width = 12)),
-        dbc.Row(dbc.Col(html.Div(id='gaugeLegend' + SUFFIX,
-                                 className='ev-gauge-legend'), width = 12)),
+        dbc.Row(dbc.Col(html.Div(id='comparisonLegend' + SUFFIX,
+                                 className='ev-comparison-legend'), width = 12)),
         metricsFigAuthor_c,
         dbc.Row(html.Br()),
         formulaRow,

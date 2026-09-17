@@ -3127,12 +3127,13 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   white-space: nowrap;
 }
 
-/* ====== What the gauges are measured against ======
-   Both facts came from one choice and neither was written down: the top of
-   each arc is the highest value in the selected group, and the line across it
-   is that group's median. The option text used to carry the explanation and
-   called the line red; it is orange. */
-.ev-gauge-legend {
+/* ====== What the comparison group sets ======
+   It sets the two reference marks on each bullet row, the median and the
+   middle half, and nothing else: the bars divide by the edition maximum, so
+   a bar does not change length when the group changes. This used to say
+   "gauge maximum: the highest in <group>", which was true of the gauges that
+   are gone and true of nothing now. */
+.ev-comparison-legend {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
@@ -3149,14 +3150,16 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   border-radius: 2px;
   background: var(--ev-orange);
 }
-.ev-legend-cap {
+/* The q1-q3 band, as it is drawn on the rows. */
+.ev-legend-band {
   width: 16px;
-  height: 10px;
-  border: 1px solid var(--ev-text-muted);
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  opacity: .7;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--ev-surface-2);
+  opacity: .8;
 }
+/* The scale note is an explanation, not a key, so it carries no swatch. */
+.ev-legend-note { opacity: .85; }
 
 /* ==========================================================================
    The bullet rows in the author card
