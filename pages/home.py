@@ -24,6 +24,7 @@ import dash_loading_spinners as dls
 # =============== Custom lib
 from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
+from citations_lib.top10 import top10_layout
 from citations_lib.single_author_layout import *
 from citations_lib.author_vs_group_layout import *
 from citations_lib.group_vs_group_layout import *
@@ -654,6 +655,10 @@ dede = dbc.Navbar(
                     dbc.Button([html.I(**{"data-lucide": "user"}), "Explore"],
                                id="jump-explore", className="ev-nav-btn",
                                n_clicks=0),
+                    dbc.Button([html.I(**{"data-lucide": "trophy"}),
+                                "Top 10"],
+                               id="jump-top10", className="ev-nav-btn",
+                               n_clicks=0),
                     dbc.Button([html.I(**{"data-lucide": "users"}), "Compare"],
                                id="jump-compare", className="ev-nav-btn",
                                n_clicks=0),
@@ -683,6 +688,7 @@ dede = dbc.Navbar(
 # multi-person icon opened the single-researcher section.
 _JUMP_TARGETS = {
     "jump-explore": "explore",
+    "jump-top10": "top10",
     "jump-trends": "trends",
     "jump-compare": "compare",
 }
@@ -691,11 +697,12 @@ _JUMP_TARGETS = {
 @callback(
     Output("accordion", "active_item"),
     Input("jump-explore", "n_clicks"),
+    Input("jump-top10", "n_clicks"),
     Input("jump-trends", "n_clicks"),
     Input("jump-compare", "n_clicks"),
     prevent_initial_call=True,
 )
-def jump_to_section(_explore, _trends, _compare):
+def jump_to_section(_explore, _top10, _trends, _compare):
     """Open the section whose navbar button was pressed.
 
     Which button fired is read from the trigger rather than from the click
@@ -724,7 +731,8 @@ dash.clientside_callback(
     function (explore, trends, compare) {
         var trigger = (dash_clientside.callback_context.triggered || [])[0];
         if (!trigger || !trigger.value) { return window.dash_clientside.no_update; }
-        var order = {'jump-explore': 0, 'jump-trends': 1, 'jump-compare': 2};
+        var order = {'jump-explore': 0, 'jump-top10': 1, 'jump-trends': 2,
+                     'jump-compare': 3};
         var index = order[trigger.prop_id.split('.')[0]];
         if (index === undefined) { return window.dash_clientside.no_update; }
 
@@ -746,6 +754,7 @@ dash.clientside_callback(
     """,
     Output("jump-sink", "children"),
     Input("jump-explore", "n_clicks"),
+    Input("jump-top10", "n_clicks"),
     Input("jump-trends", "n_clicks"),
     Input("jump-compare", "n_clicks"),
     prevent_initial_call=True,
@@ -868,6 +877,9 @@ ACCORDION_SECTIONS = [
     ("explore", "One researcher, explore metrics",
      "Every metric for one researcher, against the field they work in",
      "user"),
+    ("top10", "Top 10, by score and by metric",
+     "Who leads the selected edition, and which indicator puts them there",
+     "trophy"),
     ("trends", "One researcher, year by year",
      "How a single researcher's metrics move across editions",
      "trending-up"),
@@ -876,31 +888,27 @@ ACCORDION_SECTIONS = [
      "users"),
 ]
 
+# What each section holds. Keyed by item_id for the same reason the jump
+# buttons are: the items used to be written out one by one against
+# ACCORDION_SECTIONS[0], [1] and [2], so inserting a section silently gave
+# three of them somebody else's title.
+_SECTION_CONTENT = {
+    "explore": lambda: html.Div(id="explore-content"),
+    "top10": top10_layout,
+    "trends": single_author_layout,
+    "compare": lambda: html.Div(tabs),
+}
+
 
 accordion = html.Div(
     dbc.Accordion(
         [
             dbc.AccordionItem(
-                [
-                    html.Div(id="explore-content"),
-                ],
-                title = ACCORDION_SECTIONS[0][1],
-                item_id = ACCORDION_SECTIONS[0][0],
-            ),
-            dbc.AccordionItem(
-                [
-                    single_author_layout(),
-                ],
-                title = ACCORDION_SECTIONS[1][1],
-                item_id = ACCORDION_SECTIONS[1][0],
-            ),
-            dbc.AccordionItem(
-                [
-                    html.Div(tabs),
-                ],
-                title = ACCORDION_SECTIONS[2][1],
-                item_id = ACCORDION_SECTIONS[2][0],
+                [_SECTION_CONTENT[item_id]()],
+                title = title,
+                item_id = item_id,
             )
+            for item_id, title, _blurb, _icon in ACCORDION_SECTIONS
         ],
         flush = False,
         id='accordion',

@@ -19,7 +19,8 @@ import dash
 import dash_bootstrap_components as dbc
 import dash_daq as daq
 import math
-from dash import Input, Output, State, callback, dcc, html
+from dash import (ALL, Input, Output, State, callback, callback_context,
+                  dcc, html)
 from dash.exceptions import PreventUpdate
 
 from citations_lib.auth_find import (WHATIF_METRICS, bullet_payload,
@@ -242,6 +243,11 @@ def _card():
                           className='ev-bullet-chart'),
                  className='ev-bullets ev-bullets-lean'),
         dcc.Store(id='top10CardStore' + SUFFIX),
+        # Whose card this is. Carried rather than read back out of the
+        # rendered header: the header is a component tree whose shape is a
+        # detail of card_header(), and reaching into it from here would make
+        # any change to that function a silent break in this button.
+        dcc.Store(id='top10CardName' + SUFFIX),
         html.Div(id='top10CardSink' + SUFFIX, style={'display': 'none'}),
         html.Div(id='top10CardChips' + SUFFIX, className='ev-id-chips'),
         html.Button([html.Span(className='ev-ic ev-ic-user'),
@@ -249,6 +255,34 @@ def _card():
                     id='top10OpenExplore' + SUFFIX, n_clicks=0,
                     className='ev-share-btn ev-top10-open'),
     ], id='top10Card' + SUFFIX, className='ev-id-card ev-top10-card')
+
+
+def composite_rows(payload):
+    """The ranked names, as buttons beside the chart.
+
+    These are HTML rather than axis labels for two reasons. A two-line axis
+    label cannot be aligned across rows, because echarts aligns each line
+    inside the label box and the lines are different lengths. And a name a
+    reader is meant to click should be a thing that can be clicked, focused
+    and read by a screen reader, rather than text painted into an SVG.
+
+    Row height here is the chart's ROW constant and the top padding is its
+    TOP: see the comment above COMPOSITE_DRAW_JS. If one moves the other has
+    to.
+    """
+    rows = []
+    for index, name in enumerate(payload.get('names') or []):
+        rows.append(html.Button(
+            [html.Span(str(payload['positions'][index]),
+                       className='ev-top10-rank'),
+             html.Span([
+                 html.Span(name, className='ev-top10-name'),
+                 html.Span(payload['institutes'][index] or '',
+                           className='ev-top10-inst'),
+             ], className='ev-top10-who')],
+            id={'type': 'top10-row', 'index': payload['author_ids'][index]},
+            n_clicks=0, className='ev-top10-listrow'))
+    return rows
 
 
 def _grid_cells():
@@ -286,8 +320,12 @@ def top10_layout():
                 ], className='ev-top10-head'),
                 html.Div(id='top10CompositeNote' + SUFFIX,
                          className='ev-top10-note'),
-                html.Div(id='top10Composite' + SUFFIX,
-                         className='ev-top10-composite'),
+                html.Div([
+                    html.Div(id='top10Rows' + SUFFIX,
+                             className='ev-top10-rows'),
+                    html.Div(id='top10Composite' + SUFFIX,
+                             className='ev-top10-composite'),
+                ], className='ev-top10-listing'),
                 html.Div(id='top10Legend' + SUFFIX,
                          className='ev-top10-legend'),
             ], className='ev-top10-main'),
@@ -354,6 +392,7 @@ def _years(career, current):
 @callback(
     Output('top10CompositeStore' + SUFFIX, 'data'),
     Output('top10GridStore' + SUFFIX, 'data'),
+    Output('top10Rows' + SUFFIX, 'children'),
     Output('top10CompositeNote' + SUFFIX, 'children'),
     Output('top10Legend' + SUFFIX, 'children'),
     Input('top10Kind' + SUFFIX, 'value'),
@@ -385,7 +424,7 @@ def _charts(career, year, ns):
         'each part is that indicator against the edition maximum, and the '
         'six add up to the published score',
         className='ev-legend-item ev-legend-note'))
-    return composite, grid, note, legend
+    return composite, grid, composite_rows(composite), note, legend
 
 
 @callback(
@@ -393,11 +432,13 @@ def _charts(career, year, ns):
     Output('top10CardRanks' + SUFFIX, 'children'),
     Output('top10CardChips' + SUFFIX, 'children'),
     Output('top10CardStore' + SUFFIX, 'data'),
+    Output('top10CardName' + SUFFIX, 'data'),
+    Input({'type': 'top10-row', 'index': ALL}, 'n_clicks'),
     Input('top10Picked' + SUFFIX, 'value'),
     Input('top10Kind' + SUFFIX, 'value'),
     Input('top10Year' + SUFFIX, 'value'),
     Input('top10Ns' + SUFFIX, 'on'))
-def _card_contents(picked, career, year, ns):
+def _card_contents(_row_clicks, picked, career, year, ns):
     """The card, for whoever was clicked.
 
     Falls back to the top of the list rather than to an empty card: nothing
@@ -410,35 +451,38 @@ def _card_contents(picked, career, year, ns):
     if not year:
         raise PreventUpdate
     year = int(year)
+    # A click on a ranked row names its researcher in the trigger itself, so
+    # it wins over whatever the small charts last wrote into the hidden
+    # input. Anything else, including the picker moving, keeps the current
+    # one and falls back below if that researcher is not in the new edition.
+    trigger = callback_context.triggered_id
+    if isinstance(trigger, dict) and trigger.get('type') == 'top10-row':
+        picked = trigger['index']
     card = card_children(picked, kind, year, bool(ns)) if picked else None
     if card is None:
         leaders = top_researchers(kind, year, 'c', ns=bool(ns), limit=1)
         if not leaders:
             raise PreventUpdate
         card = card_children(leaders[0]['author_id'], kind, year, bool(ns))
-    return card['header'], card['ranks'], card['chips'], card['bullet']
+    return (card['header'], card['ranks'], card['chips'], card['bullet'],
+            card['name'])
 
 
 @callback(
     Output('accordion', 'active_item', allow_duplicate=True),
     Output('spotlight-selection', 'data', allow_duplicate=True),
     Input('top10OpenExplore' + SUFFIX, 'n_clicks'),
-    State('top10CardHeader' + SUFFIX, 'children'),
+    State('top10CardName' + SUFFIX, 'data'),
     prevent_initial_call=True)
-def _open_in_explore(clicks, header):
+def _open_in_explore(clicks, name):
     """Hand this researcher to the Explore tab.
 
-    The name is read back out of the rendered header rather than kept in a
-    parallel store, which is how pages/home.py's spotlight does it: the name
-    on screen and the name that gets opened cannot then disagree.
+    The Explore tab takes a name, because that is what its Elasticsearch
+    lookup is keyed on and what its dropdown displays. The name written into
+    the store is the one the card was built from, so the card on screen and
+    the researcher that opens cannot disagree.
     """
-    if not clicks:
-        raise PreventUpdate
-    try:
-        name = header[0]['props']['children'][0]['props']['children']
-    except (TypeError, IndexError, KeyError):
-        raise PreventUpdate
-    if not name or name == 'No author selected':
+    if not clicks or not name:
         raise PreventUpdate
     return 'explore', name
 
@@ -493,7 +537,9 @@ COMPOSITE_DRAW_JS = """
                 chart.clear();
                 return;
             }
-            var ROW = 44, TOP = 12;
+            // TOP clears the axis labels, which sit above the plot: at 12
+            // they were drawn half off the top of the element.
+            var ROW = 44, TOP = 30;
             var css = getComputedStyle(document.documentElement);
             function token(name, fallback) {
                 var v = css.getPropertyValue(name);
@@ -534,7 +580,7 @@ COMPOSITE_DRAW_JS = """
 
             chart.setOption({
                 animationDuration: 260,
-                grid: {left: 250, right: 62, top: TOP, bottom: 6,
+                grid: {left: 6, right: 62, top: TOP, bottom: 6,
                        height: names.length * ROW},
                 tooltip: {
                     trigger: 'axis', axisPointer: {type: 'shadow'},
@@ -568,26 +614,15 @@ COMPOSITE_DRAW_JS = """
                 yAxis: {
                     type: 'category', inverse: true, data: names,
                     axisLine: {show: false}, axisTick: {show: false},
-                    axisLabel: {
-                        formatter: function (value, index) {
-                            var inst = payload.institutes[index] || '';
-                            if (inst.length > 30) {
-                                inst = inst.slice(0, 29) + '\\u2026';
-                            }
-                            var name = names[index];
-                            if (name.length > 26) {
-                                name = name.slice(0, 25) + '\\u2026';
-                            }
-                            return '{pos|' + payload.positions[index] + '}'
-                                 + '{name|' + name + '}\\n'
-                                 + '{inst|' + inst + '}';
-                        },
-                        rich: {
-                            pos: {color: accent, fontSize: 13, fontWeight: 700,
-                                  width: 26, align: 'left'},
-                            name: {color: text, fontSize: 13, align: 'left'},
-                            inst: {color: muted, fontSize: 10, align: 'left',
-                                   padding: [2, 0, 0, 26]}}}},
+                    // The names live in HTML beside the chart. An axis label
+                    // of two lines cannot be aligned reliably: echarts
+                    // aligns each LINE inside the label box, so ten rows of
+                    // different name lengths start at ten different offsets
+                    // whichever way the label is aligned. The repo already
+                    // solves this shape once, in the bullet chart, by
+                    // putting the column of controls beside the chart and
+                    // sharing the row geometry between the two.
+                    axisLabel: {show: false}},
                 series: series
             }, true);
             chart.resize();
