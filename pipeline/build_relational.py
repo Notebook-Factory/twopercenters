@@ -931,6 +931,67 @@ def refresh_group_metrics(conn):
     print(f"refreshed group_metrics in {time.time() - started:.1f}s", flush=True)
 
 
+# The seven questions the Top 10 tab asks, in the order it draws them.
+TOP_METRICS = ("c", "nc", "h", "hm", "ncs", "ncsf", "ncsfl")
+TOP_N = 10
+_METRIC_TABLE_BY_KIND = {"career": "career_metrics",
+                         "singleyr": "singleyr_metrics"}
+
+
+def refresh_top_researchers(conn):
+    """Fill top_researchers from the fact tables (migration 012).
+
+    Seven metrics in two column sets over fifteen editions is 210 ordering
+    queries, which together take about seven seconds. Each one is the query
+    the dashboard would otherwise run on a picker change, and the slowest of
+    them takes 640 ms against a cold cache.
+
+    Like refresh_group_metrics, this is a guarded no-op when the table does
+    not exist, so a database that has not applied 012 can still finish a
+    build.
+    """
+    exists = conn.execute(
+        "select 1 from information_schema.tables "
+        "where table_schema = 'public' and table_name = 'top_researchers'"
+    ).fetchone()
+    if not exists:
+        print("top_researchers does not exist yet; skipping refresh",
+              flush=True)
+        return
+
+    started = time.time()
+    editions = conn.execute(
+        "select edition_id, kind from editions where superseded_by is null "
+        "order by edition_id").fetchall()
+    conn.execute("truncate top_researchers")
+    written = 0
+    for edition_id, kind in editions:
+        table = _METRIC_TABLE_BY_KIND.get(kind)
+        if table is None:
+            continue
+        for metric in TOP_METRICS:
+            for ns in (False, True):
+                suffix = "_ns" if ns else ""
+                rows = conn.execute(
+                    f"select author_id, {metric}{suffix} from {table} "
+                    f"where edition_id = %s and {metric}{suffix} is not null "
+                    f"order by {metric}{suffix} desc, author_id limit %s",
+                    (edition_id, TOP_N)).fetchall()
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        "insert into top_researchers (kind, edition_id, "
+                        "metric, ns, position, author_id, value) "
+                        "values (%s, %s, %s, %s, %s, %s, %s)",
+                        [(kind, edition_id, metric, ns, position, author_id,
+                          float(value))
+                         for position, (author_id, value)
+                         in enumerate(rows, start=1)])
+                written += len(rows)
+    conn.commit()
+    print(f"filled top_researchers with {written:,} rows in "
+          f"{time.time() - started:.1f}s", flush=True)
+
+
 def refresh_dropdown_views(conn):
     """Refresh dropdown_options and dropdown_stats (migration 007).
 
@@ -994,6 +1055,7 @@ def build(conn, root="data_clean", out_dir="data_parquet"):
         print(f"wrote {target} ({rows:,} rows)", flush=True)
     refresh_group_metrics(conn)
     refresh_dropdown_views(conn)
+    refresh_top_researchers(conn)
     return counts
 
 
