@@ -85,14 +85,28 @@ def bullet_rows(values, maxima, quartiles, composite_quartiles=None):
             return math.log(max(float(x), 0.0) + 1) / math.log(ceiling + 1)
 
         quarters = quartiles.get(metric) or {}
+
+        def reference(x):
+            # None rather than 0 when the group is absent. The Top 10 card
+            # draws a researcher against the edition maximum and against no
+            # group at all, and a 0 here is indistinguishable from a group
+            # whose median really is 0: the chart would draw a tick hard
+            # against the left edge and claim it meant something.
+            return None if x is None else round(share(x), 4)
+
         rows.append({
             'key': metric,
             'label': label,
             'value': float(value),
+            # The denominator, carried so the hover can print it. A bar that
+            # reaches three quarters of the way across says nothing until the
+            # reader knows what the far end is, and it is a different number
+            # on every row and a different number in every edition.
+            'ceiling': float(ceiling),
             'share': round(share(value), 4),
-            'q1': round(share(quarters.get('q1') or 0), 4),
-            'median': round(share(quarters.get('median') or 0), 4),
-            'q3': round(share(quarters.get('q3') or 0), 4),
+            'q1': reference(quarters.get('q1')),
+            'median': reference(quarters.get('median')),
+            'q3': reference(quarters.get('q3')),
             'median_raw': quarters.get('median'),
         })
 
@@ -109,30 +123,39 @@ def bullet_rows(values, maxima, quartiles, composite_quartiles=None):
         quarters = composite_quartiles or {}
 
         def composite_share(x):
-            return 0.0 if x is None else float(x) / len(WHATIF_METRICS)
+            return None if x is None else round(
+                float(x) / len(WHATIF_METRICS), 4)
 
         rows.append({
             'key': 'c',
             'label': 'Composite score',
             'value': round(total, 4),
+            # The score's own ceiling is the six terms all at 1, which is 6.
+            'ceiling': float(len(WHATIF_METRICS)),
             'share': round(total / len(WHATIF_METRICS), 4),
-            'q1': round(composite_share(quarters.get('q1')), 4),
-            'median': round(composite_share(quarters.get('median')), 4),
-            'q3': round(composite_share(quarters.get('q3')), 4),
+            'q1': composite_share(quarters.get('q1')),
+            'median': composite_share(quarters.get('median')),
+            'q3': composite_share(quarters.get('q3')),
             'median_raw': quarters.get('median'),
             'composite': True,
         })
     return rows
 
 
-def bullet_payload(rows, group_label, whatif=False, published=None):
+def bullet_payload(rows, group_label, whatif=False, published=None,
+                   reference=True):
     """What the clientside bullet chart draws.
 
     `published` is the untouched set of rows, carried only in what-if mode so
     each bar can show where the real value sat before the reader moved it.
+
+    `reference` is false for a card drawn without a comparison group, which
+    is how the Top 10 tab draws one: no band, no median tick, just the bars
+    against the edition maximum.
     """
     return {'rows': rows, 'group': str(group_label or ''),
             'whatif': bool(whatif),
+            'reference': bool(reference),
             'published': published if whatif else None}
 
 
@@ -395,6 +418,226 @@ page_size = 8000
 
 
 # END: RUN ONLY ON DATA CHANGE ------------------------------------------------
+
+
+# The bullet rows.
+#
+# Drawn in the browser so a what-if keystroke redraws without waiting on a
+# figure to come back over the wire, and so the colours can be read from
+# the CSS custom properties at draw time, which means the chart follows a
+# theme switch where the server-rendered plotly figures cannot.
+#
+# The geometry here is shared with assets/style.css: ROW and TOP set where
+# each bar sits, and .ev-bullet-inputs positions its boxes to match. If one
+# changes the other has to.
+BULLET_DRAW_JS = """
+        function (payload, elementId) {
+            var el = document.getElementById(elementId);
+            if (!el || !window.echarts) { return ''; }
+
+            // Named so assets/charts.js can call it again when the theme
+            // changes: the colours below are read from CSS at draw time, and
+            // a chart already on screen does not redraw itself.
+            function draw() {
+            var chart = window.echarts.getInstanceByDom(el)
+                        || window.echarts.init(el, null, {renderer: 'svg'});
+            if (!payload || !payload.rows || !payload.rows.length) {
+                chart.clear();
+                return;
+            }
+
+            // TOP was 26 to clear the axis label across the top. There is
+            // no axis label any more, so it is the gap under the card's
+            // divider and nothing else.
+            var ROW = 34, TOP = 10;
+            var rows = payload.rows;
+            var css = getComputedStyle(document.documentElement);
+            function token(name, fallback) {
+                var v = css.getPropertyValue(name);
+                return (v && v.trim()) || fallback;
+            }
+            var accent = payload.whatif ? '#D86CB4'
+                                        : token('--ev-accent', '#00B4D8');
+            // The composite row keeps its own colour when published, because
+            // it is a different kind of quantity from the six that make it
+            // up. In what-if mode it goes magenta with everything else: the
+            // distinction that matters there is invented against published,
+            // and nothing hypothetical may be left looking published.
+            var composite = payload.whatif ? '#D86CB4'
+                                           : token('--ev-green', '#84B460');
+            var orange = token('--ev-orange', '#F09048');
+            var text = token('--ev-text', '#E8ECF2');
+            var band = token('--ev-surface-2', '#4A5670');
+
+            function commas(v) {
+                var n = (Math.round(v * 10) / 10);
+                var whole = Math.floor(n);
+                var s = whole.toLocaleString();
+                return (n - whole) ? s + (n - whole).toFixed(1).slice(1) : s;
+            }
+
+            // A card drawn without a comparison group has no band and no
+            // median tick to draw. The Top 10 tab draws one: it shows a
+            // researcher against the edition maximum, which is the same
+            // denominator on every row, and against nobody else.
+            var hasGroup = payload.reference !== false;
+
+            var series = [];
+            if (hasGroup) { series.push(
+                // Spacer, then the group's middle half. A band drawn from q1
+                // rather than from zero says where most of the group actually
+                // sits, which a gauge could not show at all.
+                // The group's middle half, drawn as a custom rect rather than
+                // as a stacked bar. A stacked pair is its own bar group, and
+                // echarts offsets bar groups within the category slot, so the
+                // band sat half a row below the value it belongs to no matter
+                // what barGap said. A custom series is positioned by hand
+                // against the category centre, which is where the value bar
+                // and the median tick already are.
+                {type: 'custom', silent: true, z: 1,
+                 renderItem: function (params, api) {
+                     var row = api.value(0);
+                     var a = api.coord([api.value(1), row]);
+                     var b = api.coord([api.value(2), row]);
+                     return {type: 'rect',
+                             shape: {x: a[0], y: a[1] - 9,
+                                     width: Math.max(b[0] - a[0], 1),
+                                     height: 18},
+                             style: {fill: band, opacity: 0.5}};
+                 },
+                 encode: {x: [1, 2], y: 0}, tooltip: {show: false},
+                 data: rows.map(function (r, i) { return [i, r.q1, r.q3]; })});
+            }
+            series.push(
+                // barGap -100% overlays this on the band instead of letting
+                // echarts set it beside as a second bar group, which is what
+                // put every value bar below the band it belongs to.
+                // The bar sits in a track that runs the full width of the
+                // axis, so the edition maximum is a visible edge every row
+                // ends against. Without it a bar just stopped somewhere and
+                // there was nothing to read its length against.
+                {type: 'bar', barWidth: 8, barGap: '-100%', z: 3,
+                 showBackground: true,
+                 backgroundStyle: {color: band, opacity: 0.65,
+                                   borderRadius: 2},
+                 itemStyle: {color: accent, borderRadius: 2},
+                 data: rows.map(function (r) {
+                     return r.composite
+                         ? {value: r.share, itemStyle: {color: composite}}
+                         : r.share; }),
+                 // This is the one series the row tooltip reads its index
+                 // from, which is why the other three are excluded below.
+                 });
+            if (hasGroup) { series.push(
+                {type: 'scatter', symbol: 'rect', symbolSize: [3, 22], z: 4,
+                 itemStyle: {color: orange}, tooltip: {show: false},
+                 data: rows.map(function (r, i) { return [r.median, i]; })});
+            }
+            if (payload.whatif && payload.published) {
+                // Where the real value sat before it was moved.
+                series.push({type: 'scatter', symbol: 'circle', symbolSize: 7,
+                    z: 5, itemStyle: {color: 'transparent',
+                                      borderColor: token('--ev-accent', '#00B4D8'),
+                                      borderWidth: 2},
+                    tooltip: {show: false},
+                    data: payload.published.map(function (r, i) {
+                        return [r.share, i]; })});
+            }
+
+            chart.setOption({
+                animationDuration: 260,
+                // Room on the right for the input column, which is laid out
+                // by CSS and sits over the chart.
+                grid: {left: 150, right: 116, top: TOP, bottom: 8,
+                       height: rows.length * ROW},
+                // One tooltip for the whole row, rather than one per series.
+                //
+                // It is triggered by the axis rather than by the item because
+                // the thing worth hovering is the row, and several rows have
+                // a bar a few pixels long: an h-index of 132 against a
+                // ceiling of 328 is a wide bar, but single-authored citations
+                // against 184,268 is not, and nobody should have to hit it.
+                //
+                // Everything about the row is in here, including the number
+                // the bar is a share of. That number is the reason the axis
+                // tick at the far end is gone: it read "edition max" on all
+                // seven rows, which names the denominator without ever giving
+                // one, and the denominators are seven different numbers that
+                // change with the edition, the year and the self-citation
+                // setting.
+                tooltip: {trigger: 'axis', axisPointer: {type: 'shadow'},
+                          backgroundColor: '#303C54',
+                          borderColor: '#4A5670',
+                          textStyle: {color: '#E8ECF2', fontSize: 12},
+                          formatter: function (params) {
+                    var list = [].concat(params);
+                    var i = list.length ? list[0].dataIndex : -1;
+                    var r = rows[i];
+                    if (!r) { return ''; }
+                    // The score is a small number and commas() rounds to
+                    // one decimal, which would print 5.2 beside a box reading
+                    // 5.19. Its own row gets two.
+                    function num(v) {
+                        return r.composite ? Number(v).toFixed(2) : commas(v);
+                    }
+                    var lines = [
+                        '<strong>' + r.label + '</strong>',
+                        num(r.value) + ' of ' + num(r.ceiling)
+                            + (r.composite
+                               ? ', the six terms at their ceiling'
+                               : ', the highest in this edition')];
+                    if (r.median_raw !== null && r.median_raw !== undefined) {
+                        lines.push('median in ' + payload.group + ': '
+                                   + num(r.median_raw));
+                    }
+                    if (payload.whatif && payload.published
+                        && payload.published[i]) {
+                        lines.push('published: '
+                                   + num(payload.published[i].value));
+                    }
+                    lines.push('contributes ' + r.share.toFixed(3)
+                               + ' to the score');
+                    return lines.join('<br/>');
+                }},
+                xAxis: {type: 'value', min: 0, max: 1, position: 'top',
+                    axisLine: {show: false}, axisTick: {show: false},
+                    axisLabel: {show: false},
+                    splitLine: {show: false}},
+                yAxis: {type: 'category', inverse: true,
+                    data: rows.map(function (r) {
+                        return r.composite ? {value: r.label, textStyle:
+                            {color: composite, fontWeight: 600}} : r.label; }),
+                    axisLine: {show: false}, axisTick: {show: false},
+                    axisLabel: {color: text, fontSize: 12}},
+                series: series
+            }, true);
+            chart.resize();
+            }
+
+            el.__evRedraw = draw;
+            window.__evCharts = window.__evCharts || [];
+            if (window.__evCharts.indexOf(el) < 0) {
+                window.__evCharts.push(el);
+                if (window.__evObserveSize) { window.__evObserveSize(el); }
+            }
+            draw();
+            return '';
+        }
+        """
+
+
+def register_bullet_chart(store_id, element_id, sink_id):
+    """Draw one bullet store into one element.
+
+    Two tabs draw these rows now, the Explore card and the Top 10 card, which
+    is why the function above is a module-level constant rather than a string
+    inside one tab's factory. The ids differ; the chart does not.
+    """
+    dash.clientside_callback(
+        BULLET_DRAW_JS,
+        Output(sink_id, 'children'),
+        Input(store_id, 'data'),
+        State(element_id, 'id'))
 
 
 def author_find_layout(default_author='Ioannidis, John P.A.'):
@@ -923,167 +1166,9 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         State('rankChartStore' + SUFFIX, 'data'),
         prevent_initial_call=True)
 
-    # The bullet rows.
-    #
-    # Drawn in the browser so a what-if keystroke redraws without waiting on a
-    # figure to come back over the wire, and so the colours can be read from
-    # the CSS custom properties at draw time, which means the chart follows a
-    # theme switch where the server-rendered plotly figures cannot.
-    #
-    # The geometry here is shared with assets/style.css: ROW and TOP set where
-    # each bar sits, and .ev-bullet-inputs positions its boxes to match. If one
-    # changes the other has to.
-    dash.clientside_callback(
-        """
-        function (payload, elementId) {
-            var el = document.getElementById(elementId);
-            if (!el || !window.echarts) { return ''; }
-
-            // Named so assets/charts.js can call it again when the theme
-            // changes: the colours below are read from CSS at draw time, and
-            // a chart already on screen does not redraw itself.
-            function draw() {
-            var chart = window.echarts.getInstanceByDom(el)
-                        || window.echarts.init(el, null, {renderer: 'svg'});
-            if (!payload || !payload.rows || !payload.rows.length) {
-                chart.clear();
-                return;
-            }
-
-            var ROW = 34, TOP = 26;
-            var rows = payload.rows;
-            var css = getComputedStyle(document.documentElement);
-            function token(name, fallback) {
-                var v = css.getPropertyValue(name);
-                return (v && v.trim()) || fallback;
-            }
-            var accent = payload.whatif ? '#D86CB4'
-                                        : token('--ev-accent', '#00B4D8');
-            // The composite row keeps its own colour when published, because
-            // it is a different kind of quantity from the six that make it
-            // up. In what-if mode it goes magenta with everything else: the
-            // distinction that matters there is invented against published,
-            // and nothing hypothetical may be left looking published.
-            var composite = payload.whatif ? '#D86CB4'
-                                           : token('--ev-green', '#84B460');
-            var orange = token('--ev-orange', '#F09048');
-            var muted = token('--ev-text-muted', '#A8B2C4');
-            var text = token('--ev-text', '#E8ECF2');
-            var band = token('--ev-surface-2', '#4A5670');
-
-            function commas(v) {
-                var n = (Math.round(v * 10) / 10);
-                var whole = Math.floor(n);
-                var s = whole.toLocaleString();
-                return (n - whole) ? s + (n - whole).toFixed(1).slice(1) : s;
-            }
-
-            var series = [
-                // Spacer, then the group's middle half. A band drawn from q1
-                // rather than from zero says where most of the group actually
-                // sits, which a gauge could not show at all.
-                // The group's middle half, drawn as a custom rect rather than
-                // as a stacked bar. A stacked pair is its own bar group, and
-                // echarts offsets bar groups within the category slot, so the
-                // band sat half a row below the value it belongs to no matter
-                // what barGap said. A custom series is positioned by hand
-                // against the category centre, which is where the value bar
-                // and the median tick already are.
-                {type: 'custom', silent: true, z: 1,
-                 renderItem: function (params, api) {
-                     var row = api.value(0);
-                     var a = api.coord([api.value(1), row]);
-                     var b = api.coord([api.value(2), row]);
-                     return {type: 'rect',
-                             shape: {x: a[0], y: a[1] - 9,
-                                     width: Math.max(b[0] - a[0], 1),
-                                     height: 18},
-                             style: {fill: band, opacity: 0.5}};
-                 },
-                 encode: {x: [1, 2], y: 0},
-                 data: rows.map(function (r, i) { return [i, r.q1, r.q3]; })},
-                // barGap -100% overlays this on the band instead of letting
-                // echarts set it beside as a second bar group, which is what
-                // put every value bar below the band it belongs to.
-                // The bar sits in a track that runs the full width of the
-                // axis, so the edition maximum is a visible edge every row
-                // ends against. Without it a bar just stopped somewhere and
-                // there was nothing to read its length against.
-                {type: 'bar', barWidth: 8, barGap: '-100%', z: 3,
-                 showBackground: true,
-                 backgroundStyle: {color: band, opacity: 0.65,
-                                   borderRadius: 2},
-                 itemStyle: {color: accent, borderRadius: 2},
-                 data: rows.map(function (r) {
-                     return r.composite
-                         ? {value: r.share, itemStyle: {color: composite}}
-                         : r.share; }),
-                 tooltip: {formatter: function (p) {
-                     var r = rows[p.dataIndex];
-                     return r.label + '<br/>' + commas(r.value)
-                          + '<br/>contributes ' + r.share.toFixed(3)
-                          + ' to the score'; }}},
-                {type: 'scatter', symbol: 'rect', symbolSize: [3, 22], z: 4,
-                 itemStyle: {color: orange},
-                 data: rows.map(function (r, i) { return [r.median, i]; }),
-                 tooltip: {formatter: function (p) {
-                     var r = rows[p.dataIndex];
-                     return 'median in ' + payload.group + '<br/>'
-                          + (r.median_raw === null || r.median_raw === undefined
-                             ? '-' : commas(r.median_raw)); }}}
-            ];
-            if (payload.whatif && payload.published) {
-                // Where the real value sat before it was moved.
-                series.push({type: 'scatter', symbol: 'circle', symbolSize: 7,
-                    z: 5, itemStyle: {color: 'transparent',
-                                      borderColor: token('--ev-accent', '#00B4D8'),
-                                      borderWidth: 2},
-                    data: payload.published.map(function (r, i) {
-                        return [r.share, i]; }),
-                    tooltip: {formatter: function (p) {
-                        return 'published<br/>'
-                             + commas(payload.published[p.dataIndex].value); }}});
-            }
-
-            chart.setOption({
-                animationDuration: 260,
-                // Room on the right for the input column, which is laid out
-                // by CSS and sits over the chart.
-                grid: {left: 150, right: 116, top: TOP, bottom: 8,
-                       height: rows.length * ROW},
-                tooltip: {trigger: 'item', backgroundColor: '#303C54',
-                          borderColor: '#4A5670',
-                          textStyle: {color: '#E8ECF2', fontSize: 12}},
-                xAxis: {type: 'value', min: 0, max: 1, position: 'top',
-                    axisLine: {show: false}, axisTick: {show: false},
-                    axisLabel: {color: muted, fontSize: 10, align: 'right',
-                        formatter: function (v) {
-                            return v === 1 ? 'edition max' : ''; }},
-                    splitLine: {show: false}},
-                yAxis: {type: 'category', inverse: true,
-                    data: rows.map(function (r) {
-                        return r.composite ? {value: r.label, textStyle:
-                            {color: composite, fontWeight: 600}} : r.label; }),
-                    axisLine: {show: false}, axisTick: {show: false},
-                    axisLabel: {color: text, fontSize: 12}},
-                series: series
-            }, true);
-            chart.resize();
-            }
-
-            el.__evRedraw = draw;
-            window.__evCharts = window.__evCharts || [];
-            if (window.__evCharts.indexOf(el) < 0) {
-                window.__evCharts.push(el);
-                if (window.__evObserveSize) { window.__evObserveSize(el); }
-            }
-            draw();
-            return '';
-        }
-        """,
-        Output('bulletSink' + SUFFIX, 'children'),
-        Input('bulletStore' + SUFFIX, 'data'),
-        State('bulletChart' + SUFFIX, 'id'))
+    register_bullet_chart('bulletStore' + SUFFIX,
+                          'bulletChart' + SUFFIX,
+                          'bulletSink' + SUFFIX)
 
     # =============== The card, across the row
     #
