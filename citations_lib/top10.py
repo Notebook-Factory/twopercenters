@@ -777,3 +777,10 @@ dash.clientside_callback(
     Output('top10GridSink' + SUFFIX, 'children'),
     Input('top10GridStore' + SUFFIX, 'data'),
     State('top10GridCells' + SUFFIX, 'data'))
+
+
+# The card's own chart, which is the Explore tab's bullet chart drawn from
+# this tab's store into this tab's element.
+register_bullet_chart('top10CardStore' + SUFFIX,
+                      'top10CardBullet' + SUFFIX,
+                      'top10CardSink' + SUFFIX)

@@ -141,3 +141,15 @@ def test_the_rows_and_the_chart_agree_on_row_height():
     listing = css[css.index('.ev-top10-rows'):css.index('.ev-top10-composite')]
     assert f'padding-top: {top}px' in listing
     assert f'height: {row}px' in listing
+
+
+def test_every_chart_on_the_tab_has_something_drawing_it():
+    """Three charts, three clientside callbacks. The card's was imported and
+    then never called once, which leaves a card with an empty space where its
+    bars belong and no error anywhere to say so."""
+    import app  # noqa: F401
+    from dash._callback import GLOBAL_CALLBACK_MAP
+
+    from citations_lib.top10 import SUFFIX
+    for sink in ('top10CompositeSink', 'top10GridSink', 'top10CardSink'):
+        assert any(sink + SUFFIX in key for key in GLOBAL_CALLBACK_MAP), sink
