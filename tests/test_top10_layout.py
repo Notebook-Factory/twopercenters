@@ -153,3 +153,31 @@ def test_every_chart_on_the_tab_has_something_drawing_it():
     from citations_lib.top10 import SUFFIX
     for sink in ('top10CompositeSink', 'top10GridSink', 'top10CardSink'):
         assert any(sink + SUFFIX in key for key in GLOBAL_CALLBACK_MAP), sink
+
+
+def test_a_rebuilt_row_is_not_a_click():
+    """Changing the picker replaces all ten rows, and Dash reports a newly
+    rendered row as the trigger with n_clicks of 0. Treating that as a click
+    would move the card to a researcher nobody asked for."""
+    from dash import callback_context
+
+    from citations_lib.top10 import _card_contents
+    leader = top_researchers('career', 2024, 'c')[0]
+    other = top_researchers('career', 2024, 'c')[4]
+
+    class _Context:
+        def __init__(self, value):
+            self.triggered_id = {'type': 'top10-row', 'index': other['author_id']}
+            self.triggered = [{'prop_id': 'x.n_clicks', 'value': value}]
+
+    import citations_lib.top10 as module
+    original = module.callback_context
+    try:
+        module.callback_context = _Context(0)
+        rebuilt = _card_contents([0] * 10, '', True, '2024', False)
+        module.callback_context = _Context(3)
+        clicked = _card_contents([0] * 10, '', True, '2024', False)
+    finally:
+        module.callback_context = original
+    assert rebuilt[4] == leader['name']
+    assert clicked[4] == other['name']

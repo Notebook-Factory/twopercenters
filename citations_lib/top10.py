@@ -456,7 +456,14 @@ def _card_contents(_row_clicks, picked, career, year, ns):
     # input. Anything else, including the picker moving, keeps the current
     # one and falls back below if that researcher is not in the new edition.
     trigger = callback_context.triggered_id
-    if isinstance(trigger, dict) and trigger.get('type') == 'top10-row':
+    fired = (callback_context.triggered or [{}])[0].get('value')
+    if (isinstance(trigger, dict) and trigger.get('type') == 'top10-row'
+            and fired):
+        # `fired` has to be checked, not just the trigger's shape. Changing
+        # the picker replaces all ten rows, and Dash reports a newly rendered
+        # row as the trigger with n_clicks of 0 or None. Without this the
+        # card would jump to whichever row happened to be reported rather
+        # than staying where the reader left it.
         picked = trigger['index']
     card = card_children(picked, kind, year, bool(ns)) if picked else None
     if card is None:
