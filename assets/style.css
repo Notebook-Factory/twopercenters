@@ -19,6 +19,26 @@
   --ev-orange:      #F09048;
   --ev-magenta:     #D86CB4;
 
+  /* The six series colours, for charts that draw the six indicators at once.
+     Separate from the accents above because they answer a different
+     question: these have to be told apart from each other, not just seen
+     against the page. Stepped for this surface (#394459) rather than flipped
+     from the light set, and checked with the dataviz validator: every one
+     clears 3:1 on the surface, the worst adjacent pair separates by 18.7 in
+     normal vision, and the green-to-orange pair sits at 6.0 under
+     deuteranopia, which is why the stack carries 2px gaps and every segment
+     is named in both the legend and the hover. */
+  --ev-cat-1:       #00A3CB;
+  --ev-cat-2:       #CE7D38;
+  --ev-cat-3:       #4FA866;
+  --ev-cat-4:       #9684DC;
+  --ev-cat-5:       #00ABA4;
+  --ev-cat-6:       #D8706F;
+  /* For a bar that is present but not the thing being pointed at. Light
+     enough to read against the ground, at 3.17:1, which --ev-surface-2 is
+     not: that measures 1.33:1 and disappears. */
+  --ev-cat-dim:     #8A93A6;
+
   --ev-radius:      10px;
   --ev-shadow:      0 2px 10px rgba(0, 0, 0, 0.28);
 }
@@ -446,6 +466,16 @@ color: var(--ev-bg);
   --ev-green:       #5E8F3C;
   --ev-orange:      #C4671F;
   --ev-magenta:     #A83C82;
+
+  /* The same six hues, re-stepped for a light surface rather than reused.
+     All six pass every check against #F4F6FA. */
+  --ev-cat-1:       #008AB1;
+  --ev-cat-2:       #984C00;
+  --ev-cat-3:       #348F4F;
+  --ev-cat-4:       #6652A6;
+  --ev-cat-5:       #00918B;
+  --ev-cat-6:       #A03F40;
+  --ev-cat-dim:     #6B7488;
 
   --ev-shadow:      0 2px 10px rgba(31, 39, 51, 0.12);
 }
@@ -3181,8 +3211,8 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   border-top: 1px solid color-mix(in srgb, var(--ev-surface-2) 60%, transparent);
 }
 .ev-bullet-chart {
-  /* 26 top + seven 34px rows + 8 bottom. */
-  height: 272px;
+  /* 10 top + seven 34px rows + 8 bottom. */
+  height: 256px;
   width: 100%;
 }
 
@@ -3191,9 +3221,9 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 .ev-bullet-inputs {
   position: absolute;
   right: 0;
-  /* 26px grid offset + (34 - 26) / 2 to centre the box on its row, plus the
+  /* 10px grid offset + (34 - 26) / 2 to centre the box on its row, plus the
      8px of padding on the container above. */
-  top: calc(.8rem + 30px);
+  top: calc(.8rem + 14px);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3237,4 +3267,131 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   opacity: 1 !important;
   font-weight: 600;
   cursor: default;
+}
+
+/* ==========================================================================
+   Top 10
+   ==========================================================================
+   Two questions side by side, because they disagree: the ten highest
+   composite scores, and the ten highest of each indicator that goes into
+   that score. The disagreement is the finding, so the layout puts the lists
+   where one glance covers both.
+
+   The heights here are shared with citations_lib/top10.py. ECharts measures
+   the element it draws into, so a chart div with no height renders nothing
+   at all rather than rendering small. COMPOSITE: 12 top + ten 44px rows + 6
+   bottom. CELL: ten rows at 26px plus the labels' own padding. */
+
+.ev-top10 { width: 100%; max-width: 1500px; text-align: left; }
+
+.ev-top10 .ev-panel-toolbar { justify-content: space-between; gap: 1rem; }
+.ev-top10-switch { display: flex; align-items: center; }
+
+.ev-top10-head { margin-bottom: .35rem; }
+.ev-top10-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ev-text);
+  margin: 0;
+}
+.ev-top10-sub {
+  font-size: .84rem;
+  color: var(--ev-text-muted);
+  margin: .15rem 0 0;
+  max-width: 62ch;
+}
+
+/* The list and the card. The card follows the list down the page rather than
+   scrolling away from the row that filled it. */
+.ev-top10-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+.ev-top10-main { flex: 1 1 62%; min-width: 0; }
+.ev-top10-side {
+  flex: 0 0 380px;
+  /* Follows the list down the page. Reading row eight and then looking up to
+     a card that has scrolled off is the whole failure this avoids. 76px
+     clears the sticky navbar. */
+  position: sticky;
+  top: 76px;
+}
+
+.ev-top10-composite { height: 458px; width: 100%; }
+
+.ev-top10-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem 1rem;
+  margin-top: .35rem;
+  font-size: .78rem;
+  color: var(--ev-text-muted);
+}
+.ev-top10-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: .35rem;
+  vertical-align: middle;
+}
+
+.ev-top10-note:empty { display: none; }
+.ev-top10-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: .55rem .7rem;
+  margin: .5rem 0;
+  border-radius: var(--ev-radius);
+  border: 1px solid color-mix(in srgb, var(--ev-orange) 45%, transparent);
+  background: color-mix(in srgb, var(--ev-orange) 12%, transparent);
+  color: var(--ev-text);
+  font-size: .82rem;
+}
+
+/* The six indicators. Three across on a wide screen, because six charts in
+   two rows of three is one shape the eye can take in, and two across or one
+   below that. */
+.ev-top10-metrics { margin-top: 1.5rem; }
+.ev-top10-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: .75rem;
+}
+.ev-top10-cell {
+  background: var(--ev-surface);
+  border: 1px solid var(--ev-surface-2);
+  border-radius: var(--ev-radius);
+  padding: .6rem .7rem .4rem;
+}
+.ev-top10-cell-title {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--ev-text);
+  margin-bottom: .2rem;
+}
+.ev-top10-cell-chart { height: 286px; width: 100%; }
+
+/* The card on this tab has no what-if inputs, so the bullet rows have the
+   whole width. The Explore card's 26px offset exists to clear an input
+   column that is not here. */
+.ev-top10-card { width: 100%; }
+.ev-bullets-lean .ev-bullet-chart { height: 256px; }
+.ev-top10-open { margin-top: .6rem; }
+
+@media (max-width: 1240px) {
+  .ev-top10-row { flex-direction: column; }
+  /* Stacked rather than beside, so sticky would pin the card over the
+     list it came from. */
+  .ev-top10-side { flex: 1 1 auto; width: 100%; max-width: 520px;
+                   position: static; }
+  .ev-top10-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .ev-top10-grid { grid-template-columns: minmax(0, 1fr); }
+  .ev-top10-composite { height: 420px; }
 }

@@ -548,8 +548,12 @@ BULLET_DRAW_JS = """
                 animationDuration: 260,
                 // Room on the right for the input column, which is laid out
                 // by CSS and sits over the chart.
-                grid: {left: 150, right: 116, top: TOP, bottom: 8,
-                       height: rows.length * ROW},
+                // 116px on the right is the input column, which is laid
+                // out by CSS and sits over the chart. A card with no
+                // comparison group has no inputs either, so that space is
+                // the bars' to use.
+                grid: {left: 150, right: hasGroup ? 116 : 30, top: TOP,
+                       bottom: 8, height: rows.length * ROW},
                 // One tooltip for the whole row, rather than one per series.
                 //
                 // It is triggered by the axis rather than by the item because
