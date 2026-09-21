@@ -558,21 +558,32 @@ color: var(--ev-bg);
    look equally important. The remaining three leaves are put to work here on
    things that are genuinely different kinds of thing. */
 
-/* Each section gets a leaf, matching its navbar button. */
-.accordion-item:nth-of-type(1) .accordion-button:not(.collapsed) {
+/* Each section gets a leaf, matching its navbar button.
+
+   Keyed off the section's own class rather than its position. These were
+   :nth-of-type(1..3), so adding Top 10 as the second section gave Trends the
+   colour of Compare and left Compare with none, while the navbar buttons
+   below kept theirs: the two halves of the same cue disagreed. There are
+   four sections now and the logo has four leaves. */
+.ev-section-explore .accordion-button:not(.collapsed) {
   color: var(--ev-accent);
   box-shadow: inset 4px 0 0 var(--ev-accent);
 }
-.accordion-item:nth-of-type(2) .accordion-button:not(.collapsed) {
+.ev-section-top10 .accordion-button:not(.collapsed) {
+  color: var(--ev-magenta);
+  box-shadow: inset 4px 0 0 var(--ev-magenta);
+}
+.ev-section-trends .accordion-button:not(.collapsed) {
   color: var(--ev-green);
   box-shadow: inset 4px 0 0 var(--ev-green);
 }
-.accordion-item:nth-of-type(3) .accordion-button:not(.collapsed) {
+.ev-section-compare .accordion-button:not(.collapsed) {
   color: var(--ev-orange);
   box-shadow: inset 4px 0 0 var(--ev-orange);
 }
 
 #jump-explore:hover { border-color: var(--ev-accent); color: var(--ev-accent); }
+#jump-top10:hover   { border-color: var(--ev-magenta); color: var(--ev-magenta); }
 #jump-trends:hover  { border-color: var(--ev-green);  color: var(--ev-green); }
 #jump-compare:hover { border-color: var(--ev-orange); color: var(--ev-orange); }
 
@@ -1939,8 +1950,11 @@ body, body * {
    silently removed the whole accordion. So the titles stay plain strings and
    the icons are the Lucide glyphs drawn as CSS masks. A mask painted with
    currentColor inherits the header's text colour, so they follow the theme.
-   Keyed by nth-of-type, so a rule is needed for EVERY section: adding a
-   third without one is what left it showing a blank square. */
+   Keyed by the section's own class rather than by its position. They were
+   :nth-of-type(1..3), so inserting Top 10 as the second section slid every
+   icon down one: Top 10 wore the trend line, Trends wore the two people, and
+   Compare wore nothing. The navbar buttons carry their icons in markup and
+   so kept the right ones, which is the disagreement a reader sees. */
 .accordion-button::before {
   content: "";
   width: 19px;
@@ -1955,19 +1969,25 @@ body, body * {
 
 
 /* lucide "user" */
-.accordion-item:nth-of-type(1) .accordion-button::before {
+.ev-section-explore .accordion-button::before {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>");
 }
 
 /* lucide "trending-up" */
-.accordion-item:nth-of-type(2) .accordion-button::before {
+.ev-section-trends .accordion-button::before {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 7 13.5 15.5 8.5 10.5 2 17'/><polyline points='16 7 22 7 22 13'/></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 7 13.5 15.5 8.5 10.5 2 17'/><polyline points='16 7 22 7 22 13'/></svg>");
 }
 
+/* lucide "trophy" */
+.ev-section-top10 .accordion-button::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9H4.5a2.5 2.5 0 0 1 0-5H6'/><path d='M18 9h1.5a2.5 2.5 0 0 0 0-5H18'/><path d='M4 22h16'/><path d='M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22'/><path d='M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22'/><path d='M18 2H6v7a6 6 0 0 0 12 0V2Z'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9H4.5a2.5 2.5 0 0 1 0-5H6'/><path d='M18 9h1.5a2.5 2.5 0 0 0 0-5H18'/><path d='M4 22h16'/><path d='M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22'/><path d='M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22'/><path d='M18 2H6v7a6 6 0 0 0 12 0V2Z'/></svg>");
+}
+
 /* lucide "users" */
-.accordion-item:nth-of-type(3) .accordion-button::before {
+.ev-section-compare .accordion-button::before {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
 }

@@ -907,6 +907,12 @@ accordion = html.Div(
                 [_SECTION_CONTENT[item_id]()],
                 title = title,
                 item_id = item_id,
+                # The section's own accent is keyed off this class rather
+                # than off its position. assets/style.css used to colour the
+                # sections with :nth-of-type, so inserting Top 10 as the
+                # second one handed every section below it the colour of its
+                # neighbour while the navbar buttons kept theirs.
+                class_name = f'ev-section ev-section-{item_id}',
             )
             for item_id, title, _blurb, _icon in ACCORDION_SECTIONS
         ],

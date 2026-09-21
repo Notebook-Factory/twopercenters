@@ -181,3 +181,33 @@ def test_a_rebuilt_row_is_not_a_click():
         module.callback_context = original
     assert rebuilt[4] == leader['name']
     assert clicked[4] == other['name']
+
+
+def test_every_section_has_its_own_accent_and_its_button_matches():
+    """The section colour and the navbar button colour are two halves of one
+    cue. They used to be written against :nth-of-type, so inserting a section
+    moved the sections' colours and left the buttons' where they were."""
+    home = _home()
+    with open('assets/style.css') as handle:
+        css = handle.read()
+    for item_id, *_rest in home.ACCORDION_SECTIONS:
+        button = next(name for name, target in home._JUMP_TARGETS.items()
+                      if target == item_id)
+        section_rule = f'.ev-section-{item_id} .accordion-button'
+        assert section_rule in css, item_id
+        colour = css.split(section_rule)[1].split('color: var(')[1].split(')')[0]
+        hover = css.split(f'#{button}:hover')[1].split('}')[0]
+        assert colour in hover, (item_id, colour, hover)
+    assert ':nth-of-type(1) .accordion-button' not in css
+
+
+def test_every_section_has_its_own_header_icon():
+    """The header icons are CSS masks. They were keyed by :nth-of-type, so
+    inserting a section slid every icon below it down by one while the navbar
+    buttons, which carry their icons in markup, kept the right ones."""
+    home = _home()
+    with open('assets/style.css') as handle:
+        css = handle.read()
+    for item_id, *_rest in home.ACCORDION_SECTIONS:
+        assert f'.ev-section-{item_id} .accordion-button::before' in css, item_id
+    assert '.accordion-item:nth-of-type' not in css
