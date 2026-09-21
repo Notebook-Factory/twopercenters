@@ -39,6 +39,7 @@ from db.connection import connect
 from db.migrate import apply_all
 from pipeline.column_map import canonical_frame
 from pipeline.identity import block_key, normalize, resolve
+from pipeline.ror_match import refresh_institution_ror
 
 MANIFEST = "dataset_manifest.json"
 
@@ -1056,6 +1057,7 @@ def build(conn, root="data_clean", out_dir="data_parquet"):
     refresh_group_metrics(conn)
     refresh_dropdown_views(conn)
     refresh_top_researchers(conn)
+    refresh_institution_ror(conn)
     return counts
 
 

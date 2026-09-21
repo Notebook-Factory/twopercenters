@@ -122,6 +122,34 @@ order and is safe to run against a database that is already up to date.
 `data_clean/`, rather than quietly producing an empty database, so you will
 be told rather than left guessing.
 
+#### Institution geography, which is optional
+
+The published data gives an institution as a name and a country and nothing
+else: no city, no coordinates, no identifier. `pipeline/ror_match.py` matches
+those names against the [Research Organization Registry](https://ror.org),
+which has all three, and fills `institution_ror`. The build calls it, and it
+prints how many institutions matched and, more usefully, what share of
+researchers that covers.
+
+The registry dump is not in git: it is 36 MB and ROR publishes a new release
+roughly monthly. Without it the step says so and skips, and everything else
+works; `institution_ror` is then simply empty. To fetch the current release:
+
+```bash
+mkdir -p data_ror
+curl -sL -o data_ror/ror-data.zip \
+  "$(curl -s 'https://zenodo.org/api/communities/ror-data/records?sort=newest&size=1' \
+     | python -c 'import json,sys; print(json.load(sys.stdin)["hits"]["hits"][0]["files"][0]["links"]["self"])')"
+python pipeline/ror_match.py
+```
+
+Against ROR v2.12-2026-08-25 this matched 19,120 of the 66,079 institution
+names (28.9%), which covers 160,224 of the 230,333 researchers in career-2024
+(69.6%). The two numbers are far apart because the names that match are the
+large institutions, and the tail that does not is departments, hospital
+wings and laboratory names. Both are printed on every run rather than
+assumed, and they move with each ROR release.
+
 ### 4. Build the search index
 
 The typeahead reads the `authors` alias, which lives in Elasticsearch and is

@@ -175,3 +175,7 @@ data_parquet/
 docs/superpowers/
 data_rdl/
 
+
+# The ROR data dump, fetched from Zenodo rather than kept in git: it is
+# 36 MB, and ROR publishes a new release roughly monthly.
+data_ror/

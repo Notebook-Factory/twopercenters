@@ -22,3 +22,11 @@ build-all:
 	python pipeline/build_relational.py data_clean
 	# 3. search index: build the Elasticsearch index from the relational core.
 	python pipeline/build_search_index.py
+
+.PHONY: ror
+ror:
+	# Match institution names to the Research Organization Registry, which is
+	# where the city and the coordinates come from. Needs a dump under
+	# data_ror/; see README. build-all does this too, through
+	# build_relational.py, and skips it when there is no dump.
+	python pipeline/ror_match.py
