@@ -186,6 +186,33 @@ def comparison_legend(group_label):
     ]
 
 
+def preset_choice(year_options, preset, career):
+    """What to set when another tab hands this one a researcher.
+
+    Returns (kind, year, exclude-self-citations, preset-to-keep), with
+    dash.no_update for anything that must not move. Split out from the
+    callback so the sequence can be tested: it takes two passes when the kind
+    has to change, and getting that wrong either loops forever or silently
+    leaves the reader on the wrong edition.
+    """
+    if not preset:
+        raise PreventUpdate
+    wanted_career = bool(preset.get('career'))
+    if bool(career) != wanted_career:
+        # The kind first. Changing it rebuilds the year options, and the
+        # callback runs again on those, so the preset is kept for that pass.
+        return wanted_career, dash.no_update, dash.no_update, preset
+    wanted_year = str(preset.get('year') or '')
+    available = {str(option['value']) for option in (year_options or [])
+                 if not option.get('disabled')}
+    # A researcher in the career-2024 top ten need not be in single-year
+    # 2024, and an edition this author has no row in is not selectable. The
+    # year Explore chose stands in that case, rather than a year that would
+    # show nothing.
+    year = wanted_year if wanted_year in available else dash.no_update
+    return dash.no_update, year, bool(preset.get('ns')), None
+
+
 def card_header(name, institute, country, field, edition=None):
     """Who this is, above the numbers, and which edition it is drawn from.
 
@@ -1205,6 +1232,34 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                        html.Span('Open in OpenAlex')],
                       href=url, target='_blank', rel='noopener noreferrer',
                       className='ev-id-link')
+
+    @callback(
+        Output('careerORSingleYrA1' + SUFFIX, 'value', allow_duplicate=True),
+        Output('selectYrRadioA1' + SUFFIX, 'value', allow_duplicate=True),
+        Output('selfCToggle' + SUFFIX, 'on', allow_duplicate=True),
+        Output('explore-preset', 'data', allow_duplicate=True),
+        Input('selectYrRadioA1' + SUFFIX, 'options'),
+        State('explore-preset', 'data'),
+        State('careerORSingleYrA1' + SUFFIX, 'value'),
+        prevent_initial_call=True)
+    def _apply_preset(year_options, preset, career):
+        """Open on the edition the reader was already looking at.
+
+        Explore works out which years an author has and lands on the earliest
+        one, which is what somebody typing a name wants: it is the start of
+        that researcher's record. It is not what somebody arriving from the
+        Top 10 of career-2024 wants, and landing them on 2017 silently
+        answers a different question than the one they clicked on.
+
+        This runs off the year options rather than off the store, because the
+        options are the last thing to arrive: the author sets the kind, the
+        kind sets the years, and only then is there a 2024 to select. Setting
+        the kind here sends the years round again, so the preset is kept
+        until the year is actually applied and cleared once it is. Without
+        that it would run forever, and with a preset that is never cleared
+        the reader could not change the year by hand afterwards.
+        """
+        return preset_choice(year_options, preset, career)
 
     # =============== The card, across the row
     #

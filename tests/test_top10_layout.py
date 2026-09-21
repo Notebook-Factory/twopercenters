@@ -112,9 +112,12 @@ def test_a_row_shows_a_flag_and_a_self_citation_share():
     flag = row.children[1]
     assert flag.src.endswith('/' + payload['flags'][0])
     assert flag.alt == payload['countries'][0]
+    # The number only: "self-cited" printed after each of the ten was the
+    # same two words ten times over. The legend says it once.
     printed = row.children[2].children[2].children[1].children
-    assert printed.endswith('% self-cited')
-    assert abs(float(printed.split('%')[0]) - payload['self_pct'][0]) < 0.05
+    assert printed.endswith('%')
+    assert 'self' not in printed
+    assert abs(float(printed.rstrip('%')) - payload['self_pct'][0]) < 0.05
 
 
 def test_the_self_citation_share_is_a_percentage():
@@ -170,12 +173,19 @@ def test_a_click_opens_that_researcher_in_explore():
     try:
         module.callback_context = _Context(
             {'type': 'top10-row', 'index': 'Wang, Zhong Lin'}, 3)
-        assert module._open_in_explore([3], '') == ('explore', 'Wang, Zhong Lin')
+        where, name, preset = module._open_in_explore(
+            [3], '', True, '2024', False)
+        assert (where, name) == ('explore', 'Wang, Zhong Lin')
+        # The edition travels with the name, or Explore opens on the earliest
+        # year this researcher appears in rather than the one on screen.
+        assert preset == {'career': True, 'year': '2024', 'ns': False}
 
         # A small chart writes the name into the hidden input instead.
         module.callback_context = _Context('top10Picked_top10_', 'He, Kaiming')
-        assert module._open_in_explore([0], 'He, Kaiming') == ('explore',
-                                                               'He, Kaiming')
+        where, name, preset = module._open_in_explore(
+            [0], 'He, Kaiming', False, '2019', True)
+        assert (where, name) == ('explore', 'He, Kaiming')
+        assert preset == {'career': False, 'year': '2019', 'ns': True}
     finally:
         module.callback_context = original
 
@@ -198,7 +208,7 @@ def test_a_rebuilt_row_is_not_a_click():
     try:
         module.callback_context = _Context(0)
         with _pytest.raises(PreventUpdate):
-            module._open_in_explore([0] * 10, '')
+            module._open_in_explore([0] * 10, '', True, '2024', False)
     finally:
         module.callback_context = original
 
@@ -249,3 +259,60 @@ def test_the_openalex_lookup_survives_a_service_that_is_not_there():
     from citations_lib.utils import openalex_author
     assert openalex_author('Ioannidis, John P.A.', timeout=0.000001) is None
     assert openalex_author('') is None
+
+
+def test_explore_opens_on_the_edition_that_was_clicked():
+    """Explore lands on the earliest year an author appears in, which is
+    right for a typed name and wrong for a researcher handed over from the
+    top ten of career-2024."""
+    import dash
+
+    from citations_lib.auth_find import preset_choice
+    options = [{'label': '2017', 'value': '2017'},
+               {'label': '2024', 'value': '2024'}]
+    preset = {'career': True, 'year': '2024', 'ns': False}
+
+    # Pass one, the kind is already right: the year and the toggle are set
+    # and the preset is spent.
+    kind, year, ns, keep = preset_choice(options, preset, True)
+    assert (kind, year, ns, keep) == (dash.no_update, '2024', False, None)
+
+
+def test_a_preset_that_changes_the_kind_takes_two_passes():
+    """Changing career to single-year rebuilds the year options, so the year
+    cannot be set in the same pass. Clearing the preset there would leave the
+    reader on the wrong year with nothing left to correct it."""
+    import dash
+
+    from citations_lib.auth_find import preset_choice
+    preset = {'career': False, 'year': '2022', 'ns': True}
+    kind, year, ns, keep = preset_choice([], preset, True)
+    assert kind is False and year is dash.no_update and keep == preset
+
+    options = [{'label': '2022', 'value': '2022'}]
+    kind, year, ns, keep = preset_choice(options, preset, False)
+    assert year == '2022' and ns is True and keep is None
+
+
+def test_a_year_the_author_does_not_have_is_left_alone():
+    """A researcher in the career top ten need not have a single-year row for
+    the same year. Selecting it anyway would show an empty card."""
+    import dash
+
+    from citations_lib.auth_find import preset_choice
+    options = [{'label': '2017', 'value': '2017'},
+               {'label': '2024', 'value': '2024', 'disabled': True}]
+    _kind, year, _ns, keep = preset_choice(
+        options, {'career': True, 'year': '2024'}, True)
+    assert year is dash.no_update
+    assert keep is None
+
+
+def test_without_a_preset_nothing_moves():
+    """Typing a name into Explore must still land on the earliest year."""
+    from dash.exceptions import PreventUpdate
+    import pytest as _pytest
+
+    from citations_lib.auth_find import preset_choice
+    with _pytest.raises(PreventUpdate):
+        preset_choice([{'label': '2017', 'value': '2017'}], None, True)

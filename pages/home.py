@@ -1186,6 +1186,12 @@ layout = dbc.Container(fluid = True, children = [
         spotlight,
         dcc.Store(id="spotlight-hotkey"),
         dcc.Store(id="spotlight-selection"),
+        # What the Explore tab should open on, when something else sends a
+        # researcher there. Explore works out an author's available years
+        # itself and lands on the earliest, which is right when a name is
+        # typed into it and wrong when Top 10 hands it a researcher from a
+        # particular edition. Read and cleared by auth_find.
+        dcc.Store(id="explore-preset"),
         dede,
         html.Div(navigation_row),
         html.Br(),

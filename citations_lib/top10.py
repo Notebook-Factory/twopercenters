@@ -255,7 +255,10 @@ def _self_citation_bar(share):
         html.Span(html.Span(className='ev-top10-self-fill',
                             style={'width': f'{width:.1f}%'}),
                   className='ev-top10-self-track'),
-        html.Span(f'{share:.1f}% self-cited', className='ev-top10-self-value'),
+        # The number only. "self-cited" after every one of the ten was the
+        # same two words ten times over, which is noise rather than a label;
+        # the legend under the list says it once.
+        html.Span(f'{share:.1f}%', className='ev-top10-self-value'),
     ], className='ev-top10-self',
         title=f'{share:.2f}% of the citations counted here are the '
               f"researcher's own")
@@ -411,6 +414,11 @@ def _charts(career, year, ns):
                         className='ev-legend-item')
               for entry in composite['series']]
     legend.append(html.Span(
+        [html.Span(className='ev-top10-key ev-top10-key-self'),
+         html.Span('self-citations, under each name, against a scale that '
+                   'ends at 30%')],
+        className='ev-legend-item'))
+    legend.append(html.Span(
         'each part is that indicator against the edition maximum, and the '
         'six add up to the published score',
         className='ev-legend-item ev-legend-note'))
@@ -420,10 +428,14 @@ def _charts(career, year, ns):
 @callback(
     Output('accordion', 'active_item', allow_duplicate=True),
     Output('spotlight-selection', 'data', allow_duplicate=True),
+    Output('explore-preset', 'data', allow_duplicate=True),
     Input({'type': 'top10-row', 'index': ALL}, 'n_clicks'),
     Input('top10Picked' + SUFFIX, 'value'),
+    State('top10Kind' + SUFFIX, 'value'),
+    State('top10Year' + SUFFIX, 'value'),
+    State('top10Ns' + SUFFIX, 'on'),
     prevent_initial_call=True)
-def _open_in_explore(_row_clicks, picked):
+def _open_in_explore(_row_clicks, picked, career, year, ns):
     """A click on any name opens that researcher in Explore.
 
     There is no card on this tab. One was built here first, and it repeated
@@ -435,7 +447,13 @@ def _open_in_explore(_row_clicks, picked):
     lookup takes and what its dropdown shows. Both ways in agree on it: the
     ranked rows carry it in the trigger and the small charts write it into
     the hidden input.
+
+    The edition travels with the name. Explore would otherwise open on the
+    earliest year that researcher appears in, which is a different question
+    than the one being asked by clicking a name in the top ten of
+    career-2024.
     """
+    preset = {'career': bool(career), 'year': str(year or ''), 'ns': bool(ns)}
     trigger = callback_context.triggered_id
     fired = (callback_context.triggered or [{}])[0].get('value')
     if isinstance(trigger, dict) and trigger.get('type') == 'top10-row':
@@ -445,10 +463,10 @@ def _open_in_explore(_row_clicks, picked):
         # the year would throw the reader into Explore.
         if not fired:
             raise PreventUpdate
-        return 'explore', trigger['index']
+        return 'explore', trigger['index'], preset
     if not picked:
         raise PreventUpdate
-    return 'explore', picked
+    return 'explore', picked, preset
 
 
 # ---------------------------------------------------------------------------
@@ -506,8 +524,11 @@ COMPOSITE_DRAW_JS = """
                 return;
             }
             // TOP clears the axis labels, which sit above the plot: at 12
-            // they were drawn half off the top of the element.
-            var ROW = 44, TOP = 30;
+            // they were drawn half off the top of the element. ROW is the
+            // height of one ranked row, which carries a name, an institution
+            // and a self-citation bar, and is duplicated in
+            // .ev-top10-listrow: see the comment there.
+            var ROW = 52, TOP = 30;
             var css = getComputedStyle(document.documentElement);
             function token(name, fallback) {
                 var v = css.getPropertyValue(name);

@@ -3345,7 +3345,7 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   align-items: center;
   gap: .55rem;
   width: 100%;
-  height: 44px;
+  height: 52px;
   padding: 0 .4rem;
   text-align: left;
   background: transparent;
@@ -3404,7 +3404,10 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   display: flex;
   align-items: center;
   gap: .35rem;
-  margin-top: 2px;
+  /* Tight to the institution above it rather than floating midway to the
+     next researcher's name, which is what 2px looked like. */
+  margin-top: 0;
+  line-height: 1;
 }
 .ev-top10-self-track {
   flex: 0 0 52px;
@@ -3426,9 +3429,9 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   white-space: nowrap;
 }
 
-/* 30 top, for the axis labels above the plot, then ten 44px rows and 6
+/* 30 top, for the axis labels above the plot, then ten 52px rows and 6
    below. */
-.ev-top10-composite { height: 476px; width: 100%; }
+.ev-top10-composite { height: 556px; width: 100%; }
 
 .ev-top10-legend {
   display: flex;
@@ -3449,6 +3452,7 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 .ev-top10-key-shared { background: var(--ev-accent); }
 .ev-top10-key-dim    { background: var(--ev-cat-dim); }
 .ev-top10-key-follow { background: var(--ev-magenta); }
+.ev-top10-key-self   { background: var(--ev-orange); }
 
 .ev-top10-note:empty { display: none; }
 .ev-top10-warning {
@@ -3493,7 +3497,6 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 }
 @media (max-width: 760px) {
   .ev-top10-grid { grid-template-columns: minmax(0, 1fr); }
-  .ev-top10-composite { height: 420px; }
 }
 
 /* Where to read the work behind the numbers. Sits under the card's header,
