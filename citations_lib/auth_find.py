@@ -859,6 +859,14 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     identityCard = html.Div([
         dcc.Store(id = 'rankChartStore' + SUFFIX),
         html.Div(id = 'cardHeader' + SUFFIX, className = 'ev-id-head'),
+        # Filled by its own callback rather than as part of the header,
+        # because resolving the researcher at OpenAlex is a call to somebody
+        # else's server and takes about 600 ms the first time each name is
+        # asked for. On the header's callback that would be 600 ms of blank
+        # card; here the card draws at once and the link appears when it
+        # arrives, or never, which is what happens when there is no
+        # confident match.
+        html.Div(id = 'openalexRow' + SUFFIX, className = 'ev-id-links'),
         html.Div([
             html.Div(id = 'rankDisplay' + SUFFIX, className = 'ev-id-ranks'),
             html.Div(id = 'rankChart' + SUFFIX, className = 'ev-rank-chart'),
@@ -1173,6 +1181,30 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     register_bullet_chart('bulletStore' + SUFFIX,
                           'bulletChart' + SUFFIX,
                           'bulletSink' + SUFFIX)
+
+    @callback(
+        Output('openalexRow' + SUFFIX, 'children'),
+        Input('author1OptionsDropdown' + SUFFIX, 'value'))
+    def _openalex_link(name):
+        """Where to read the work behind the numbers.
+
+        This dashboard reports what the published list says and stops there.
+        A reader who wants the papers has only the name to go on, and
+        OpenAlex is where that name resolves to a profile.
+
+        No link is shown unless OpenAlex returns a researcher whose name
+        matches this one once punctuation, case, order and initials are set
+        aside. A search for a common surname returns the most cited match
+        rather than the right one, and a link to the wrong researcher is a
+        claim this dashboard has no business making.
+        """
+        url = openalex_author(name) if name else None
+        if not url:
+            return []
+        return html.A([html.Span(className='ev-ic ev-ic-external-link'),
+                       html.Span('Open in OpenAlex')],
+                      href=url, target='_blank', rel='noopener noreferrer',
+                      className='ev-id-link')
 
     # =============== The card, across the row
     #

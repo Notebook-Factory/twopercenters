@@ -10,6 +10,9 @@ from plotly.subplots import make_subplots
 import country_converter as coco
 import os
 import json
+import re
+import urllib.parse
+import urllib.request
 import pickle
 import base64
 import zlib
@@ -1843,6 +1846,21 @@ def edition_sizes(kind):
 # The top of a list
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=512)
+def iso2(country_code):
+    """The two-letter code for a three-letter one, for flag images.
+
+    The fact tables carry ISO3, which is what the published data uses, and
+    every flag service is keyed on ISO2. Cached because the conversion is
+    about 3 ms a call and the same handful of countries come up over and
+    over.
+    """
+    if not country_code:
+        return ''
+    code = str(coco.convert(names=str(country_code), to='ISO2'))
+    return '' if code.lower() == 'not found' else code.lower()
+
+
 def top_researchers(kind, year, metric, ns=False, limit=10,
                     _force_live=False):
     """The highest `limit` researchers by one metric in one edition.
@@ -1871,7 +1889,7 @@ def top_researchers(kind, year, metric, ns=False, limit=10,
         rows = _fetch(
             f'select t.position, t.author_id, a.authfull_display, i.inst_name, '
             f'm.country_code, f.name, t.value, m.rank{suffix}, '
-            f'm.list_position{suffix} '
+            f'm.list_position{suffix}, m.self_pct '
             f'from top_researchers t '
             f'join {table} m on m.author_id = t.author_id '
             f'   and m.edition_id = t.edition_id '
@@ -1886,7 +1904,7 @@ def top_researchers(kind, year, metric, ns=False, limit=10,
             f'select row_number() over (order by m.{metric}{suffix} desc, '
             f'   m.author_id), m.author_id, a.authfull_display, i.inst_name, '
             f'm.country_code, f.name, m.{metric}{suffix}, m.rank{suffix}, '
-            f'm.list_position{suffix} '
+            f'm.list_position{suffix}, m.self_pct '
             f'from {table} m '
             f'join authors a on a.author_id = m.author_id '
             f'left join institutions i on i.institution_id = m.institution_id '
@@ -1896,12 +1914,14 @@ def top_researchers(kind, year, metric, ns=False, limit=10,
             (edition_id, limit))
     return [{'position': int(position), 'author_id': author_id,
              'name': name, 'institute': inst or '',
-             'country_code': (country or '').upper(), 'field': field or '',
+             'country_code': (country or '').upper(),
+             'flag': iso2(country), 'field': field or '',
              'value': float(value),
+             'self_pct': None if self_pct is None else float(self_pct),
              'rank': int(rank) if rank is not None else None,
              'list_position': int(listpos) if listpos is not None else None}
             for (position, author_id, name, inst, country, field, value,
-                 rank, listpos) in rows]
+                 rank, listpos, self_pct) in rows]
 
 
 # The columns the Top 10 card reads off a fact row, published and
@@ -1946,3 +1966,67 @@ def author_metrics(author_id, kind, year):
     for name, value in zip(columns, row[5:]):
         data[name] = None if value is None else float(value)
     return data
+
+
+# ---------------------------------------------------------------------------
+# OpenAlex
+# ---------------------------------------------------------------------------
+#
+# The dashboard reports what the published list says and stops there. A reader
+# who wants the papers behind a number has to go and find the person
+# themselves, and the name on the card is the only thing they have to go on.
+#
+# OpenAlex has an open API, no key, that resolves a name to a canonical author
+# id. What it cannot do is tell us the match is the right person: a search for
+# a common surname returns the most cited match, not the one on this card. So
+# the match is only accepted when the names agree once punctuation, case,
+# order and initials are put aside, and the card shows no link at all when
+# they do not. A missing link is a small loss. A link to the wrong researcher
+# is a claim this dashboard has no business making.
+
+_OPENALEX_SEARCH = 'https://api.openalex.org/authors?per-page=5&search='
+
+
+def _name_key(name):
+    """A name reduced to what two spellings of it have in common.
+
+    "Ioannidis, John P.A." and "John P. A. Ioannidis" are the same person
+    written two ways: surname first or last, initials spaced or not. This
+    reduces both to the surname plus the first letters of everything else, so
+    they compare equal without treating every J. Smith as the same person.
+    """
+    cleaned = re.sub(r'[^a-z ]', ' ', str(name or '').lower())
+    parts = [p for p in cleaned.split() if p]
+    if not parts:
+        return ''
+    longest = max(parts, key=len)
+    initials = sorted(p[0] for p in parts if p is not longest)
+    return longest + '|' + ''.join(initials)
+
+
+@lru_cache(maxsize=2048)
+def openalex_author(name, timeout=2.5):
+    """The OpenAlex page for this researcher, or None if it cannot be sure.
+
+    Cached per process: the same author is looked up again on every change of
+    year or of the self-citation toggle, and this is a call to somebody
+    else's server. Any failure, including a slow one, returns None rather
+    than raising: a link is an extra, and the card has to render without it.
+    """
+    if not name:
+        return None
+    wanted = _name_key(name)
+    if not wanted:
+        return None
+    try:
+        with urllib.request.urlopen(
+                _OPENALEX_SEARCH + urllib.parse.quote(str(name)),
+                timeout=timeout) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+    except Exception:
+        return None
+    for candidate in (payload.get('results') or []):
+        if _name_key(candidate.get('display_name')) == wanted:
+            url = candidate.get('id')
+            return url if isinstance(url, str) and url.startswith('http') else None
+    return None

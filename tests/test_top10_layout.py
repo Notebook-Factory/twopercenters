@@ -7,7 +7,7 @@ parts add back up.
 """
 import pytest
 
-from citations_lib.top10 import (card_children, composite_stack_payload,
+from citations_lib.top10 import (composite_rows, composite_stack_payload,
                                  metric_grid_payload, top10_layout)
 from citations_lib.utils import top_researchers
 
@@ -34,26 +34,6 @@ def test_career_2018_is_drawn_but_not_claimed_to_reproduce():
     sum to the number printed beside them, and the tab has to say so."""
     assert composite_stack_payload('career', 2018, False)['reproducible'] is False
     assert composite_stack_payload('career', 2024, False)['reproducible'] is True
-
-
-def test_the_card_draws_seven_rows_against_the_edition_maximum():
-    top = top_researchers('career', 2024, 'c')[0]
-    card = card_children(top['author_id'], 'career', 2024, False)
-    payload = card['bullet']
-    assert len(payload['rows']) == 7
-    assert payload['reference'] is False
-    assert payload['rows'][-1]['key'] == 'c'
-    assert all(row['ceiling'] for row in payload['rows'])
-
-
-def test_the_researcher_with_the_most_citations_fills_that_bar():
-    """Their value is the edition maximum, so their share of it is 1. A card
-    where that bar stopped short would mean the denominator is not the one
-    the score uses."""
-    top = top_researchers('career', 2024, 'nc')[0]
-    payload = card_children(top['author_id'], 'career', 2024, False)['bullet']
-    citations = next(r for r in payload['rows'] if r['key'] == 'nc')
-    assert citations['share'] == 1.0
 
 
 def test_every_indicator_gets_ten_researchers_and_a_shared_flag():
@@ -116,15 +96,36 @@ def test_the_scroll_handler_knows_where_every_section_sits():
 
 
 def test_a_ranked_row_carries_the_researcher_it_opens():
-    """The row's id is how a click says who was clicked. Carrying the author
-    id in the id itself means the callback does not have to look anything up,
-    and cannot look the wrong thing up."""
-    from citations_lib.top10 import composite_rows
+    """The row's id is how a click says who was clicked. It carries the name,
+    because the name is what Explore is keyed on, so the callback does not
+    have to look anything up and cannot look the wrong thing up."""
     payload = composite_stack_payload('career', 2024, False)
     rows = composite_rows(payload)
     assert len(rows) == 10
-    assert [row.id['index'] for row in rows] == payload['author_ids']
+    assert [row.id['index'] for row in rows] == payload['names']
     assert all(row.id['type'] == 'top10-row' for row in rows)
+
+
+def test_a_row_shows_a_flag_and_a_self_citation_share():
+    payload = composite_stack_payload('career', 2024, False)
+    row = composite_rows(payload)[0]
+    flag = row.children[1]
+    assert flag.src.endswith('/' + payload['flags'][0])
+    assert flag.alt == payload['countries'][0]
+    printed = row.children[2].children[2].children[1].children
+    assert printed.endswith('% self-cited')
+    assert abs(float(printed.split('%')[0]) - payload['self_pct'][0]) < 0.05
+
+
+def test_the_self_citation_share_is_a_percentage():
+    """The column is a fraction in the fact table and a percentage on the
+    Explore card, which reads that figure from Elasticsearch. Printing the
+    fraction here would put 0.1% beside Explore's 14.26% for one researcher."""
+    payload = composite_stack_payload('career', 2024, False)
+    shares = [s for s in payload['self_pct'] if s is not None]
+    assert shares
+    assert any(share > 1 for share in shares)
+    assert all(0 <= share <= 100 for share in shares)
 
 
 def test_the_rows_and_the_chart_agree_on_row_height():
@@ -144,70 +145,107 @@ def test_the_rows_and_the_chart_agree_on_row_height():
 
 
 def test_every_chart_on_the_tab_has_something_drawing_it():
-    """Three charts, three clientside callbacks. The card's was imported and
-    then never called once, which leaves a card with an empty space where its
-    bars belong and no error anywhere to say so."""
+    """Two charts, two clientside callbacks. One of these was registered by a
+    function that was imported and never called, which leaves an empty space
+    where the bars belong and no error anywhere to say so."""
     import app  # noqa: F401
     from dash._callback import GLOBAL_CALLBACK_MAP
 
     from citations_lib.top10 import SUFFIX
-    for sink in ('top10CompositeSink', 'top10GridSink', 'top10CardSink'):
+    for sink in ('top10CompositeSink', 'top10GridSink'):
         assert any(sink + SUFFIX in key for key in GLOBAL_CALLBACK_MAP), sink
+
+
+def test_a_click_opens_that_researcher_in_explore():
+    """There is no card on this tab. A click hands the name to Explore, which
+    is where the full card already lives."""
+    import citations_lib.top10 as module
+
+    class _Context:
+        def __init__(self, trigger, value):
+            self.triggered_id = trigger
+            self.triggered = [{'prop_id': 'x', 'value': value}]
+
+    original = module.callback_context
+    try:
+        module.callback_context = _Context(
+            {'type': 'top10-row', 'index': 'Wang, Zhong Lin'}, 3)
+        assert module._open_in_explore([3], '') == ('explore', 'Wang, Zhong Lin')
+
+        # A small chart writes the name into the hidden input instead.
+        module.callback_context = _Context('top10Picked_top10_', 'He, Kaiming')
+        assert module._open_in_explore([0], 'He, Kaiming') == ('explore',
+                                                               'He, Kaiming')
+    finally:
+        module.callback_context = original
 
 
 def test_a_rebuilt_row_is_not_a_click():
     """Changing the picker replaces all ten rows, and Dash reports a newly
     rendered row as the trigger with n_clicks of 0. Treating that as a click
-    would move the card to a researcher nobody asked for."""
-    from dash import callback_context
+    would throw the reader into Explore for a name they never clicked."""
+    import pytest as _pytest
+    from dash.exceptions import PreventUpdate
 
-    from citations_lib.top10 import _card_contents
-    leader = top_researchers('career', 2024, 'c')[0]
-    other = top_researchers('career', 2024, 'c')[4]
+    import citations_lib.top10 as module
 
     class _Context:
         def __init__(self, value):
-            self.triggered_id = {'type': 'top10-row', 'index': other['author_id']}
-            self.triggered = [{'prop_id': 'x.n_clicks', 'value': value}]
+            self.triggered_id = {'type': 'top10-row', 'index': 'Kresse, Georg'}
+            self.triggered = [{'prop_id': 'x', 'value': value}]
 
-    import citations_lib.top10 as module
     original = module.callback_context
     try:
         module.callback_context = _Context(0)
-        rebuilt = _card_contents([0] * 10, '', True, '2024', False)
-        module.callback_context = _Context(3)
-        clicked = _card_contents([0] * 10, '', True, '2024', False)
+        with _pytest.raises(PreventUpdate):
+            module._open_in_explore([0] * 10, '')
     finally:
         module.callback_context = original
-    assert rebuilt[4] == leader['name']
-    assert clicked[4] == other['name']
 
 
-def test_every_section_has_its_own_accent_and_its_button_matches():
-    """The section colour and the navbar button colour are two halves of one
-    cue. They used to be written against :nth-of-type, so inserting a section
-    moved the sections' colours and left the buttons' where they were."""
-    home = _home()
-    with open('assets/style.css') as handle:
-        css = handle.read()
-    for item_id, *_rest in home.ACCORDION_SECTIONS:
-        button = next(name for name, target in home._JUMP_TARGETS.items()
-                      if target == item_id)
-        section_rule = f'.ev-section-{item_id} .accordion-button'
-        assert section_rule in css, item_id
-        colour = css.split(section_rule)[1].split('color: var(')[1].split(')')[0]
-        hover = css.split(f'#{button}:hover')[1].split('}')[0]
-        assert colour in hover, (item_id, colour, hover)
-    assert ':nth-of-type(1) .accordion-button' not in css
+def test_a_name_in_the_grid_is_hoverable():
+    """The instruction under the grid says to hover a name. Only a bar fires
+    mouseover unless the axis is told to raise events, so the names did
+    nothing at all and the colours read as random."""
+    from citations_lib.top10 import GRID_DRAW_JS
+    assert 'triggerEvent: true' in GRID_DRAW_JS
+    # An axis-label event carries the label text and no row index.
+    assert "params.componentType === 'yAxis'" in GRID_DRAW_JS
+    assert 'globalout' in GRID_DRAW_JS
 
 
-def test_every_section_has_its_own_header_icon():
-    """The header icons are CSS masks. They were keyed by :nth-of-type, so
-    inserting a section slid every icon below it down by one while the navbar
-    buttons, which carry their icons in markup, kept the right ones."""
-    home = _home()
-    with open('assets/style.css') as handle:
-        css = handle.read()
-    for item_id, *_rest in home.ACCORDION_SECTIONS:
-        assert f'.ev-section-{item_id} .accordion-button::before' in css, item_id
-    assert '.accordion-item:nth-of-type' not in css
+def test_the_grid_legend_names_all_three_colours():
+    """Three states, three colours: in the top ten overall, leading this
+    indicator only, and the one being hovered."""
+    layout = top10_layout()
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    classes = [getattr(n, 'className', '') or '' for n in walk(layout)]
+    for key in ('ev-top10-key-shared', 'ev-top10-key-dim',
+                'ev-top10-key-follow'):
+        assert any(key in c for c in classes), key
+
+
+def test_openalex_is_only_linked_when_the_name_actually_matches():
+    """A search for a common surname returns the most cited match rather than
+    the right one. A link to the wrong researcher is a claim this dashboard
+    has no business making, so no match means no link."""
+    from citations_lib.utils import _name_key, openalex_author
+    assert _name_key('Ioannidis, John P.A.') == _name_key('John P. A. Ioannidis')
+    assert _name_key('Smith, John A.') != _name_key('Smith, Jane B.')
+    assert openalex_author('Qqqzzz, Nobody X.') is None
+
+
+def test_the_openalex_lookup_survives_a_service_that_is_not_there():
+    """It is somebody else's server, and the card has to render without it."""
+    from citations_lib.utils import openalex_author
+    assert openalex_author('Ioannidis, John P.A.', timeout=0.000001) is None
+    assert openalex_author('') is None

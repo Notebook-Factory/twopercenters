@@ -3049,6 +3049,10 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'></path><path d='M16 2v3'></path><rect x='3' y='3' width='18' height='18' rx='2'></rect><path d='M3 9h18'></path></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'></path><path d='M16 2v3'></path><rect x='3' y='3' width='18' height='18' rx='2'></rect><path d='M3 9h18'></path></svg>");
 }
+.ev-ic-external-link {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6'/><path d='M10 14 21 3'/><path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6'/><path d='M10 14 21 3'/><path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>");
+}
 .ev-ic-quote {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path><path d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path><path d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path></svg>");
@@ -3321,23 +3325,7 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   max-width: 62ch;
 }
 
-/* The list and the card. The card follows the list down the page rather than
-   scrolling away from the row that filled it. */
-.ev-top10-row {
-  display: flex;
-  gap: 1.25rem;
-  align-items: flex-start;
-  margin-top: 1rem;
-}
-.ev-top10-main { flex: 1 1 62%; min-width: 0; }
-.ev-top10-side {
-  flex: 0 0 380px;
-  /* Follows the list down the page. Reading row eight and then looking up to
-     a card that has scrolled off is the whole failure this avoids. 76px
-     clears the sticky navbar. */
-  position: sticky;
-  top: 76px;
-}
+.ev-top10-main { margin-top: 1rem; min-width: 0; }
 
 /* The ranked names and the bars they belong to, side by side.
 
@@ -3348,7 +3336,7 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    if one changes the other has to. */
 .ev-top10-listing {
   display: grid;
-  grid-template-columns: minmax(180px, 250px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 330px) minmax(0, 1fr);
   align-items: start;
 }
 .ev-top10-rows { padding-top: 30px; }
@@ -3371,6 +3359,20 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 .ev-top10-listrow:focus-visible {
   outline: 2px solid var(--ev-accent);
   outline-offset: -2px;
+}
+.ev-top10-flag {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+/* A country with no two-letter code still has to occupy the same space, or
+   the names below it step sideways. */
+.ev-top10-flag-none {
+  flex: 0 0 22px;
+  font-size: .6rem;
+  color: var(--ev-text-muted);
+  text-align: center;
 }
 .ev-top10-rank {
   flex: 0 0 22px;
@@ -3395,6 +3397,34 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Self-citations, under the name. Drawn against 30% rather than 100%,
+   because everyone on these lists sits in the low single digits and against
+   100 they are all the same invisible sliver. */
+.ev-top10-self {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-top: 2px;
+}
+.ev-top10-self-track {
+  flex: 0 0 52px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ev-surface-2);
+  overflow: hidden;
+}
+.ev-top10-self-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ev-orange);
+}
+.ev-top10-self-value {
+  font-size: .62rem;
+  color: var(--ev-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* 30 top, for the axis labels above the plot, then ten 44px rows and 6
    below. */
@@ -3416,6 +3446,9 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   margin-right: .35rem;
   vertical-align: middle;
 }
+.ev-top10-key-shared { background: var(--ev-accent); }
+.ev-top10-key-dim    { background: var(--ev-cat-dim); }
+.ev-top10-key-follow { background: var(--ev-magenta); }
 
 .ev-top10-note:empty { display: none; }
 .ev-top10-warning {
@@ -3455,22 +3488,33 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 }
 .ev-top10-cell-chart { height: 286px; width: 100%; }
 
-/* The card on this tab has no what-if inputs, so the bullet rows have the
-   whole width. The Explore card's 26px offset exists to clear an input
-   column that is not here. */
-.ev-top10-card { width: 100%; }
-.ev-bullets-lean .ev-bullet-chart { height: 256px; }
-.ev-top10-open { margin-top: .6rem; }
-
 @media (max-width: 1240px) {
-  .ev-top10-row { flex-direction: column; }
-  /* Stacked rather than beside, so sticky would pin the card over the
-     list it came from. */
-  .ev-top10-side { flex: 1 1 auto; width: 100%; max-width: 520px;
-                   position: static; }
   .ev-top10-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .ev-top10-grid { grid-template-columns: minmax(0, 1fr); }
   .ev-top10-composite { height: 420px; }
+}
+
+/* Where to read the work behind the numbers. Sits under the card's header,
+   empty until OpenAlex confirms which researcher this is, so the row has no
+   height of its own when there is no confident match. */
+.ev-id-links:empty { display: none; }
+.ev-id-links {
+  display: flex;
+  gap: .5rem;
+  margin: -.2rem 0 .6rem;
+}
+.ev-id-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .76rem;
+  color: var(--ev-text-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.ev-id-link:hover {
+  color: var(--ev-accent);
+  border-bottom-color: var(--ev-accent);
 }

@@ -23,12 +23,10 @@ from dash import (ALL, Input, Output, State, callback, callback_context,
                   dcc, html)
 from dash.exceptions import PreventUpdate
 
-from citations_lib.auth_find import (WHATIF_METRICS, bullet_payload,
-                                     bullet_rows, card_chips, card_header,
-                                     rank_stats, register_bullet_chart)
+from citations_lib.auth_find import WHATIF_METRICS
 from citations_lib.utils import (author_metrics, composite_is_reproducible,
-                                 composite_maxima, edition_size,
-                                 top_researchers, update_yr_options2)
+                                 composite_maxima, top_researchers,
+                                 update_yr_options2)
 
 SUFFIX = '_top10_'
 
@@ -105,8 +103,15 @@ def composite_stack_payload(kind, year, ns=False):
         'names': [row['name'] for row in rows],
         'institutes': [row['institute'] for row in rows],
         'countries': [row['country_code'] for row in rows],
+        'flags': [row['flag'] for row in rows],
         'author_ids': [row['author_id'] for row in rows],
         'list_positions': [row['list_position'] for row in rows],
+        # A fraction in the fact table, a percentage everywhere a reader
+        # sees it. The Explore card gets this figure from Elasticsearch,
+        # where it is already scaled, which is why the two look like they
+        # disagree if you read them side by side in the database.
+        'self_pct': [None if row['self_pct'] is None else row['self_pct'] * 100
+                     for row in rows],
         'totals': [row['value'] for row in rows],
         'series': series,
         'reproducible': composite_is_reproducible(kind, year),
@@ -137,49 +142,6 @@ def metric_grid_payload(kind, year, ns=False):
             'shared': [row['author_id'] in best for row in rows],
         })
     return {'charts': charts}
-
-
-def card_children(author_id, kind, year, ns=False):
-    """Everything the lean card shows for one researcher.
-
-    Lean means no what-if inputs and no comparison group. Without a group
-    there is no Elasticsearch aggregate to fetch, so a click on a name costs
-    one Postgres row and the edition maxima, and the bars are drawn against
-    the edition maximum alone.
-    """
-    data = author_metrics(author_id, kind, year)
-    if data is None:
-        return None
-    suffix = '_ns' if ns else ''
-    values = {metric: data.get(metric + suffix)
-              for metric, _label in WHATIF_METRICS}
-    rows = bullet_rows(values, composite_maxima(kind, year, ns=ns), {})
-
-    edition = (f'Career to {year}' if kind == 'career'
-               else f'Single year {year}')
-    scopus_rank = data.get('rank' + suffix)
-    list_rank = data.get('list_position' + suffix)
-    subfield_rank = data.get('rank_subfield' + suffix)
-    subfield_count = data.get('subfield_count')
-    if subfield_rank and subfield_count:
-        standing = (f'{int(subfield_rank):,} of {int(subfield_count):,} '
-                    f'in {data["subfield"]}')
-    else:
-        # 2017 and 2018 carry no subfield rank at all, for every row. Saying
-        # so beats printing the overall rank under a label promising a
-        # different number, which is what the Explore card used to do.
-        standing = 'Not recorded in this edition'
-
-    return {
-        'header': card_header(data['name'], data['institute'],
-                              data['country_code'], data['field'], edition),
-        'ranks': rank_stats(int(scopus_rank) if scopus_rank else None,
-                            int(list_rank) if list_rank else None,
-                            edition_size(kind, year)),
-        'chips': card_chips(data.get('self_pct'), standing),
-        'bullet': bullet_payload(rows, '', reference=False),
-        'name': data['name'],
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -227,36 +189,6 @@ def _toolbar():
     ], className='ev-toolbar ev-panel-toolbar')
 
 
-def _card():
-    """The card shell.
-
-    Static for the same reason the Explore card's is: echarts attaches an
-    instance to #top10CardBullet, and an element Dash replaces on every click
-    is an element that instance no longer points at.
-    """
-    return html.Div([
-        html.Div(id='top10CardHeader' + SUFFIX, className='ev-id-head'),
-        html.Div(html.Div(id='top10CardRanks' + SUFFIX,
-                          className='ev-id-ranks'),
-                 className='ev-id-body'),
-        html.Div(html.Div(id='top10CardBullet' + SUFFIX,
-                          className='ev-bullet-chart'),
-                 className='ev-bullets ev-bullets-lean'),
-        dcc.Store(id='top10CardStore' + SUFFIX),
-        # Whose card this is. Carried rather than read back out of the
-        # rendered header: the header is a component tree whose shape is a
-        # detail of card_header(), and reaching into it from here would make
-        # any change to that function a silent break in this button.
-        dcc.Store(id='top10CardName' + SUFFIX),
-        html.Div(id='top10CardSink' + SUFFIX, style={'display': 'none'}),
-        html.Div(id='top10CardChips' + SUFFIX, className='ev-id-chips'),
-        html.Button([html.Span(className='ev-ic ev-ic-user'),
-                     html.Span('Open in Explore')],
-                    id='top10OpenExplore' + SUFFIX, n_clicks=0,
-                    className='ev-share-btn ev-top10-open'),
-    ], id='top10Card' + SUFFIX, className='ev-id-card ev-top10-card')
-
-
 def composite_rows(payload):
     """The ranked names, as buttons beside the chart.
 
@@ -275,14 +207,58 @@ def composite_rows(payload):
         rows.append(html.Button(
             [html.Span(str(payload['positions'][index]),
                        className='ev-top10-rank'),
+             _flag(payload['flags'][index], payload['countries'][index]),
              html.Span([
                  html.Span(name, className='ev-top10-name'),
                  html.Span(payload['institutes'][index] or '',
                            className='ev-top10-inst'),
+                 _self_citation_bar(payload['self_pct'][index]),
              ], className='ev-top10-who')],
-            id={'type': 'top10-row', 'index': payload['author_ids'][index]},
-            n_clicks=0, className='ev-top10-listrow'))
+            id={'type': 'top10-row', 'index': name},
+            n_clicks=0, className='ev-top10-listrow',
+            title=f'Open {name} in Explore'))
     return rows
+
+
+def _flag(code, country):
+    """The country's flag, or its code when there is no flag to draw.
+
+    The images come from flagfeed.com, which needs no key and serves circular
+    PNGs keyed on the two-letter code. They are fetched by the reader's
+    browser rather than by this server, and the alt text carries the country
+    either way, so a reader who blocks the request, or who reads this after
+    the service has gone, still knows which country it is.
+    """
+    if not code:
+        return html.Span(country or '', className='ev-top10-flag-none')
+    # dash-html-components 2.15 has no `loading` prop, so it goes through as
+    # a data attribute rather than not at all.
+    return html.Img(src=f'https://flagfeed.com/country/{code}',
+                    alt=country or code.upper(), title=country or code.upper(),
+                    className='ev-top10-flag', **{'data-loading': 'lazy'})
+
+
+def _self_citation_bar(share):
+    """What share of this researcher's citations are their own.
+
+    The number on its own says nothing to a reader who has not seen the
+    others, which is why the Explore card draws it as a bar too. The scale
+    here is 30 percent rather than 100: almost everyone on these lists sits
+    in the low single digits, and against 100 every one of them is the same
+    invisible sliver. The number is printed beside the bar, so the scale
+    cannot mislead about the value itself.
+    """
+    if share is None:
+        return html.Span('', className='ev-top10-self')
+    width = max(0.0, min(float(share) / 30.0 * 100.0, 100.0))
+    return html.Span([
+        html.Span(html.Span(className='ev-top10-self-fill',
+                            style={'width': f'{width:.1f}%'}),
+                  className='ev-top10-self-track'),
+        html.Span(f'{share:.1f}% self-cited', className='ev-top10-self-value'),
+    ], className='ev-top10-self',
+        title=f'{share:.2f}% of the citations counted here are the '
+              f"researcher's own")
 
 
 def _grid_cells():
@@ -310,36 +286,50 @@ def top10_layout():
         _toolbar(),
         html.Div([
             html.Div([
-                html.Div([
-                    html.H3('The ten highest composite scores',
-                            className='ev-top10-title'),
-                    html.P('Every bar is that researcher\'s score taken apart '
-                           'into the six indicators that make it up. Click a '
-                           'row to read the card beside it.',
-                           className='ev-top10-sub'),
-                ], className='ev-top10-head'),
-                html.Div(id='top10CompositeNote' + SUFFIX,
-                         className='ev-top10-note'),
-                html.Div([
-                    html.Div(id='top10Rows' + SUFFIX,
-                             className='ev-top10-rows'),
-                    html.Div(id='top10Composite' + SUFFIX,
-                             className='ev-top10-composite'),
-                ], className='ev-top10-listing'),
-                html.Div(id='top10Legend' + SUFFIX,
-                         className='ev-top10-legend'),
-            ], className='ev-top10-main'),
-            html.Div(_card(), className='ev-top10-side'),
-        ], className='ev-top10-row'),
+                html.H3('The ten highest composite scores',
+                        className='ev-top10-title'),
+                html.P('Every bar is that researcher\'s score taken apart '
+                       'into the six indicators that make it up. Click any '
+                       'name to open them in Explore.',
+                       className='ev-top10-sub'),
+            ], className='ev-top10-head'),
+            html.Div(id='top10CompositeNote' + SUFFIX,
+                     className='ev-top10-note'),
+            html.Div([
+                html.Div(id='top10Rows' + SUFFIX,
+                         className='ev-top10-rows'),
+                html.Div(id='top10Composite' + SUFFIX,
+                         className='ev-top10-composite'),
+            ], className='ev-top10-listing'),
+            html.Div(id='top10Legend' + SUFFIX,
+                     className='ev-top10-legend'),
+        ], className='ev-top10-main'),
         html.Div([
             html.Div([
                 html.H3('The ten highest of each indicator',
                         className='ev-top10-title'),
-                html.P('Coloured where the researcher is also in the top ten '
-                       'overall, muted where leading one indicator is not '
-                       'enough to get there. Hover a name to follow the same '
-                       'person across all six.',
+                html.P('Who leads each of the six indicators that make up '
+                       'the score. Hover a name to follow that person across '
+                       'all six; click to open them in Explore.',
                        className='ev-top10-sub'),
+                # What the two colours mean, next to the charts that use
+                # them rather than in a sentence above them. Written out
+                # because a reader who cannot tell why one bar is blue and
+                # the next is grey reads the whole grid as random.
+                html.Div([
+                    html.Span([html.Span(className='ev-top10-key '
+                                                   'ev-top10-key-shared'),
+                               html.Span('also in the top ten overall')],
+                              className='ev-legend-item'),
+                    html.Span([html.Span(className='ev-top10-key '
+                                                   'ev-top10-key-dim'),
+                               html.Span('leads this indicator only')],
+                              className='ev-legend-item'),
+                    html.Span([html.Span(className='ev-top10-key '
+                                                   'ev-top10-key-follow'),
+                               html.Span('the one you are hovering')],
+                              className='ev-legend-item'),
+                ], className='ev-top10-legend'),
             ], className='ev-top10-head'),
             html.Div(_grid_cells(), className='ev-top10-grid'),
         ], className='ev-top10-metrics'),
@@ -428,70 +418,37 @@ def _charts(career, year, ns):
 
 
 @callback(
-    Output('top10CardHeader' + SUFFIX, 'children'),
-    Output('top10CardRanks' + SUFFIX, 'children'),
-    Output('top10CardChips' + SUFFIX, 'children'),
-    Output('top10CardStore' + SUFFIX, 'data'),
-    Output('top10CardName' + SUFFIX, 'data'),
-    Input({'type': 'top10-row', 'index': ALL}, 'n_clicks'),
-    Input('top10Picked' + SUFFIX, 'value'),
-    Input('top10Kind' + SUFFIX, 'value'),
-    Input('top10Year' + SUFFIX, 'value'),
-    Input('top10Ns' + SUFFIX, 'on'))
-def _card_contents(_row_clicks, picked, career, year, ns):
-    """The card, for whoever was clicked.
-
-    Falls back to the top of the list rather than to an empty card: nothing
-    is clicked when the tab is first opened, and an empty card beside a
-    populated list looks broken rather than expectant. It falls back the same
-    way when the selection changes to an edition the clicked researcher is
-    not in.
-    """
-    kind = 'career' if career else 'singleyr'
-    if not year:
-        raise PreventUpdate
-    year = int(year)
-    # A click on a ranked row names its researcher in the trigger itself, so
-    # it wins over whatever the small charts last wrote into the hidden
-    # input. Anything else, including the picker moving, keeps the current
-    # one and falls back below if that researcher is not in the new edition.
-    trigger = callback_context.triggered_id
-    fired = (callback_context.triggered or [{}])[0].get('value')
-    if (isinstance(trigger, dict) and trigger.get('type') == 'top10-row'
-            and fired):
-        # `fired` has to be checked, not just the trigger's shape. Changing
-        # the picker replaces all ten rows, and Dash reports a newly rendered
-        # row as the trigger with n_clicks of 0 or None. Without this the
-        # card would jump to whichever row happened to be reported rather
-        # than staying where the reader left it.
-        picked = trigger['index']
-    card = card_children(picked, kind, year, bool(ns)) if picked else None
-    if card is None:
-        leaders = top_researchers(kind, year, 'c', ns=bool(ns), limit=1)
-        if not leaders:
-            raise PreventUpdate
-        card = card_children(leaders[0]['author_id'], kind, year, bool(ns))
-    return (card['header'], card['ranks'], card['chips'], card['bullet'],
-            card['name'])
-
-
-@callback(
     Output('accordion', 'active_item', allow_duplicate=True),
     Output('spotlight-selection', 'data', allow_duplicate=True),
-    Input('top10OpenExplore' + SUFFIX, 'n_clicks'),
-    State('top10CardName' + SUFFIX, 'data'),
+    Input({'type': 'top10-row', 'index': ALL}, 'n_clicks'),
+    Input('top10Picked' + SUFFIX, 'value'),
     prevent_initial_call=True)
-def _open_in_explore(clicks, name):
-    """Hand this researcher to the Explore tab.
+def _open_in_explore(_row_clicks, picked):
+    """A click on any name opens that researcher in Explore.
 
-    The Explore tab takes a name, because that is what its Elasticsearch
-    lookup is keyed on and what its dropdown displays. The name written into
-    the store is the one the card was built from, so the card on screen and
-    the researcher that opens cannot disagree.
+    There is no card on this tab. One was built here first, and it repeated
+    a smaller version of what Explore already draws properly, one click away,
+    with the what-if calculator and the comparison group this tab has no room
+    for. So a click goes there instead.
+
+    Explore is keyed on the name, because that is what its Elasticsearch
+    lookup takes and what its dropdown shows. Both ways in agree on it: the
+    ranked rows carry it in the trigger and the small charts write it into
+    the hidden input.
     """
-    if not clicks or not name:
+    trigger = callback_context.triggered_id
+    fired = (callback_context.triggered or [{}])[0].get('value')
+    if isinstance(trigger, dict) and trigger.get('type') == 'top10-row':
+        # `fired` has to be checked, not just the trigger's shape. Changing
+        # the picker replaces all ten rows, and Dash reports a newly rendered
+        # row as the trigger with n_clicks of 0 or None. Without this, moving
+        # the year would throw the reader into Explore.
+        if not fired:
+            raise PreventUpdate
+        return 'explore', trigger['index']
+    if not picked:
         raise PreventUpdate
-    return 'explore', name
+    return 'explore', picked
 
 
 # ---------------------------------------------------------------------------
@@ -512,12 +469,16 @@ _PICK_JS = """
             // input in top10_layout: React only notices a value it is told
             // about through its own setter, so setting .value directly does
             // nothing at all.
-            function pick(authorId) {
+            //
+            // The name rather than the id, because Explore is keyed on the
+            // name. Clicking the same person twice in a row is a no-op,
+            // which is right: they are already open.
+            function pick(name) {
                 var input = document.getElementById('top10Picked%(suffix)s');
-                if (!input || !authorId) { return; }
+                if (!input || !name) { return; }
                 var setter = Object.getOwnPropertyDescriptor(
                     window.HTMLInputElement.prototype, 'value').set;
-                setter.call(input, authorId);
+                setter.call(input, name);
                 input.dispatchEvent(new Event('input', {bubbles: true}));
             }
 """ % {'suffix': SUFFIX}
@@ -636,7 +597,7 @@ COMPOSITE_DRAW_JS = """
 
             chart.off('click');
             chart.on('click', function (params) {
-                pick(payload.author_ids[params.dataIndex]);
+                pick(payload.names[params.dataIndex]);
             });
             }
 
@@ -668,6 +629,7 @@ GRID_DRAW_JS = """
             // Present but not pointed at. --ev-surface-2 measures 1.33:1
             // against the ground and simply vanishes; this is 3.17:1.
             var dim = token('--ev-cat-dim', '#8A93A6');
+            var follow = token('--ev-magenta', '#D86CB4');
 %(commas)s
 %(pick)s
             // Every chart on the grid, so that hovering a name in one can
@@ -708,6 +670,11 @@ GRID_DRAW_JS = """
                             max: Math.max.apply(null, spec.values) * 1.28},
                     yAxis: {
                         type: 'category', inverse: true,
+                        // The names are events too, not only paint. Without
+                        // this only the bar fires mouseover, so "hover a
+                        // name" did nothing at all, and the name is the part
+                        // a reader points at.
+                        triggerEvent: true,
                         data: spec.names.map(function (n) {
                             return n.length > 20 ? n.slice(0, 19) + '\\u2026'
                                                  : n; }),
@@ -725,34 +692,62 @@ GRID_DRAW_JS = """
                                 color: muted,
                                 formatter: function (p) {
                                     return commas(p.value); }},
-                        emphasis: {itemStyle: {color: accent}}
+                        // Following someone is a third state, so it takes
+                        // a third colour. Emphasising in the accent would
+                        // have said "this one is in the top ten overall",
+                        // which is what the accent already means here.
+                        emphasis: {itemStyle: {color: follow}}
                     }]
                 }, true);
                 chart.resize();
 
-                chart.off('click');
-                chart.on('click', function (params) {
-                    pick(spec.author_ids[params.dataIndex]);
-                });
-                chart.off('mouseover');
-                chart.on('mouseover', function (params) {
-                    var who = spec.author_ids[params.dataIndex];
+                // Which row an event is about. A bar event carries its
+                // dataIndex; an axis label event carries the label text and
+                // no index, so the text is matched back against the
+                // truncated names the axis was given.
+                var shown = chart.getOption().yAxis[0].data;
+                function rowOf(params) {
+                    if (params.componentType === 'yAxis') {
+                        return shown.indexOf(params.value);
+                    }
+                    return params.dataIndex === undefined
+                        ? -1 : params.dataIndex;
+                }
+                function follows(at) {
+                    if (at < 0) { return; }
+                    var who = spec.author_ids[at];
                     group.forEach(function (other) {
-                        var at = other.ids.indexOf(who);
-                        if (at >= 0) {
+                        var found = other.ids.indexOf(who);
+                        if (found >= 0) {
                             other.chart.dispatchAction({
                                 type: 'highlight', seriesIndex: 0,
-                                dataIndex: at});
+                                dataIndex: found});
                         }
                     });
-                });
-                chart.off('mouseout');
-                chart.on('mouseout', function () {
+                }
+                function clear() {
                     group.forEach(function (other) {
                         other.chart.dispatchAction({
                             type: 'downplay', seriesIndex: 0});
                     });
+                }
+
+                chart.off('click');
+                chart.on('click', function (params) {
+                    var at = rowOf(params);
+                    if (at >= 0) { pick(spec.names[at]); }
                 });
+                chart.off('mouseover');
+                chart.on('mouseover', function (params) {
+                    follows(rowOf(params));
+                });
+                chart.off('mouseout');
+                chart.on('mouseout', clear);
+                // Leaving the chart altogether has to clear it too: mouseout
+                // fires per element, and going from a bar straight off the
+                // edge can leave the other five lit.
+                chart.off('globalout');
+                chart.on('globalout', clear);
             });
             }
 
@@ -785,9 +780,3 @@ dash.clientside_callback(
     Input('top10GridStore' + SUFFIX, 'data'),
     State('top10GridCells' + SUFFIX, 'data'))
 
-
-# The card's own chart, which is the Explore tab's bullet chart drawn from
-# this tab's store into this tab's element.
-register_bullet_chart('top10CardStore' + SUFFIX,
-                      'top10CardBullet' + SUFFIX,
-                      'top10CardSink' + SUFFIX)
