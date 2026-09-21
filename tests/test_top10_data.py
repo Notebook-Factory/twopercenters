@@ -7,7 +7,8 @@ than trusting the fill.
 """
 import pytest
 
-from citations_lib.utils import COMPOSITE_METRICS, _fetch
+from citations_lib.utils import (COMPOSITE_METRICS, _fetch, author_metrics,
+                                 top_researchers)
 
 EDITIONS = [('career', 2024), ('career', 2017), ('singleyr', 2024)]
 METRICS = ('c',) + COMPOSITE_METRICS
@@ -58,3 +59,46 @@ def test_the_two_column_sets_are_not_the_same_column():
     plain = _stored('career', 2024, 'nc', False)
     excluded = _stored('career', 2024, 'nc', True)
     assert [value for _, value in plain] != [value for _, value in excluded]
+
+
+# ---------------------------------------------------------------------------
+# What the dashboard actually calls
+# ---------------------------------------------------------------------------
+
+def test_top_researchers_resolves_names_and_keeps_order():
+    rows = top_researchers('career', 2024, 'ncsf')
+    assert len(rows) == 10
+    assert [row['position'] for row in rows] == list(range(1, 11))
+    assert all(row['name'] for row in rows)
+    values = [row['value'] for row in rows]
+    assert values == sorted(values, reverse=True)
+
+
+def test_the_fallback_returns_what_the_table_returns():
+    """The tab has to work on a database where 012 has been applied but the
+    pipeline has not run since, so the live path has to agree with the stored
+    one rather than merely exist."""
+    stored = top_researchers('career', 2024, 'ncsf')
+    live = top_researchers('career', 2024, 'ncsf', _force_live=True)
+    assert [row['author_id'] for row in stored] == [row['author_id']
+                                                    for row in live]
+    assert [row['value'] for row in stored] == [row['value'] for row in live]
+
+
+def test_the_self_citation_variant_asks_a_different_question():
+    plain = top_researchers('career', 2024, 'nc')
+    excluded = top_researchers('career', 2024, 'nc', ns=True)
+    assert [r['value'] for r in plain] != [r['value'] for r in excluded]
+
+
+def test_author_metrics_returns_the_row_the_card_needs():
+    top = top_researchers('career', 2024, 'c')[0]
+    data = author_metrics(top['author_id'], 'career', 2024)
+    assert data['name'] == top['name']
+    for metric in ('nc', 'h', 'hm', 'ncs', 'ncsf', 'ncsfl', 'c'):
+        assert data[metric] is not None
+        assert data[metric + '_ns'] is not None
+
+
+def test_author_metrics_is_silent_about_an_author_not_in_the_edition():
+    assert author_metrics('no-such-author', 'career', 2024) is None

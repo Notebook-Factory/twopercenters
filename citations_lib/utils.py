@@ -1837,3 +1837,112 @@ def edition_sizes(kind):
             sizes[edition_id] = int(published)
         _EDITION_SIZES[kind] = sizes
     return _EDITION_SIZES[kind]
+
+
+# ---------------------------------------------------------------------------
+# The top of a list
+# ---------------------------------------------------------------------------
+
+def top_researchers(kind, year, metric, ns=False, limit=10,
+                    _force_live=False):
+    """The highest `limit` researchers by one metric in one edition.
+
+    Reads the ordering that pipeline/build_relational.py precomputed, and
+    joins the fact row for everything else, so the institution, the field,
+    the rank and the list position are read from the one place they are
+    maintained rather than from a copy.
+
+    If that table holds nothing for this edition, because migration 012 has
+    been applied but the pipeline has not run since, this asks the fact table
+    directly instead. A tab that is slow until the next build beats a tab
+    that is empty, and the two paths agree: the ordering here is the ordering
+    the fill uses, ties included.
+
+    `_force_live` exists so the test suite can compare the two paths against
+    each other. Nothing in the dashboard passes it.
+    """
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None:
+        return []
+    edition_id = f'{kind}-{year}'
+    suffix = '_ns' if ns else ''
+    rows = []
+    if not _force_live:
+        rows = _fetch(
+            f'select t.position, t.author_id, a.authfull_display, i.inst_name, '
+            f'm.country_code, f.name, t.value, m.rank{suffix}, '
+            f'm.list_position{suffix} '
+            f'from top_researchers t '
+            f'join {table} m on m.author_id = t.author_id '
+            f'   and m.edition_id = t.edition_id '
+            f'join authors a on a.author_id = t.author_id '
+            f'left join institutions i on i.institution_id = m.institution_id '
+            f'left join fields f on f.field_id = m.field_id '
+            f'where t.edition_id = %s and t.metric = %s and t.ns = %s '
+            f'order by t.position limit %s',
+            (edition_id, metric, bool(ns), limit))
+    if not rows:
+        rows = _fetch(
+            f'select row_number() over (order by m.{metric}{suffix} desc, '
+            f'   m.author_id), m.author_id, a.authfull_display, i.inst_name, '
+            f'm.country_code, f.name, m.{metric}{suffix}, m.rank{suffix}, '
+            f'm.list_position{suffix} '
+            f'from {table} m '
+            f'join authors a on a.author_id = m.author_id '
+            f'left join institutions i on i.institution_id = m.institution_id '
+            f'left join fields f on f.field_id = m.field_id '
+            f'where m.edition_id = %s and m.{metric}{suffix} is not null '
+            f'order by m.{metric}{suffix} desc, m.author_id limit %s',
+            (edition_id, limit))
+    return [{'position': int(position), 'author_id': author_id,
+             'name': name, 'institute': inst or '',
+             'country_code': (country or '').upper(), 'field': field or '',
+             'value': float(value),
+             'rank': int(rank) if rank is not None else None,
+             'list_position': int(listpos) if listpos is not None else None}
+            for (position, author_id, name, inst, country, field, value,
+                 rank, listpos) in rows]
+
+
+# The columns the Top 10 card reads off a fact row, published and
+# self-citation-excluded. `np` and `self_pct` have no excluded variant: the
+# paper count is the same either way, and the self-citation share is the
+# thing being excluded.
+_CARD_COLUMNS = ('c', 'h', 'hm', 'nc', 'ncs', 'ncsf', 'ncsfl',
+                 'rank', 'list_position', 'rank_subfield')
+_CARD_PLAIN_ONLY = ('np', 'self_pct', 'subfield_count')
+
+
+def author_metrics(author_id, kind, year):
+    """One researcher's fact row, by id, for the Top 10 tab's card.
+
+    The Explore tab reaches its researcher through Elasticsearch because it
+    starts from a name somebody typed. This tab starts from an id it already
+    holds, so it asks Postgres for the row it has the key to, which is
+    shorter and is one fewer service in the path of a click.
+    """
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None:
+        return None
+    columns = (list(_CARD_COLUMNS) + [f'{name}_ns' for name in _CARD_COLUMNS]
+               + list(_CARD_PLAIN_ONLY))
+    selected = ', '.join(f'm.{name}' for name in columns)
+    rows = _fetch(
+        f'select a.authfull_display, i.inst_name, m.country_code, f.name, '
+        f's.name, {selected} '
+        f'from {table} m '
+        f'join authors a on a.author_id = m.author_id '
+        f'left join institutions i on i.institution_id = m.institution_id '
+        f'left join fields f on f.field_id = m.field_id '
+        f'left join subfields s on s.subfield_id = m.subfield_1_id '
+        f'where m.author_id = %s and m.edition_id = %s',
+        (author_id, f'{kind}-{year}'))
+    if not rows:
+        return None
+    row = rows[0]
+    data = {'author_id': author_id, 'name': row[0], 'institute': row[1] or '',
+            'country_code': (row[2] or '').upper(), 'field': row[3] or '',
+            'subfield': row[4] or ''}
+    for name, value in zip(columns, row[5:]):
+        data[name] = None if value is None else float(value)
+    return data
