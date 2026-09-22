@@ -307,6 +307,18 @@ MAP_DRAW_JS = """
                 function opacityAt(zoom) {
                     return Math.min(0.38 * (1 + 0.55 * steps(zoom)), 0.85);
                 }
+                // Twelve steps each, walked at even perceptual distance
+                // through the anchors the two ramps have always had, so the
+                // lightness climbs in equal amounts rather than crowding
+                // four near-white swatches at the top. Warm for the city
+                // lights, cool for the filled countries: a country should
+                // never read as a lit city.
+                var WARM = ['#6B4A12', '#7E5714', '#916416', '#A47218',
+                            '#B87F19', '#CB8E22', '#D9A043', '#E6B25D',
+                            '#F4C476', '#FFD690', '#FFE7B9', '#FFF7E0'];
+                var COOL = ['#16233A', '#18364D', '#174B60', '#195F77',
+                            '#1C748F', '#228AA6', '#2CA0BC', '#3EB7D1',
+                            '#67CBE0', '#8AE0F0', '#BAEEF8', '#E8FBFF'];
                 var LABELS = {researchers: 'researchers on the list',
                               citations: 'citations',
                               papers: 'papers',
@@ -330,17 +342,32 @@ MAP_DRAW_JS = """
                     var top = Math.log(1 + largest);
                     for (var b = 1; b < colours.length; b++) {
                         var at = Math.pow(b / colours.length, 1 / power);
-                        edges.push(Math.round(Math.exp(at * top) - 1));
+                        var edge = Math.round(Math.exp(at * top) - 1);
+                        // Where the range is short, two bands round to the
+                        // same number and the one between them would be a
+                        // swatch covering nothing at all. Top h-index is the
+                        // case that bites: twelve bands over a range that
+                        // ends at 293 has the bottom few landing on 5, 11,
+                        // 19 and the ones below that all on 0.
+                        if (edge > edges[edges.length - 1]) {
+                            edges.push(edge);
+                        }
                     }
+                    var last = edges.length - 1;
                     var pieces = [];
-                    for (var i = 0; i < colours.length; i++) {
+                    for (var i = 0; i < edges.length; i++) {
                         var from = edges[i];
                         var to = (i + 1 < edges.length) ? edges[i + 1] : null;
-                        if (i && from === edges[i - 1]) { continue; }
+                        // However many bands survive, the ramp runs from its
+                        // darkest to its lightest across them, rather than
+                        // stopping partway up because some were dropped.
+                        var colour = colours[last
+                            ? Math.round(i * (colours.length - 1) / last)
+                            : colours.length - 1];
                         pieces.push(to === null
-                            ? {gte: from, color: colours[i],
+                            ? {gte: from, color: colour,
                                label: commas(from) + ' and over'}
-                            : {gte: from, lt: to, color: colours[i],
+                            : {gte: from, lt: to, color: colour,
                                label: commas(from) + ' to ' + commas(to)});
                     }
                     return pieces;
@@ -471,12 +498,8 @@ MAP_DRAW_JS = """
                             // large block of colour: the spacing that reads
                             // well on a two-pixel point leaves half the
                             // world in one band when it is a continent.
-                            ? bands(countryLargest,
-                                    ['#16233A', '#164E63', '#1D7F9B',
-                                     '#35B3CE', '#8FE3F2', '#E8FBFF'], 1.4)
-                            : bands(largest,
-                                    ['#6B4A12', '#C98B1A', '#FFD48A',
-                                     '#FFF7E0'], 2.2),
+                            ? bands(countryLargest, COOL, 1.4)
+                            : bands(largest, WARM, 2.2),
                         // A legend, not a control: with hoverLink on,
                         // running the mouse along it made the map flare.
                         hoverLink: false,
@@ -486,7 +509,7 @@ MAP_DRAW_JS = """
                         // left four coloured squares meaning nothing.
                         showLabel: true,
                         left: 12, bottom: 12,
-                        itemWidth: 12, itemHeight: 10, itemGap: 3,
+                        itemWidth: 12, itemHeight: 9, itemGap: 2,
                         text: [LABELS[measure] +
                                (onCountries ? ', per country' : ', per city')],
                         textGap: 8,

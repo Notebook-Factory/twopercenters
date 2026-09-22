@@ -731,10 +731,16 @@ def test_the_two_readings_do_not_share_a_colour_ramp():
     and the countries are a cool single hue, so the two pictures cannot be
     confused at a glance."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    ramps = MAP_DRAW_JS[MAP_DRAW_JS.index('pieces: onCountries'):]
-    ramps = ramps[:ramps.index('hoverLink')]
-    assert '#35B3CE' in ramps          # the cool ramp, for countries
-    assert '#FFD48A' in ramps          # the warm one, for cities
+    warm, cool = _ramps()
+    assert 'bands(countryLargest, COOL' in MAP_DRAW_JS
+    assert 'bands(largest, WARM' in MAP_DRAW_JS
+    # Warm means the red channel leads, cool means the blue one does, at
+    # every step of each ramp rather than only at the ends.
+    def channels(hex_):
+        return (int(hex_[1:3], 16), int(hex_[3:5], 16), int(hex_[5:7], 16))
+    assert all(r > b for r, _, b in map(channels, warm))
+    assert all(b > r for r, _, b in map(channels, cool))
+    assert not set(warm) & set(cool)
 
 
 def test_pinch_zooms_but_the_wheel_does_not():
@@ -1062,3 +1068,40 @@ def test_the_countries_are_banded_on_their_own_curve():
     pieces = pieces[:pieces.index('hoverLink')]
     assert '1.4)' in pieces
     assert '2.2)' in pieces
+
+
+def _ramps():
+    """The two colour ramps, read out of the draw function."""
+    import re
+    from citations_lib.glowmap import MAP_DRAW_JS
+    out = []
+    for name in ('WARM', 'COOL'):
+        block = MAP_DRAW_JS[MAP_DRAW_JS.index('var ' + name + ' ='):]
+        out.append(re.findall(r'#[0-9A-F]{6}', block[:block.index(']')]))
+    return out
+
+
+def test_each_ramp_has_twelve_levels():
+    """Four steps for the cities and six for the countries read as a handful
+    of buckets rather than as a scale."""
+    warm, cool = _ramps()
+    assert len(warm) == 12
+    assert len(cool) == 12
+    # No step repeated, and each one lighter than the last, so a reader can
+    # order the bands by eye without consulting the key.
+    for ramp in (warm, cool):
+        assert len(set(ramp)) == 12
+        light = [sum(int(c[i:i + 2], 16) for i in (1, 3, 5)) for c in ramp]
+        assert light == sorted(light)
+
+
+def test_a_short_range_drops_bands_rather_than_repeating_a_number():
+    """Twelve log-spaced edges over a range that ends at 293 round onto each
+    other near the bottom, and a band from 0 to 0 is a swatch that covers
+    nothing. The duplicates go, and the ramp is spread over however many
+    bands are left rather than stopping partway up."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    block = MAP_DRAW_JS[MAP_DRAW_JS.index('function bands('):]
+    block = block[:block.index('// The country reading')]
+    assert 'if (edge > edges[edges.length - 1])' in block
+    assert 'Math.round(i * (colours.length - 1) / last)' in block
