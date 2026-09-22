@@ -363,10 +363,35 @@ _MAP_YEAR_OPTIONS, _MAP_DEFAULT_YEAR = update_yr_options2(True)
 # toolbar above it, because the whole page reads the selection those controls
 # hold: the map, the year track under it, and the tables beside it.
 
+# Two icons rather than the words "Career" and "Single year".
+#
+# The words made this control a different size from the two beside it: the
+# rules that size a dataset toggle are keyed to this id prefix and are shared
+# with the toolbars on the other pages, where the toggle stands alone and is
+# meant to be large. Here it sits in a row with the granularity and the
+# measure, and a 118px half against their 60px buttons read as a different
+# system. An icon is the same size whatever it says, so the three groups line
+# up by construction rather than by a running fight with those rules.
+#
+# The icons are lucide's, drawn as CSS masks in style.css: a clock with a
+# rewind arrow for the career-long record, which is everything up to the year
+# selected, and a calendar for one year on its own. Each carries a tooltip,
+# because an icon on its own is a guess.
 careerORSingleYr = html.Div([
-    dbc.RadioItems(id = "careerORSingleYrRadio" + SUFFIX, value = True, className = "btn-group", inputClassName = "btn-check", labelClassName = "btn btn-outline-primary",
-        labelCheckedClassName = "active", options = [{"label": "Career", "value": True}, {"label": "Single year", "value": False},
-    ])], className = "radio-group")
+    dbc.RadioItems(
+        id="careerORSingleYrRadio" + SUFFIX, value=True,
+        className="btn-group", inputClassName="btn-check",
+        labelClassName="btn btn-outline-primary",
+        labelCheckedClassName="active",
+        options=[
+            {"label": "", "value": True, "label_id": "kindCareer" + SUFFIX},
+            {"label": "", "value": False, "label_id": "kindSingle" + SUFFIX},
+        ]),
+    dbc.Tooltip("Career-long, up to the year selected",
+                target="kindCareer" + SUFFIX, placement="bottom"),
+    dbc.Tooltip("That year on its own",
+                target="kindSingle" + SUFFIX, placement="bottom"),
+], className="radio-group ev-kind-toggle")
 
 
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')

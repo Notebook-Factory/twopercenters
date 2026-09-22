@@ -1143,3 +1143,58 @@ def test_the_key_says_that_a_band_can_be_singled_out():
     """Nothing else on the map would tell a reader the gesture exists."""
     from citations_lib.glowmap import MAP_DRAW_JS
     assert "'double-click a band for that band alone'" in MAP_DRAW_JS
+
+
+def test_the_dataset_toggle_is_a_pair_of_icons_with_tooltips():
+    """Words made this control a different size from the two beside it: the
+    rules that size a dataset toggle are keyed to its id prefix and shared
+    with the toolbars on other pages, where it stands alone and is meant to
+    be large. An icon is the same size whatever it says. An icon on its own
+    is a guess, though, so each one carries a tooltip."""
+    import app  # noqa: F401
+    import pages.home as home
+
+    toggle = home.careerORSingleYr
+    radio = toggle.children[0]
+    assert [option['value'] for option in radio.options] == [True, False]
+    assert all(option['label'] == '' for option in radio.options)
+    assert [option['label_id'] for option in radio.options] == [
+        'kindCareerHOME', 'kindSingleHOME']
+    targets = {tip.target for tip in toggle.children[1:]}
+    assert targets == {'kindCareerHOME', 'kindSingleHOME'}
+    assert all(isinstance(tip.children, str) and tip.children
+               for tip in toggle.children[1:])
+
+
+def test_the_icon_toggle_is_the_height_of_the_buttons_beside_it():
+    """The shared rules give a dataset toggle 118px per half, 8px by 16px of
+    padding and 14px of space above it, all of which are wrong in a row of
+    small buttons. The icon is as tall as a line of the label text next to
+    it, so the button comes out the same height as the ones with words."""
+    with open('assets/style.css') as handle:
+        css = handle.read()
+    block = css[css.index('.ev-kind-toggle,'):]
+    assert 'margin-top: 0 !important' in block
+    assert 'min-width: 0 !important' in block
+    assert 'height: 1.35em' in block
+    # Lucide's clock-with-a-rewind-arrow for the career-long record, and its
+    # calendar for one year on its own.
+    assert '.ev-kind-toggle .btn[id^="kindCareer"]::before' in block
+    assert '.ev-kind-toggle .btn[id^="kindSingle"]::before' in block
+
+
+def test_the_buttons_above_the_map_are_legible_in_the_light_theme():
+    """Bootstrap's .btn-outline-primary takes its colour from SLATE, which is
+    tuned for a dark ground, so the granularity and measure buttons were
+    white on white. The year picker and the dataset toggle were given the
+    theme's own foreground long ago; these two were missed."""
+    with open('assets/style.css') as handle:
+        css = handle.read()
+    at = css.index('In the light theme the granularity and measure buttons')
+    block = css[at:css.index('}', css.index(
+        '.ev-glow-measures .radio-group .btn {', at))]
+    assert 'color: var(--ev-text) !important' in block
+    # And the selection has to be said at least as loudly as the transparent
+    # ground above it, or it disappears.
+    assert ('.ev-glow-measures .radio-group .btn.active {\n'
+            '  background-color: var(--ev-accent) !important;') in css

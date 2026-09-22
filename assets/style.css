@@ -3729,6 +3729,26 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   border-color: var(--ev-accent) !important;
   color: #10151D !important;
 }
+/* In the light theme the granularity and measure buttons were white on
+   white. Their labels are Bootstrap .btn-outline-primary, whose colour comes
+   from SLATE and is tuned for a dark ground; the year picker and the dataset
+   toggle were given the theme's own foreground long ago and these two groups
+   were missed. Saying it here rather than adding two more ids to that rule
+   keeps this row's appearance in the block that describes this row. */
+.ev-glow-measures .radio-group .btn {
+  color: var(--ev-text) !important;
+  background-color: transparent !important;
+  border-color: var(--ev-surface-2) !important;
+}
+.ev-glow-measures .radio-group .btn:hover:not(.active) {
+  background-color: var(--ev-surface-2) !important;
+}
+/* The transparent ground above is !important, so the selected button has to
+   say its fill at least as loudly or the selection disappears. */
+.ev-glow-measures .radio-group .btn.active {
+  background-color: var(--ev-accent) !important;
+  border-color: var(--ev-accent) !important;
+}
 
 /* An icon-only navbar button, for "about this data". */
 .ev-nav-icon { padding-left: .55rem; padding-right: .55rem; }
@@ -3796,3 +3816,58 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   border-color: var(--ev-surface-2);
 }
 .ev-row-card-close .ev-ic { width: 15px; height: 15px; }
+
+/* ==========================================================================
+   The dataset toggle on the map, as two icons
+   ==========================================================================
+   Career and single-year are a pair of icons here rather than a pair of
+   words, so that the three groups above the map are one row of buttons of
+   one size. The rules that size a dataset toggle are keyed to the
+   careerORSingleYr id prefix and shared with the toolbars on the other
+   pages, where the control stands alone and is meant to be large: a 118px
+   minimum per half, 8px by 16px of padding, and 14px of space above. All
+   three are wrong in this row, and all three have to be said louder than the
+   rules they are overriding, which is why these carry !important. */
+.ev-kind-toggle,
+.ev-kind-toggle .btn-group { margin-top: 0 !important; }
+.ev-kind-toggle .btn-group > .form-check {
+  flex: 0 0 auto !important;
+  min-width: 0 !important;
+}
+.ev-kind-toggle .btn {
+  min-width: 0 !important;
+  padding: .3rem .7rem !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The icons themselves, lucide's, as masks on the label rather than as an
+   element inside it: dbc's RadioItems takes a string for a label and nothing
+   else, so there is nowhere to put a span. A mask also inherits the label's
+   colour, so the selected half's icon turns dark on the accent fill with no
+   second rule. */
+.ev-kind-toggle .btn::before {
+  content: "";
+  display: inline-block;
+  /* As wide as the glyph and as tall as a line of the label text beside it,
+     so this button is exactly the height of the ones with words in them.
+     mask-size: contain keeps the glyph square inside that taller box. */
+  width: 1.05em;
+  height: 1.35em;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center;  mask-position: center;
+  -webkit-mask-size: contain;     mask-size: contain;
+}
+/* lucide "history": a clock with a rewind arrow, for the record that runs up
+   to the year selected. */
+.ev-kind-toggle .btn[id^="kindCareer"]::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>");
+}
+/* lucide "calendar": one year on its own. */
+.ev-kind-toggle .btn[id^="kindSingle"]::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'/><path d='M16 2v3'/><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'/><path d='M16 2v3'/><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18'/></svg>");
+}
