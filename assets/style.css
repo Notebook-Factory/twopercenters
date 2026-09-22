@@ -3529,7 +3529,7 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    it draws into, so this needs a height of its own or it renders nothing at
    all rather than rendering small. */
 
-.ev-glow { margin-top: 1.25rem; }
+.ev-glow { display: flex; flex-direction: column; width: 100%; }
 .ev-glow-head {
   display: flex;
   align-items: flex-end;
@@ -3650,6 +3650,8 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 }
 
 .ev-glow-chart {
+  flex: 1 1 auto;
+  min-height: 460px;
   height: 560px;
   width: 100%;
   border-radius: var(--ev-radius) var(--ev-radius) 0 0;
@@ -3659,3 +3661,47 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 @media (max-width: 900px) {
   .ev-glow-chart { height: 420px; }
 }
+
+/* ==========================================================================
+   The map and the list beside it
+   ==========================================================================
+   They are one row of two panes and they have to start and end together.
+   The map pane is the map, its header and its year track; the list pane is
+   the statistic, the summary and the table. Before this the two began at
+   different heights, because one started with a heading and the other with a
+   dropdown. */
+
+.ev-panes { align-items: stretch; }
+.ev-panes > [class*="col"] { display: flex; }
+.ev-map-pane,
+.ev-list-pane {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+/* Both panes open with a control row of the same height, so the map and the
+   summary below them line up. */
+.ev-glow-head,
+.ev-pane-head {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .5rem;
+}
+.ev-pane-head { justify-content: space-between; }
+.ev-pane-label {
+  font-size: .78rem;
+  color: var(--ev-text-muted);
+  white-space: nowrap;
+}
+.ev-pane-head .Select, .ev-pane-head > div:last-child { min-width: 190px; }
+.ev-list-pane > :last-child { flex: 1 1 auto; min-height: 0; }
+
+/* The dataset toggle now lives in the map's header, at its left. */
+.ev-glow-head { justify-content: space-between; }
+.ev-glow-kind { display: flex; align-items: center; }
+
+/* An icon-only navbar button, for "about this data". */
+.ev-nav-icon { padding-left: .55rem; padding-right: .55rem; }

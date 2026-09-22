@@ -667,3 +667,68 @@ def test_the_year_arrows_step_along_the_editions_that_exist():
         assert module._step_a_year(1, 0, 2019, marks) == 2017
     finally:
         module.callback_context = original
+
+
+def test_the_two_readings_do_not_share_a_colour_ramp():
+    """A filled country should never read as a lit city. The lights are warm
+    and the countries are a cool single hue, so the two pictures cannot be
+    confused at a glance."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    ramps = MAP_DRAW_JS[MAP_DRAW_JS.index('inRange: {color: onCountries'):]
+    ramps = ramps[:ramps.index('seriesIndex')]
+    assert '#35B3CE' in ramps          # the cool ramp, for countries
+    assert '#FFD48A' in ramps          # the warm one, for cities
+
+
+def test_pinch_zooms_but_the_wheel_does_not():
+    """A trackpad pinch arrives as a wheel event with ctrlKey set; an
+    ordinary wheel does not, and has to keep scrolling the page."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    wheel = MAP_DRAW_JS[MAP_DRAW_JS.index("addEventListener('wheel'"):]
+    wheel = wheel[:wheel.index('touchstart')]
+    assert 'if (!event.ctrlKey) { return; }' in wheel
+    assert 'preventDefault' in wheel
+    # Touch screens pinch through their own events.
+    assert "addEventListener('touchmove'" in MAP_DRAW_JS
+
+
+def test_the_map_has_no_prose_above_it():
+    """What the map shows is what its buttons say. A paragraph explaining
+    that the points are cities sat above a map of points on cities."""
+    from citations_lib.glowmap import glow_map
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    text = ' '.join(str(getattr(n, 'children', '')) for n in walk(glow_map())
+                    if isinstance(getattr(n, 'children', None), str))
+    assert 'One point per city' not in text
+    assert 'Every city on the list' not in text
+
+
+def test_the_year_is_one_control_now():
+    """The track under the map replaced the radio buttons above it, rather
+    than sitting beside them as a second way to say the same thing."""
+    import app  # noqa: F401
+    import pages.home as home
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    ids = {getattr(n, 'id', None) for n in walk(home.layout)}
+    assert 'glowYear_glowmap_' in ids
+    assert 'selectYrRadioHOME' not in ids
+    # The dataset toggle stays, because the tables beside the map read it.
+    assert 'careerORSingleYrRadioHOME' in ids

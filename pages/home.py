@@ -113,7 +113,7 @@ tbl  = dash_table.DataTable(
 @callback(
     Output('worldtitle', 'children',allow_duplicate=True),
     [Input('instnametable', 'active_cell')],
-    [State('selectYrRadio' + SUFFIX, 'value'),
+    [State('glowYear_glowmap_', 'value'),
      State("careerORSingleYrRadio" + SUFFIX, 'value'),
      State("stats2", 'value'),
      State('instnametable', 'data')],
@@ -250,7 +250,7 @@ def _clicked_a_city(city, country_code, is_career, yr):
     Output("instnametable", "active_cell"),
     Input('glowPicked_glowmap_', 'value'),
     Input("careerORSingleYrRadio" + SUFFIX, 'value'),
-    Input("selectYrRadio" + SUFFIX, 'value'),
+    Input('glowYear_glowmap_', 'value'),
     Input('stats2', 'value'),
     #prevent_initial_call=True
     prevent_initial_call='initial_duplicate' 
@@ -348,29 +348,6 @@ careerORSingleYr = html.Div([
     ])], className = "radio-group")
 
 
-@callback(
-    Output('selectYrRadio' + SUFFIX, 'options'),
-    Output('selectYrRadio' + SUFFIX, 'value'),
-    [Input('careerORSingleYrRadio' + SUFFIX, 'value')],
-    prevent_initial_call=True)
-def update_yr_opts(career):
-    return(update_yr_options2(career)[0], update_yr_options2(career)[1])
-
-
-zort = html.Div([dbc.RadioItems(id='selectYrRadio' + SUFFIX,
-                      className = "btn-group",
-                      labelCheckedClassName = "active",
-                      inputClassName = "btn-check",
-                      style = {'size':'sm'},
-                      labelClassName = "btn btn-outline-primary",
-                      # These were hardcoded 2017-2021. The callback below
-                      # rebuilds them from the editions table, but it is
-                      # prevent_initial_call=True and only fires when the
-                      # career/single-year toggle changes, so on first load
-                      # the map showed the stale list and stopped at 2021.
-                      # Seeding from the same helper fixes the initial render.
-                      options = _MAP_YEAR_OPTIONS,
-                      value = _MAP_DEFAULT_YEAR)], className = "radio-group year-picker")
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
 explain  =  f'''
                     This dashboard section provides a zoomed-out look at the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
@@ -645,6 +622,11 @@ dede = dbc.Navbar(
                                 "Top 10"],
                                id="jump-top10", className="ev-nav-btn",
                                n_clicks=0),
+                    html.Span(className="ev-nav-sep"),
+                    dbc.Button(html.I(**{"data-lucide": "info"}),
+                               id='off', n_clicks=0,
+                               className="ev-nav-btn ev-nav-icon",
+                               title="About this data"),
                     dbc.Button([html.I(**{"data-lucide": "users"}), "Compare"],
                                id="jump-compare", className="ev-nav-btn",
                                n_clicks=0),
@@ -747,9 +729,6 @@ dash.clientside_callback(
 )
 
 
-info_button = dbc.Button("More info", id='off', n_clicks=0,
-                    className='ev-info-btn')
-
 def _field(label, control, grow=False):
     """One labelled control in the toolbar.
 
@@ -780,27 +759,45 @@ def _picker(dataset_control, year_control):
     )
 
 
-row1 = html.Div(
-    [
-        _field("Dataset and year", _picker(careerORSingleYr, zort), grow=True),
-        _field("Statistic", zortt),
-        html.Div(info_button, className="ev-toolbar-end"),
-    ],
-    className="ev-toolbar",
-)
+# The toolbar that used to sit above the map is gone. Its dataset toggle is
+# on the map's own header now, next to the controls that read with it; its
+# year picker was a second control for what the track under the map already
+# says; and the statistic is beside the summary it describes. "More info"
+# moved to the navbar, where the other page-level things live.
 
 # Toolbar over a two-pane body: map on the left, country summary on the right.
 # They are cards now with room around them, rather than two grid columns butted
 # together against the page.
+def _map_with_kind_toggle():
+    """The map, with the career/single-year toggle in its header.
+
+    The toggle belongs to this page rather than to the map module, because
+    the tables beside the map read it too. It is placed into the slot the
+    map leaves for it.
+    """
+    built = glow_map()
+    for node in built.children:
+        if getattr(node, 'className', '') == 'ev-glow-head':
+            node.children[0].children = careerORSingleYr
+            break
+    return built
+
+
 navigation_row = html.Div(
     [
-        row1,
         dbc.Row(
             [
-                dbc.Col(html.Div([glow_map(), map_hint],
+                dbc.Col(html.Div([_map_with_kind_toggle(), map_hint],
                                  className="ev-map-pane"),
                         width=8),
-                dbc.Col(zart, width=4),
+                dbc.Col(html.Div([
+                    html.Div([
+                        html.Span('Summary statistic',
+                                  className='ev-pane-label'),
+                        zortt,
+                    ], className='ev-pane-head'),
+                    zart,
+                ], className='ev-list-pane'), width=4),
             ],
             className="ev-panes",
         ),

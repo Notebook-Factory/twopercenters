@@ -118,15 +118,12 @@ def glow_map():
     measures = _segmented('glowMeasure' + SUFFIX, MEASURES, MEASURES[0][0])
 
     return html.Div([
+        # One row of controls and no prose. What the map is showing is what
+        # the buttons say, and a paragraph explaining that the points are
+        # cities sat above a map of points on cities.
         html.Div([
-            html.Div([
-                html.H3('Every city on the list', className='ev-glow-title'),
-                html.P('One point per city, brighter where there is more of '
-                       'the measure you pick. Points overlap and add up, so '
-                       'a dense region reads as light rather than as dots. '
-                       'Drag to pan, scroll to zoom.',
-                       className='ev-glow-sub'),
-            ]),
+            html.Div(id='glowKindHolder' + SUFFIX,
+                     className='ev-glow-kind'),
             html.Div([
                 _segmented('glowGrain' + SUFFIX, GRAINS, GRAINS[0][0]),
                 measures,
@@ -485,13 +482,17 @@ MAP_DRAW_JS = """
                         // One hue, dark to light. The brightest places are
                         // near white because that is what the eye reads as
                         // intensity when points are adding up.
-                        // The country reading starts from the land's own
-                        // colour rather than from a dark amber, so a country
-                        // with almost nobody sits a shade above the sea
-                        // instead of reading as a filled-in value.
+                        // Two ramps, because the two readings are
+                        // different kinds of picture. The lights are warm,
+                        // the way a photograph of a city at night is. The
+                        // countries are a cool single hue running from the
+                        // land's own colour up through the dashboard's cyan
+                        // to near-white, so a filled country never reads as
+                        // a lit one and the two cannot be confused at a
+                        // glance.
                         inRange: {color: onCountries
-                            ? ['#1A2238', '#6B4A12', '#C98B1A', '#FFD48A',
-                               '#FFF7E0']
+                            ? ['#16233A', '#164E63', '#1D7F9B', '#35B3CE',
+                               '#8FE3F2', '#E8FBFF']
                             : ['#6B4A12', '#C98B1A', '#FFD48A', '#FFF7E0']},
                         seriesIndex: 0,
                         formatter: function (value) { return commas(value); }
@@ -586,6 +587,53 @@ MAP_DRAW_JS = """
                         symbolSize: sizeAt(zoom),
                         itemStyle: {opacity: opacityAt(zoom),
                                     borderWidth: 0}}]});
+                }
+
+                // Pinch to zoom, and only pinch.
+                //
+                // A trackpad pinch arrives as a wheel event with ctrlKey
+                // set, which is how browsers have reported it since they
+                // started supporting it; an ordinary wheel does not have it
+                // and is left alone, so the page still scrolls past the map.
+                // Touch screens send their own pinch through the same
+                // handler below.
+                if (!el.__evPinch && el.addEventListener) {
+                    el.__evPinch = true;
+                    el.addEventListener('wheel', function (event) {
+                        if (!event.ctrlKey) { return; }
+                        event.preventDefault();
+                        var view = ((chart.getOption().geo || [])[0] || {});
+                        var zoom = view.zoom || 1;
+                        var factor = Math.exp(-event.deltaY / 120);
+                        chart.setOption({geo: [{
+                            zoom: Math.min(Math.max(zoom * factor, 1), 60)}]});
+                        if (el.__evFollowZoom) { el.__evFollowZoom(); }
+                    }, {passive: false});
+
+                    var pinchFrom = null;
+                    function spread(touches) {
+                        var dx = touches[0].clientX - touches[1].clientX;
+                        var dy = touches[0].clientY - touches[1].clientY;
+                        return Math.sqrt(dx * dx + dy * dy);
+                    }
+                    el.addEventListener('touchstart', function (event) {
+                        if (event.touches.length === 2) {
+                            var view = ((chart.getOption().geo || [])[0] || {});
+                            pinchFrom = {gap: spread(event.touches),
+                                         zoom: view.zoom || 1};
+                        }
+                    }, {passive: true});
+                    el.addEventListener('touchmove', function (event) {
+                        if (event.touches.length !== 2 || !pinchFrom) { return; }
+                        event.preventDefault();
+                        var ratio = spread(event.touches) / pinchFrom.gap;
+                        chart.setOption({geo: [{zoom: Math.min(
+                            Math.max(pinchFrom.zoom * ratio, 1), 60)}]});
+                    }, {passive: false});
+                    el.addEventListener('touchend', function () {
+                        pinchFrom = null;
+                        if (el.__evFollowZoom) { el.__evFollowZoom(); }
+                    }, {passive: true});
                 }
 
                 chart.off('georoam');
