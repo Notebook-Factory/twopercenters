@@ -3521,3 +3521,42 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   color: var(--ev-accent);
   border-bottom-color: var(--ev-accent);
 }
+
+/* ==========================================================================
+   The city map
+   ==========================================================================
+   Under the choropleth and on the same toolbar. ECharts measures the element
+   it draws into, so this needs a height of its own or it renders nothing at
+   all rather than rendering small. */
+
+.ev-glow { margin-top: 1.25rem; }
+.ev-glow-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: .5rem;
+}
+.ev-glow-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ev-text);
+  margin: 0;
+}
+.ev-glow-sub {
+  font-size: .84rem;
+  color: var(--ev-text-muted);
+  margin: .15rem 0 0;
+  max-width: 68ch;
+}
+.ev-glow-chart {
+  height: 560px;
+  width: 100%;
+  border-radius: var(--ev-radius);
+  overflow: hidden;
+  border: 1px solid var(--ev-surface-2);
+}
+@media (max-width: 900px) {
+  .ev-glow-chart { height: 420px; }
+}

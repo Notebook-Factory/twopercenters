@@ -2030,3 +2030,49 @@ def openalex_author(name, timeout=2.5):
             url = candidate.get('id')
             return url if isinstance(url, str) and url.startswith('http') else None
     return None
+
+
+# ---------------------------------------------------------------------------
+# The map
+# ---------------------------------------------------------------------------
+
+def city_points(kind, year, limit_institutes=4):
+    """Every place the selected edition's researchers work, with what is
+    there.
+
+    One row per city, keyed on the coordinates ROR gives rather than on the
+    name: there are eleven Springfields in the United States, and two cities
+    of one name in one country are two places.
+
+    All three measures come back together rather than one per request. The
+    query takes about half a second, the payload is a few hundred kilobytes,
+    and a reader switching between researchers, citations and papers is
+    asking the same question of the same rows, so the switch belongs in the
+    browser rather than in another round trip.
+
+    Researchers whose institution could not be located are not here. That is
+    most institution names and a minority of researchers: see
+    pipeline/ror_match.py for the measured coverage.
+    """
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None:
+        return []
+    rows = _fetch(
+        f'select r.city, r.country_code, r.lat, r.lng, '
+        f'count(*) as researchers, sum(m.nc) as citations, '
+        f'sum(m.np) as papers, '
+        f'(array_agg(i.inst_name order by m.nc desc nulls last))[1:%s] '
+        f'from {table} m '
+        f'join institution_ror r on r.institution_id = m.institution_id '
+        f'join institutions i on i.institution_id = m.institution_id '
+        f'where m.edition_id = %s and r.lat is not null '
+        f'group by r.city, r.country_code, r.lat, r.lng '
+        f'order by researchers desc',
+        (limit_institutes, f'{kind}-{year}'))
+    return [{'city': city, 'country_code': (country or '').upper(),
+             'lat': float(lat), 'lng': float(lng),
+             'researchers': int(researchers),
+             'citations': int(citations or 0), 'papers': int(papers or 0),
+             'institutes': [name for name in (institutes or []) if name]}
+            for (city, country, lat, lng, researchers, citations, papers,
+                 institutes) in rows]

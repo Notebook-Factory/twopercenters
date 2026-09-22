@@ -303,3 +303,93 @@ def test_an_empty_database_is_not_an_error(tmp_path):
             return None
 
     refresh_institution_ror(_Empty(), str(dump))
+
+
+# ---------------------------------------------------------------------------
+# What the map draws
+# ---------------------------------------------------------------------------
+
+def test_city_points_add_up_to_the_edition():
+    """Every located researcher lands on exactly one point, and the measures
+    are the sums of what those researchers hold. A map is a claim about
+    totals, so the totals have to be the real ones."""
+    from citations_lib.utils import _fetch, city_points
+    points = city_points('career', 2024)
+    assert points
+    expected = _fetch("""
+        select count(*), sum(m.nc), sum(m.np) from career_metrics m
+        join institution_ror r on r.institution_id = m.institution_id
+        where m.edition_id = 'career-2024'""")[0]
+    assert sum(p['researchers'] for p in points) == expected[0]
+    assert sum(p['citations'] for p in points) == int(expected[1])
+    assert sum(p['papers'] for p in points) == int(expected[2])
+
+
+def test_every_point_has_somewhere_to_be_drawn():
+    from citations_lib.utils import city_points
+    for point in city_points('career', 2024):
+        assert point['city']
+        assert -90 <= point['lat'] <= 90
+        assert -180 <= point['lng'] <= 180
+        assert point['researchers'] >= 1
+
+
+def test_the_three_measures_are_not_the_same_number():
+    """Switching the measure has to change the map, or the control is a lie."""
+    from citations_lib.utils import city_points
+    points = city_points('career', 2024)
+    order = lambda key: [p['city'] for p in
+                         sorted(points, key=lambda q: -q[key])[:10]]
+    assert order('researchers') != order('citations')
+
+
+def test_two_cities_of_one_name_in_one_country_stay_apart():
+    """Points are keyed on the coordinates ROR gives, not on the name. There
+    are eleven Springfields in the United States."""
+    from citations_lib.utils import city_points
+    points = city_points('career', 2024)
+    keys = [(p['city'], p['country_code'], p['lat'], p['lng']) for p in points]
+    assert len(keys) == len(set(keys))
+    names = [(p['city'], p['country_code']) for p in points]
+    assert len(names) >= len(set(names))
+
+
+def test_the_map_does_not_use_large_scatter_mode():
+    """`large: true` is echarts' optimised path for tens of thousands of
+    points. This map has 3,341, and rendered headlessly with it on, every
+    point disappeared: the land drew and nothing else. It buys nothing at
+    this size and the failure is silent."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'large: true' not in MAP_DRAW_JS
+    assert "blendMode: 'lighter'" in MAP_DRAW_JS
+
+
+def test_the_scale_says_what_it_is_measuring():
+    """showLabel on its own drew the gradient and no numbers, which is a
+    scale that says nothing."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'text: [commas(largest)' in MAP_DRAW_JS
+
+
+def test_the_world_outline_is_here_and_is_a_map():
+    """ECharts 5 ships no maps, so this file is the map. It is served from
+    assets/ rather than a CDN, and the drawing code fetches it by that path."""
+    import json
+
+    from citations_lib.glowmap import MAP_DRAW_JS
+    with open('assets/world.geo.json') as handle:
+        geo = json.load(handle)
+    assert geo['type'] == 'FeatureCollection'
+    assert len(geo['features']) > 200
+    assert '/assets/world.geo.json' in MAP_DRAW_JS
+
+
+def test_the_map_follows_the_toolbar_the_choropleth_already_has():
+    """Two pickers for two maps of one selection would be two things to keep
+    in agreement, and a reader would have to notice when they drifted."""
+    import app  # noqa: F401
+    from dash._callback import GLOBAL_CALLBACK_MAP
+    key = next(k for k in GLOBAL_CALLBACK_MAP if 'glowMapStore' in k)
+    inputs = [i['id'] for i in GLOBAL_CALLBACK_MAP[key]['inputs']]
+    assert 'selectYrRadioHOME' in inputs
+    assert 'careerORSingleYrRadioHOME' in inputs

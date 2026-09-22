@@ -24,6 +24,7 @@ import dash_loading_spinners as dls
 # =============== Custom lib
 from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
+from citations_lib.glowmap import glow_map
 from citations_lib.top10 import top10_layout
 from citations_lib.single_author_layout import *
 from citations_lib.author_vs_group_layout import *
@@ -817,6 +818,10 @@ navigation_row = html.Div(
             ],
             className="ev-panes",
         ),
+        # Under the choropleth, on the same selection and the same toolbar.
+        # The two maps answer different questions: the one above fills a
+        # country with one colour, and a country is not where anybody works.
+        glow_map(),
     ],
     className="ev-stage",
 )
