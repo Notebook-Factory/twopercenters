@@ -365,11 +365,10 @@ def test_the_map_does_not_use_large_scatter_mode():
 
 
 def test_the_scale_says_what_it_is_measuring():
-    """showLabel on its own drew the gradient and no numbers, which is a
-    scale that says nothing."""
+    """A key that does not name its measure is a row of coloured squares."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert 'text: [commas(onCountries ? countryLargest : largest)' \
-        in MAP_DRAW_JS
+    assert "text: [LABELS[measure]" in MAP_DRAW_JS
+    assert "', per country' : ', per city'" in MAP_DRAW_JS
 
 
 def test_the_world_outline_is_here_and_is_a_map():
@@ -444,12 +443,12 @@ def test_country_names_are_converted_in_one_call():
 
 def test_colour_runs_with_the_value_and_not_the_row_number():
     """Echarts' visualMap takes the last data dimension when it is not told
-    which one to use. Each point here is [lng, lat, brightness, row], so
-    colour ran with a city's position in the array: London, the largest and
-    the first row, came out the darkest colour on the scale. Density hid it
-    at the whole-world view and it was plain the moment the map was zoomed."""
+    which one to use. A point here is [lng, lat, brightness, row, value], so
+    left alone the colour ran with a city's position in the array: London,
+    the largest and the first row, came out the darkest colour on the scale.
+    It is told which dimension to read, and reads the value."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert 'dimension: onCountries ? 0 : 2,' in MAP_DRAW_JS
+    assert 'dimension: onCountries ? 0 : 4' in MAP_DRAW_JS
 
 
 def test_the_scale_bar_does_not_reach_into_the_map():
@@ -732,8 +731,8 @@ def test_the_two_readings_do_not_share_a_colour_ramp():
     and the countries are a cool single hue, so the two pictures cannot be
     confused at a glance."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    ramps = MAP_DRAW_JS[MAP_DRAW_JS.index('inRange: {color: onCountries'):]
-    ramps = ramps[:ramps.index('seriesIndex')]
+    ramps = MAP_DRAW_JS[MAP_DRAW_JS.index('pieces: bands('):]
+    ramps = ramps[:ramps.index('hoverLink')]
     assert '#35B3CE' in ramps          # the cool ramp, for countries
     assert '#FFD48A' in ramps          # the warm one, for cities
 
@@ -1009,3 +1008,33 @@ def test_the_dataset_toggle_matches_the_buttons_beside_it():
     scoped = css[css.index('.ev-glow-measures [id^="careerORSingleYr"]'):]
     scoped = scoped[:scoped.index('}')]
     assert 'var(--ev-accent)' in scoped
+
+
+def test_the_legend_speaks_in_real_units():
+    """It used to be a gradient with "4,044 on the list" written at one end,
+    which says neither whose 4,044 nor that the brightness between the ends
+    runs on a log curve rather than evenly. Somebody asked what it meant,
+    which is a fair question to have to ask of a legend."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "type: 'piecewise'" in MAP_DRAW_JS
+    assert 'function bands(largest, colours)' in MAP_DRAW_JS
+    # The raw value, not the brightness: the log curve means nothing to a
+    # reader.
+    assert 'dimension: onCountries ? 0 : 4' in MAP_DRAW_JS
+
+
+def test_the_bands_carry_their_numbers():
+    """Echarts turns the band labels off as soon as `text` is given, so
+    naming the measure above the key silently took the numbers off it and
+    left four coloured squares meaning nothing."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    legend = MAP_DRAW_JS[MAP_DRAW_JS.index("type: 'piecewise'"):]
+    legend = legend[:legend.index('series:')]
+    assert 'showLabel: true' in legend
+    assert "text: [LABELS[measure]" in legend
+
+
+def test_the_raw_value_travels_with_each_point():
+    """The legend reads it, and it is the number a reader recognises."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'Math.pow(ratio, 2.2), i, values[i]]' in MAP_DRAW_JS

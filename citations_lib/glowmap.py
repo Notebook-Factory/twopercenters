@@ -276,7 +276,7 @@ MAP_DRAW_JS = """
                     // bright, which is how a city at night actually looks.
                     var ratio = Math.log(1 + values[i]) / ceiling;
                     data.push([payload.lng[i], payload.lat[i],
-                               Math.pow(ratio, 2.2), i]);
+                               Math.pow(ratio, 2.2), i, values[i]]);
                 }
 
                 function commas(v) {
@@ -307,9 +307,40 @@ MAP_DRAW_JS = """
                 function opacityAt(zoom) {
                     return Math.min(0.38 * (1 + 0.55 * steps(zoom)), 0.85);
                 }
-                var LABELS = {researchers: 'on the list',
-                              citations: 'citations', papers: 'papers',
-                              h: 'the best h-index'};
+                var LABELS = {researchers: 'researchers on the list',
+                              citations: 'citations',
+                              papers: 'papers',
+                              h: 'best h-index'};
+
+                // The legend, in real units.
+                //
+                // It used to be a gradient with "4,044 on the list" written
+                // at one end, which says neither whose 4,044 nor that the
+                // brightness between the ends runs on a log curve rather
+                // than evenly. These are bands: each one says what a colour
+                // actually means, and their widths are where the curve puts
+                // them, so a reader can see that the top band is a tenth of
+                // the range and most of the map is in the bottom one.
+                function bands(largest, colours) {
+                    var edges = [0];
+                    var top = Math.log(1 + largest);
+                    for (var b = 1; b < colours.length; b++) {
+                        var at = Math.pow(b / colours.length, 1 / 2.2);
+                        edges.push(Math.round(Math.exp(at * top) - 1));
+                    }
+                    var pieces = [];
+                    for (var i = 0; i < colours.length; i++) {
+                        var from = edges[i];
+                        var to = (i + 1 < edges.length) ? edges[i + 1] : null;
+                        if (i && from === edges[i - 1]) { continue; }
+                        pieces.push(to === null
+                            ? {gte: from, color: colours[i],
+                               label: commas(from) + ' and over'}
+                            : {gte: from, lt: to, color: colours[i],
+                               label: commas(from) + ' to ' + commas(to)});
+                    }
+                    return pieces;
+                }
 
                 // The country reading of the same edition. Every fact row
                 // carries a country and only the matched ones carry
@@ -419,56 +450,40 @@ MAP_DRAW_JS = """
                             return lines.join('<br/>');
                         }},
                     visualMap: {
-                        // The mapped dimension is the log ratio above, so
-                        // this runs 0 to 1 while the label reports the real
-                        // largest value.
-                        type: 'continuous', min: 0, max: 1,
-                        // The third value in each point, which is the
-                        // brightness. Without this echarts takes the last
-                        // dimension, which here is the row index, so colour
-                        // ran with a point's position in the array instead
-                        // of with its value: London, the largest and the
-                        // first row, came out the darkest colour on the
-                        // scale. Density hid it at the whole-world view and
-                        // it was obvious the moment the map was zoomed in.
-                        // On the country reading the series is a map and
-                        // each item carries one number, so the dimension to
-                        // read is the first.
-                        dimension: onCountries ? 0 : 2,
-                        calculable: false,
-                        // This bar is a legend, not a control. Left on,
-                        // echarts' hoverLink highlights whatever sits in the
-                        // range under the cursor, so running the mouse along
-                        // the bar made the whole map flare at one end and do
-                        // nothing anywhere else, which reads as a fault
-                        // rather than as a feature.
+                        // Bands in real units rather than a gradient with
+                        // one number written on it. See bands() above for
+                        // why: a gradient cannot say that the brightness
+                        // between its ends is a log curve, and a reader
+                        // asked what "4,044 on the list" meant, which is a
+                        // fair question of a legend.
+                        type: 'piecewise',
+                        // The raw value: the fifth number in each point on
+                        // the city reading, and the only one there is on the
+                        // country reading. Not the brightness, which is the
+                        // log curve and means nothing to a reader.
+                        dimension: onCountries ? 0 : 4,
+                        pieces: bands(
+                            onCountries ? countryLargest : largest,
+                            onCountries
+                                ? ['#16233A', '#164E63', '#1D7F9B', '#35B3CE',
+                                   '#8FE3F2', '#E8FBFF']
+                                : ['#6B4A12', '#C98B1A', '#FFD48A',
+                                   '#FFF7E0']),
+                        // A legend, not a control: with hoverLink on,
+                        // running the mouse along it made the map flare.
                         hoverLink: false,
-                        left: 12, bottom: 12, itemHeight: 110, itemWidth: 10,
-                        // Explicit endpoint text. `showLabel` alone drew the
-                        // gradient and no numbers at all, which is a scale
-                        // that says nothing. The top of the bar names the
-                        // measure as well as its largest value, so the
-                        // legend reads without the control above it.
-                        text: [commas(onCountries ? countryLargest : largest)
-                               + ' ' + LABELS[measure], '0'],
+                        // Explicitly on. Echarts turns the band labels off
+                        // as soon as `text` is given, so naming the measure
+                        // above the key silently took the numbers off it and
+                        // left four coloured squares meaning nothing.
+                        showLabel: true,
+                        left: 12, bottom: 12,
+                        itemWidth: 12, itemHeight: 10, itemGap: 3,
+                        text: [LABELS[measure] +
+                               (onCountries ? ', per country' : ', per city')],
+                        textGap: 8,
                         textStyle: {color: muted, fontSize: 10},
-                        // One hue, dark to light. The brightest places are
-                        // near white because that is what the eye reads as
-                        // intensity when points are adding up.
-                        // Two ramps, because the two readings are
-                        // different kinds of picture. The lights are warm,
-                        // the way a photograph of a city at night is. The
-                        // countries are a cool single hue running from the
-                        // land's own colour up through the dashboard's cyan
-                        // to near-white, so a filled country never reads as
-                        // a lit one and the two cannot be confused at a
-                        // glance.
-                        inRange: {color: onCountries
-                            ? ['#16233A', '#164E63', '#1D7F9B', '#35B3CE',
-                               '#8FE3F2', '#E8FBFF']
-                            : ['#6B4A12', '#C98B1A', '#FFD48A', '#FFF7E0']},
-                        seriesIndex: 0,
-                        formatter: function (value) { return commas(value); }
+                        seriesIndex: 0
                     },
                     series: [onCountries ? {
                         // The country reading fills the outline that is
