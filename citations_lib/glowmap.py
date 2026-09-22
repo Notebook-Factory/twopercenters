@@ -165,15 +165,11 @@ def glow_map():
 
 @callback(
     Output('glowMapStore' + SUFFIX, 'data'),
-    Input('selectYrRadioHOME', 'value'),
+    Input('glowYear' + SUFFIX, 'value'),
     Input('careerORSingleYrRadioHOME', 'value'))
 def _points(year, career):
-    """Driven by the toolbar the choropleth above already has.
-
-    Two pickers for two maps of the same selection would be two things to
-    keep in agreement, and a reader would have to notice that they had
-    drifted.
-    """
+    """The track under the map and the toggle above it, which are the only
+    two controls the selection has."""
     if year is None or career is None:
         raise PreventUpdate
     return map_payload('career' if career else 'singleyr', int(year))
@@ -182,7 +178,7 @@ def _points(year, career):
 @callback(
     Output('glowYearHolder' + SUFFIX, 'children'),
     Input('careerORSingleYrRadioHOME', 'value'),
-    State('selectYrRadioHOME', 'value'))
+    State('glowYear' + SUFFIX, 'value'))
 def _rebuild_slider(career, year):
     """The track carries the years this kind of edition has.
 
@@ -223,32 +219,6 @@ def _step_a_year(back, forward, year, marks):
         # anyway, but saying so keeps it out of the callback graph.
         raise PreventUpdate
     return years[moved]
-
-
-@callback(
-    Output('selectYrRadioHOME', 'value', allow_duplicate=True),
-    Input('glowYear' + SUFFIX, 'value'),
-    State('selectYrRadioHOME', 'value'),
-    prevent_initial_call=True)
-def _slider_sets_the_year(year, current):
-    """Sliding moves the toolbar above, which is what everything else on the
-    page reads. The guard is what stops the two from chasing each other:
-    setting a value Dash already holds fires nothing further."""
-    if year is None or str(year) == str(current):
-        raise PreventUpdate
-    return str(year)
-
-
-@callback(
-    Output('glowYear' + SUFFIX, 'value'),
-    Input('selectYrRadioHOME', 'value'),
-    State('glowYear' + SUFFIX, 'value'),
-    prevent_initial_call=True)
-def _the_year_moves_the_slider(year, current):
-    """And the other way, so the buttons and the track never disagree."""
-    if year is None or str(year) == str(current):
-        raise PreventUpdate
-    return int(year)
 
 
 # ---------------------------------------------------------------------------

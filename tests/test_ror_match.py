@@ -385,14 +385,15 @@ def test_the_world_outline_is_here_and_is_a_map():
     assert '/assets/world.geo.json' in MAP_DRAW_JS
 
 
-def test_the_map_follows_the_toolbar_the_choropleth_already_has():
-    """Two pickers for two maps of one selection would be two things to keep
-    in agreement, and a reader would have to notice when they drifted."""
+def test_the_map_reads_the_only_two_controls_there_are():
+    """The year track under the map and the dataset toggle above it. There
+    was a year radio in a toolbar as well; it said the same thing twice and
+    it is gone."""
     import app  # noqa: F401
     from dash._callback import GLOBAL_CALLBACK_MAP
     key = next(k for k in GLOBAL_CALLBACK_MAP if 'glowMapStore' in k)
     inputs = [i['id'] for i in GLOBAL_CALLBACK_MAP[key]['inputs']]
-    assert 'selectYrRadioHOME' in inputs
+    assert 'glowYear_glowmap_' in inputs
     assert 'careerORSingleYrRadioHOME' in inputs
 
 
@@ -732,3 +733,41 @@ def test_the_year_is_one_control_now():
     assert 'selectYrRadioHOME' not in ids
     # The dataset toggle stays, because the tables beside the map read it.
     assert 'careerORSingleYrRadioHOME' in ids
+
+
+def test_every_control_the_map_listens_to_is_on_the_page():
+    """A callback whose input does not exist never fires, and Dash says
+    nothing about it because the app suppresses callback exceptions. That is
+    how the map came up blank: the year radio was removed and the callback
+    that fetches the points was still listening for it, so the store stayed
+    empty and the chart cleared itself.
+    """
+    import app  # noqa: F401
+    from dash._callback import GLOBAL_CALLBACK_MAP
+
+    import pages.home as home
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    on_page = {getattr(n, 'id', None) for n in walk(home.layout)}
+    on_page = {i for i in on_page if isinstance(i, str)}
+
+    missing = []
+    for key, entry in GLOBAL_CALLBACK_MAP.items():
+        referenced = list(entry.get('inputs', [])) + list(entry.get('state', []))
+        for item in referenced:
+            name = item.get('id')
+            if not isinstance(name, str):
+                continue          # pattern-matching ids
+            if 'glow' not in name and name not in ('careerORSingleYrRadioHOME',):
+                continue          # only the map's own wiring is built here
+            if name not in on_page:
+                missing.append((key[:40], name))
+    assert not missing, missing
