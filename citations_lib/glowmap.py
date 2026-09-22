@@ -213,37 +213,39 @@ MAP_DRAW_JS = """
                     // they were.
                     animation: false,
                     backgroundColor: GROUND,
-                    geo: {
-                        map: 'world', roam: true, silent: true,
+                    geo: [{
+                        map: 'world', roam: true, silent: true, z: 1,
                         // The land is a ground for the light to sit on, not
                         // a thing to read, so it carries no labels and no
                         // hover state of its own.
                         itemStyle: {areaColor: LAND, borderColor: BORDER,
                                     borderWidth: 0.5},
-                        // The cities are one feature of the same map
-                        // rather than a second layer, so they pan and zoom
-                        // with the countries and there is no second viewport
-                        // to keep in agreement.
-                        //
-                        // One feature, not 11,833. Drawn as separate shapes
-                        // every zoom step took 210 ms, against 34 ms for the
-                        // countries alone, and simplifying the outlines
-                        // barely touched it: the cost is per shape, not per
-                        // point. Collapsed into a single multi-polygon it is
-                        // 69 ms, which is what the 2,143 largest cities cost
-                        // before. They carry no hover and no identity, so
-                        // there is nothing to lose by drawing them as one.
-                        regions: [{name: 'urban-areas',
-                                   itemStyle: {areaColor: URBAN,
-                                               borderColor: URBAN,
-                                               borderWidth: 0}}],
                         emphasis: {disabled: true},
                         // Antarctica is a third of the height and holds no
                         // researchers. Cutting the view off below the
                         // southern tip of the inhabited world gives the rest
                         // of the map the space instead.
                         boundingCoords: [[-180, 84], [180, -58]]
-                    },
+                    }, {
+                        // The cities, in a layer of their own so that they
+                        // can stand aside while the map is being moved.
+                        //
+                        // They are the most expensive thing on the map: with
+                        // them every frame of a drag costs half as much
+                        // again, which is what made the map feel heavy.
+                        // Hidden during a roam and brought back when it
+                        // settles, they cost nothing while the mouse is
+                        // down, and the two layers land on the same pixel
+                        // because they are given the same projection, the
+                        // same bounds and, on settling, the same centre and
+                        // zoom.
+                        map: 'world-cities', roam: false, silent: true, z: 2,
+                        show: true,
+                        itemStyle: {areaColor: URBAN, borderColor: URBAN,
+                                    borderWidth: 0},
+                        emphasis: {disabled: true},
+                        boundingCoords: [[-180, 84], [180, -58]]
+                    }],
                     tooltip: {
                         trigger: 'item',
                         backgroundColor: '#303C54', borderColor: '#4A5670',
@@ -304,7 +306,7 @@ MAP_DRAW_JS = """
                     },
                     series: [{
                         type: 'scatter', coordinateSystem: 'geo',
-                        data: data, z: 5,
+                        geoIndex: 0, data: data, z: 5,
                         // Small and faint, not sized markers. A point per
                         // city at 17px reads as a pin dropped on a map; at
                         // 2 to 6px and a third of full opacity it reads as a
@@ -319,14 +321,16 @@ MAP_DRAW_JS = """
                         // winning, which is why a dense region reads as a
                         // glow and not as a pile of dots.
                         blendMode: 'lighter',
-                        // Painted in one pass rather than in chunks across
-                        // frames. Echarts turns chunked rendering on by
-                        // itself above 3,000 points and this map has 3,341,
-                        // which puts it barely over a threshold meant for
-                        // hundreds of thousands. One pass is both simpler
-                        // and one less thing interacting with the additive
-                        // blending above.
-                        progressive: 0
+                        // Painted in chunks across frames rather than all at
+                        // once. This was off, for determinism, and that was
+                        // the wrong trade: a frame of a drag costs 36 ms
+                        // with the points painted in one pass and 24 ms in
+                        // chunks, which is the difference between 27 and 42
+                        // frames a second. The cost of it is that a fast
+                        // drag can show part of the points while it is
+                        // moving, and all of them the moment it stops.
+                        progressive: 700,
+                        progressiveThreshold: 1200
                         // Echarts' large-scatter mode is deliberately not
                         // switched on here. It is the optimised path for
                         // tens of thousands of points, this map has 3,341,
@@ -341,26 +345,43 @@ MAP_DRAW_JS = """
                 // Roaming fires continuously while the mouse is down, so the
                 // restyle waits for a pause rather than running on every
                 // frame of a drag.
-                var pending = null, applied = 1;
-                function follow() {
-                    var current = ((chart.getOption().geo || [])[0] || {});
-                    var zoom = current.zoom || 1;
-                    if (Math.abs(zoom - applied) < 0.05) { return; }
-                    applied = zoom;
-                    chart.setOption({series: [{
-                        symbolSize: sizeAt(zoom),
-                        itemStyle: {opacity: opacityAt(zoom),
-                                    borderWidth: 0}}]});
+                var pending = null, applied = 1, citiesShown = true;
+
+                function settle() {
+                    var view = ((chart.getOption().geo || [])[0] || {});
+                    var zoom = view.zoom || 1;
+                    var update = {};
+                    if (Math.abs(zoom - applied) >= 0.05) {
+                        applied = zoom;
+                        update.series = [{
+                            symbolSize: sizeAt(zoom),
+                            itemStyle: {opacity: opacityAt(zoom),
+                                        borderWidth: 0}}];
+                    }
+                    // The cities come back where the countries now are. They
+                    // are only ever shown while the view is still, so this
+                    // one copy is the whole of the synchronising: there is no
+                    // per-frame chase to fall behind.
+                    citiesShown = true;
+                    update.geo = [{}, {show: true, zoom: zoom,
+                                       center: view.center}];
+                    chart.setOption(update);
                 }
+
                 chart.off('georoam');
                 chart.on('georoam', function () {
+                    if (citiesShown) {
+                        // Once, at the start of the movement, not per frame.
+                        citiesShown = false;
+                        chart.setOption({geo: [{}, {show: false}]});
+                    }
                     if (pending) { clearTimeout(pending); }
                     pending = setTimeout(function () {
                         pending = null;
-                        follow();
-                    }, 40);
+                        settle();
+                    }, 140);
                 });
-                el.__evFollowZoom = follow;
+                el.__evFollowZoom = settle;
             }
 
             // The outline is a megabyte, so it is fetched once per page and
@@ -378,14 +399,16 @@ MAP_DRAW_JS = """
                 ]).then(function (both) {
                     var world = both[0];
                     var urban = both[1];
-                    if (urban && urban.features) {
-                        // Appended, so they draw over the countries rather
-                        // than under them.
-                        world = {type: 'FeatureCollection',
-                                 features: world.features.concat(
-                                     urban.features)};
-                    }
                     window.echarts.registerMap('world', world);
+                    // Registered separately, because it is drawn as its own
+                    // layer. An empty collection still registers, so a
+                    // missing or broken cities file leaves a map with
+                    // countries and lights and no footprints rather than no
+                    // map at all.
+                    window.echarts.registerMap('world-cities',
+                        (urban && urban.features)
+                            ? urban
+                            : {type: 'FeatureCollection', features: []});
                     return true;
                 }).catch(function () { return false; });
             }

@@ -405,12 +405,13 @@ def test_brightness_runs_with_the_logarithm_of_the_value():
     assert 'Math.pow(ratio, 2.2)' in MAP_DRAW_JS
 
 
-def test_the_map_is_painted_in_one_pass():
-    """Echarts starts rendering in chunks above 3,000 points by itself, and
-    this map has 3,341, which puts it barely over a threshold meant for
-    hundreds of thousands."""
+def test_the_points_are_painted_in_chunks():
+    """Measured on a frame of a drag: 36 ms with the points painted in one
+    pass, 24 ms in chunks, which is 27 frames a second against 42. This was
+    off once, for determinism, and determinism is not what a map that is
+    being dragged around needs."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert 'progressive: 0' in MAP_DRAW_JS
+    assert 'progressive: 700' in MAP_DRAW_JS
 
 
 def test_colour_runs_with_the_value_and_not_the_row_number():
@@ -468,9 +469,10 @@ def test_every_city_is_drawn_as_one_shape():
     assert len(urban['features']) == 1
     feature = urban['features'][0]
     assert feature['geometry']['type'] == 'MultiPolygon'
-    assert len(feature['geometry']['coordinates']) > 10000
-    assert feature['properties']['name'] == 'urban-areas'
-    assert "name: 'urban-areas'" in MAP_DRAW_JS
+    # Every city, not the 2,143 largest, and not the 9,272 that survive a
+    # heavier simplification: that one quietly dropped a fifth of them.
+    assert len(feature['geometry']['coordinates']) > 11000
+    assert MAP_DRAW_JS.count("map: 'world-cities'") == 1
 
 
 def test_nothing_on_the_map_animates():
@@ -480,3 +482,25 @@ def test_nothing_on_the_map_animates():
     because they were."""
     from citations_lib.glowmap import MAP_DRAW_JS
     assert 'animation: false' in MAP_DRAW_JS
+
+
+def test_the_cities_are_a_layer_that_can_stand_aside():
+    """They are the most expensive thing on the map: with them a frame of a
+    drag cost half as much again. In their own layer they can be hidden while
+    the map is moving and brought back when it settles, and because they are
+    only ever shown while the view is still, one copy of the centre and zoom
+    is the whole of the synchronising: there is no per-frame chase to fall
+    behind, which is what made the map look out of step."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "map: 'world-cities'" in MAP_DRAW_JS
+    assert "registerMap('world-cities'" in MAP_DRAW_JS
+    # The points belong to the countries layer, which is the one that roams.
+    assert 'geoIndex: 0' in MAP_DRAW_JS
+    assert 'show: false' in MAP_DRAW_JS
+
+
+def test_a_missing_cities_file_still_leaves_a_map():
+    """Registered from an empty collection when the fetch fails, so the map
+    draws with countries and lights and no footprints."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "{type: 'FeatureCollection', features: []}" in MAP_DRAW_JS
