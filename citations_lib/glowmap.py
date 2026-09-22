@@ -205,6 +205,13 @@ MAP_DRAW_JS = """
                               citations: 'citations', papers: 'papers'};
 
                 chart.setOption({
+                    // No animation anywhere on this chart. Echarts animates
+                    // an option update by default, so every restyle after a
+                    // zoom was a third of a second of the points easing
+                    // towards their new size while the map underneath had
+                    // already arrived: the two looked out of step because
+                    // they were.
+                    animation: false,
                     backgroundColor: GROUND,
                     geo: {
                         map: 'world', roam: true, silent: true,
@@ -213,18 +220,23 @@ MAP_DRAW_JS = """
                         // hover state of its own.
                         itemStyle: {areaColor: LAND, borderColor: BORDER,
                                     borderWidth: 0.5},
-                        // The urban footprints are features of the same map
+                        // The cities are one feature of the same map
                         // rather than a second layer, so they pan and zoom
-                        // with the countries and there is no second
-                        // viewport to keep in agreement. They are styled by
-                        // name here, which is why they carry one.
-                        regions: (window.__evUrbanNames || []).map(
-                            function (name) {
-                                return {name: name,
-                                        itemStyle: {areaColor: URBAN,
-                                                    borderColor: URBAN,
-                                                    borderWidth: 0}};
-                            }),
+                        // with the countries and there is no second viewport
+                        // to keep in agreement.
+                        //
+                        // One feature, not 11,833. Drawn as separate shapes
+                        // every zoom step took 210 ms, against 34 ms for the
+                        // countries alone, and simplifying the outlines
+                        // barely touched it: the cost is per shape, not per
+                        // point. Collapsed into a single multi-polygon it is
+                        // 69 ms, which is what the 2,143 largest cities cost
+                        // before. They carry no hover and no identity, so
+                        // there is nothing to lose by drawing them as one.
+                        regions: [{name: 'urban-areas',
+                                   itemStyle: {areaColor: URBAN,
+                                               borderColor: URBAN,
+                                               borderWidth: 0}}],
                         emphasis: {disabled: true},
                         // Antarctica is a third of the height and holds no
                         // researchers. Cutting the view off below the
@@ -346,7 +358,7 @@ MAP_DRAW_JS = """
                     pending = setTimeout(function () {
                         pending = null;
                         follow();
-                    }, 90);
+                    }, 40);
                 });
                 el.__evFollowZoom = follow;
             }
@@ -369,9 +381,6 @@ MAP_DRAW_JS = """
                     if (urban && urban.features) {
                         // Appended, so they draw over the countries rather
                         // than under them.
-                        window.__evUrbanNames = urban.features.map(
-                            function (feature) {
-                                return feature.properties.name; });
                         world = {type: 'FeatureCollection',
                                  features: world.features.concat(
                                      urban.features)};

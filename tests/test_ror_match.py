@@ -451,8 +451,32 @@ def test_the_city_footprints_are_here_and_are_optional():
     with open('assets/urban.geo.json') as handle:
         urban = json.load(handle)
     assert urban['type'] == 'FeatureCollection'
-    assert len(urban['features']) > 2000
-    # Styled by name, so every one of them needs one.
-    assert all(f['properties']['name'] for f in urban['features'])
     assert '/assets/urban.geo.json' in MAP_DRAW_JS
-    assert '__evUrbanNames' in MAP_DRAW_JS
+
+
+def test_every_city_is_drawn_as_one_shape():
+    """11,833 cities as separate shapes cost 210 ms a zoom step against 34 ms
+    for the countries alone, and simplifying the outlines barely touched it:
+    the cost is per shape, not per point. As a single multi-polygon it is 69
+    ms, which is what the 2,143 largest cities cost before. They carry no
+    hover and no identity, so there is nothing to lose."""
+    import json
+
+    from citations_lib.glowmap import MAP_DRAW_JS
+    with open('assets/urban.geo.json') as handle:
+        urban = json.load(handle)
+    assert len(urban['features']) == 1
+    feature = urban['features'][0]
+    assert feature['geometry']['type'] == 'MultiPolygon'
+    assert len(feature['geometry']['coordinates']) > 10000
+    assert feature['properties']['name'] == 'urban-areas'
+    assert "name: 'urban-areas'" in MAP_DRAW_JS
+
+
+def test_nothing_on_the_map_animates():
+    """Echarts animates an option update by default, so every restyle after a
+    zoom was a third of a second of the points easing towards their new size
+    while the map underneath had already arrived. They looked out of step
+    because they were."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'animation: false' in MAP_DRAW_JS
