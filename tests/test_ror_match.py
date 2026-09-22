@@ -714,7 +714,7 @@ def test_the_year_arrows_step_along_the_editions_that_exist():
     class _Context:
         triggered_id = 'glowYearNext_glowmap_'
 
-    marks = {y: {'label': str(y)} for y in (2017, 2019, 2020)}
+    marks = {y: str(y) for y in (2017, 2019, 2020)}
     original = module.callback_context
     try:
         module.callback_context = _Context()
@@ -1064,8 +1064,8 @@ def test_the_countries_are_banded_on_their_own_curve():
     when it is a continent, so the two readings space their bands
     differently: 1.4 for the countries, 2.2 for the lights."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    pieces = MAP_DRAW_JS[MAP_DRAW_JS.index('pieces: onCountries'):]
-    pieces = pieces[:pieces.index('hoverLink')]
+    pieces = MAP_DRAW_JS[MAP_DRAW_JS.index('var legendBands'):]
+    pieces = pieces[:pieces.index('function pick(')]
     assert '1.4)' in pieces
     assert '2.2)' in pieces
 
@@ -1105,3 +1105,41 @@ def test_a_short_range_drops_bands_rather_than_repeating_a_number():
     block = block[:block.index('// The country reading')]
     assert 'if (edge > edges[edges.length - 1])' in block
     assert 'Math.round(i * (colours.length - 1) / last)' in block
+
+
+def test_the_year_marks_are_plain_strings():
+    """rc-slider's keyboard step looks the neighbouring mark up in this dict
+    and returns whatever it finds there. With marks written as
+    {'label': '2023'} a left arrow set the slider's value to that dictionary,
+    which is not a number: the handle fell to the left end, the year read
+    2017, and the next arrow press had nothing to step from and left it
+    there."""
+    from citations_lib.glowmap import year_slider
+    marks = year_slider(True).marks
+    assert marks[2024] == '2024'
+    assert all(isinstance(label, str) for label in marks.values())
+
+
+def test_a_band_can_be_singled_out():
+    """A single click takes a band out of the picture, which is echarts' own
+    behaviour. The question a reader has is the other way round: that band on
+    its own, without the other eleven around it."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    block = MAP_DRAW_JS[MAP_DRAW_JS.index('// Double-click a band'):]
+    block = block[:block.index('// Roaming fires')]
+    # Read from echarts' own account of what changed, not from a dblclick on
+    # the canvas: by the time a dblclick arrives, the swatch under the cursor
+    # belongs to a key that the two clicks have already rebuilt twice.
+    assert "chart.on('datarangeselected'" in block
+    assert "getZr().on('dblclick'" not in block
+    assert 'when - chart.__evLastAt < 600' in block
+    # And the same gesture puts them back, so a reader is never stranded.
+    assert 'selected[j] = alone ? true : (j === changed)' in block
+    # The isolate is itself a selection change and must not start a new pair.
+    assert 'if (chart.__evQuiet) { chart.__evQuiet = false; return; }' in block
+
+
+def test_the_key_says_that_a_band_can_be_singled_out():
+    """Nothing else on the map would tell a reader the gesture exists."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "'double-click a band for that band alone'" in MAP_DRAW_JS

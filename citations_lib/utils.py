@@ -2200,6 +2200,10 @@ def city_researchers(lat, lng, kind, year, limit=None):
     table = _TABLE_BY_KIND.get(kind)
     if table is None:
         return [], 0
+    # The year arrives as a string when it comes from the slider's keyboard
+    # step, and as an int everywhere else. Both name the same edition, so
+    # they are made the same thing here rather than filling the cache twice.
+    year = int(year)
     edition_id = f'{kind}-{year}'
     # Within a hundred metres of the point, rather than equal to it after
     # rounding. The payload carries three decimals and the table carries the

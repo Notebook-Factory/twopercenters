@@ -104,7 +104,13 @@ def year_slider(career=True, year=None):
     the two are kept saying the same year in both directions.
     """
     years = edition_years('career' if career else 'singleyr')
-    marks = {int(y): {'label': str(y)} for y in years}
+    # Plain strings, not {'label': ...}. Both forms draw the same track, but
+    # rc-slider's keyboard handler steps by looking the neighbouring mark up
+    # in this dict and returning whatever it finds, so with the dict form a
+    # left arrow set the slider's value to {'label': '2023'}. That is not a
+    # number: the handle fell to the left end, the year read 2017, and the
+    # next arrow press found nothing to step from and left it there.
+    marks = {int(y): str(y) for y in years}
     chosen = int(year) if year else (years[-1] if years else 0)
     return dcc.Slider(
         id='glowYear' + SUFFIX,
@@ -396,6 +402,18 @@ MAP_DRAW_JS = """
                     return {name: c.name, value: c[measure]};
                 });
                 var onCountries = grain === 'country';
+                // Worked out once rather than inside the option, because the
+                // double-click handler below has to know which band it was
+                // given: it identifies one by its colour, and every band in
+                // both ramps has a colour of its own.
+                var legendBands = onCountries
+                    // A gentler curve than the lights use. The United States
+                    // has 87,859 researchers and the median country has
+                    // eleven, and a country is a large block of colour: the
+                    // spacing that reads well on a two-pixel point leaves
+                    // half the world in one band when it is a continent.
+                    ? bands(countryLargest, COOL, 1.4)
+                    : bands(largest, WARM, 2.2);
 
                 function pick(what) {
                     var input = document.getElementById('glowPicked_glowmap_');
@@ -491,15 +509,7 @@ MAP_DRAW_JS = """
                         // country reading. Not the brightness, which is the
                         // log curve and means nothing to a reader.
                         dimension: onCountries ? 0 : 4,
-                        pieces: onCountries
-                            // A gentler curve than the lights use. The
-                            // United States has 87,859 researchers and the
-                            // median country has eleven, and a country is a
-                            // large block of colour: the spacing that reads
-                            // well on a two-pixel point leaves half the
-                            // world in one band when it is a continent.
-                            ? bands(countryLargest, COOL, 1.4)
-                            : bands(largest, WARM, 2.2),
+                        pieces: legendBands,
                         // A legend, not a control: with hoverLink on,
                         // running the mouse along it made the map flare.
                         hoverLink: false,
@@ -511,7 +521,8 @@ MAP_DRAW_JS = """
                         left: 12, bottom: 12,
                         itemWidth: 12, itemHeight: 9, itemGap: 2,
                         text: [LABELS[measure] +
-                               (onCountries ? ', per country' : ', per city')],
+                               (onCountries ? ', per country' : ', per city'),
+                               'double-click a band for that band alone'],
                         textGap: 8,
                         textStyle: {color: muted, fontSize: 10},
                         seriesIndex: 0
@@ -591,6 +602,79 @@ MAP_DRAW_JS = """
                     // Where it is, not what it is called: there are
                     // Clevelands in Ohio and in Tennessee, and four Oxfords.
                     pick('city|' + payload.lat[i] + '|' + payload.lng[i]);
+                });
+
+                // Double-click a band to see only the places in it.
+                //
+                // A single click on a band already takes it out of the
+                // picture, which is echarts' own behaviour and worth
+                // keeping. The question a reader actually has is the other
+                // way round: where are the cities in the top band on their
+                // own, without the other eleven around them.
+                //
+                // This reads the two clicks rather than listening for a
+                // dblclick on the canvas. A double click is two clicks, and
+                // echarts rebuilds the key on each of them as the band goes
+                // out and comes back, so by the time a dblclick arrives the
+                // swatch under the cursor belongs to a key that has been
+                // thrown away: its group has no parent, and there is nothing
+                // left to say which band it was. What does survive is
+                // echarts' own account of what changed, so the same band
+                // going out and coming back inside 600ms is read as the
+                // double click it was.
+                var allOn = {};
+                for (var band = 0; band < legendBands.length; band++) {
+                    allOn[band] = true;
+                }
+                chart.__evSeen = allOn;
+                chart.__evLastBand = -1;
+                chart.__evLastAt = 0;
+                chart.__evQuiet = false;
+                chart.off('datarangeselected');
+                chart.on('datarangeselected', function (params) {
+                    var now = params.selected || {};
+                    // Singling a band out is itself a selection change. It
+                    // is not a reader's click and must not start a new pair.
+                    if (chart.__evQuiet) { chart.__evQuiet = false; return; }
+                    var shown = function (state, k) {
+                        return state[k] !== false;
+                    };
+                    var before = chart.__evSeen || {};
+                    var changed = -1, moved = 0;
+                    for (var i = 0; i < legendBands.length; i++) {
+                        if (shown(before, i) !== shown(now, i)) {
+                            changed = i;
+                            moved++;
+                        }
+                    }
+                    var when = Date.now();
+                    var twice = moved === 1
+                        && changed === chart.__evLastBand
+                        && when - chart.__evLastAt < 600;
+                    var keep = {};
+                    for (var c = 0; c < legendBands.length; c++) {
+                        keep[c] = shown(now, c);
+                    }
+                    chart.__evSeen = keep;
+                    chart.__evLastBand = changed;
+                    chart.__evLastAt = when;
+                    if (!twice) { return; }
+                    var alone = shown(now, changed);
+                    for (var k = 0; k < legendBands.length; k++) {
+                        if (k !== changed && shown(now, k)) { alone = false; }
+                    }
+                    // Double-clicking the band that is already on its own
+                    // puts the other eleven back, so the same gesture undoes
+                    // itself and a reader is never stranded.
+                    var selected = {};
+                    for (var j = 0; j < legendBands.length; j++) {
+                        selected[j] = alone ? true : (j === changed);
+                    }
+                    chart.__evSeen = selected;
+                    chart.__evLastBand = -1;
+                    chart.__evQuiet = true;
+                    chart.dispatchAction({type: 'selectDataRange',
+                                          selected: selected});
                 });
 
                 // Roaming fires continuously while the mouse is down, so the
