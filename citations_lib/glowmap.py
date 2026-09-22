@@ -220,40 +220,6 @@ MAP_DRAW_JS = """
             var el = document.getElementById(elementId);
             if (!el || !window.echarts) { return ''; }
 
-            // Is the WebGL scatter available?
-            //
-            // echarts-gl exposes no flag to look for, so this builds a
-            // throwaway chart, asks for a scatterGL series and sees whether
-            // echarts kept it. Without the script echarts drops the series;
-            // without WebGL the attempt throws. Either way the answer is no
-            // and the canvas scatter is used.
-            function glAvailable() {
-                if (window.__evGLChecked !== undefined) {
-                    return window.__evGLChecked;
-                }
-                var answer = false, probe = null;
-                try {
-                    probe = document.createElement('div');
-                    probe.style.cssText =
-                        'position:absolute;left:-9999px;width:4px;height:4px';
-                    document.body.appendChild(probe);
-                    var test = window.echarts.init(probe);
-                    test.setOption({series: [{type: 'scatterGL',
-                                              data: [[0, 0]]}]});
-                    var kept = test.getOption().series || [];
-                    answer = kept.length > 0 && kept[0].type === 'scatterGL';
-                    test.dispose();
-                } catch (e) {
-                    answer = false;
-                } finally {
-                    if (probe && probe.parentNode) {
-                        probe.parentNode.removeChild(probe);
-                    }
-                }
-                window.__evGLChecked = answer;
-                return answer;
-            }
-
             function draw() {
                 var chart = window.echarts.getInstanceByDom(el)
                             || window.echarts.init(el, null,
@@ -323,12 +289,6 @@ MAP_DRAW_JS = """
                 function opacityAt(zoom) {
                     return Math.min(0.38 * (1 + 0.55 * steps(zoom)), 0.85);
                 }
-                // One number for the whole series, because that is all the
-                // WebGL scatter takes. Sized for the middle of the range
-                // rather than the top, or the small places disappear.
-                function sizeOnGL(zoom) {
-                    return Math.min(2.6 * (1 + 0.25 * steps(zoom)), 5.5);
-                }
                 var LABELS = {researchers: 'on the list',
                               citations: 'citations', papers: 'papers'};
 
@@ -357,10 +317,6 @@ MAP_DRAW_JS = """
                                 1.4)};
                 });
                 var onCountries = grain === 'country';
-                // The city points go through the graphics card when it is
-                // there. They are half the cost of a frame in canvas, and
-                // dragging the map is what suffered for it.
-                var onGL = !onCountries && glAvailable();
 
                 chart.setOption({
                     // No animation anywhere on this chart. Echarts animates
@@ -487,27 +443,6 @@ MAP_DRAW_JS = """
                         // everywhere else on the dashboard; it is this map
                         // file that has no shape for them.
                         select: {disabled: true}
-                    } : onGL ? {
-                        // The same points, drawn by the graphics card. This
-                        // is the series the scatterGL example uses, and the
-                        // geo above no longer crops its projection, which is
-                        // what threw these points off the land last time.
-                        //
-                        // symbolSize is a number here and a function on the
-                        // canvas path below: the WebGL scatter takes one
-                        // size for the whole series, so the measure is
-                        // carried by colour alone. The night-lights maps
-                        // this is modelled on do the same.
-                        type: 'scatterGL', coordinateSystem: 'geo',
-                        geoIndex: 0, data: data, z: 5,
-                        symbolSize: sizeOnGL(1),
-                        itemStyle: {opacity: opacityAt(1)},
-                        blendMode: 'lighter',
-                        // No bloom. On a map whose point is which place is
-                        // brighter, a glow that spreads into its neighbours
-                        // makes a dense region read brighter than its
-                        // numbers are.
-                        postEffect: {enable: false}
                     } : {
                         type: 'scatter', coordinateSystem: 'geo',
                         geoIndex: 0, data: data, z: 5,
@@ -557,7 +492,7 @@ MAP_DRAW_JS = """
                     if (Math.abs(zoom - applied) < 0.05) { return; }
                     applied = zoom;
                     chart.setOption({series: [{
-                        symbolSize: onGL ? sizeOnGL(zoom) : sizeAt(zoom),
+                        symbolSize: sizeAt(zoom),
                         itemStyle: {opacity: opacityAt(zoom),
                                     borderWidth: 0}}]});
                 }

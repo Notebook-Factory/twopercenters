@@ -556,14 +556,15 @@ def test_every_roam_frame_repaints():
     assert 'zr.refresh()' in handler
 
 
-def test_the_city_points_prefer_webgl_and_survive_without_it():
-    """WebGL draws them near enough for free. What can be checked here is the
-    fallback, because a build machine has no WebGL: the feature test builds a
-    throwaway chart and asks whether echarts kept a scatterGL series, so a
-    missing script and a missing graphics context both answer no."""
+
+def test_the_points_are_drawn_by_the_canvas_renderer():
+    """The WebGL scatter was tried twice and drew the points off the land
+    both times: first because the view was cropped to the inhabited
+    latitudes and the two layers projected differently, and again after that
+    crop was removed. Whatever else it disagrees about, it is not worth more
+    of anyone's time to find out."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert "type: 'scatterGL'" in MAP_DRAW_JS
+    assert 'scatterGL' not in MAP_DRAW_JS
     assert "type: 'scatter', coordinateSystem: 'geo'" in MAP_DRAW_JS
-    probe = MAP_DRAW_JS[MAP_DRAW_JS.index('function glAvailable()'):]
-    probe = probe[:probe.index('function draw()')]
-    assert 'try {' in probe and 'catch (e)' in probe and 'answer = false;' in probe
+    with open('app.py') as handle:
+        assert 'echarts-gl' not in handle.read()

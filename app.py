@@ -24,15 +24,6 @@ app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
                # nothing new is installed on the Python side and no other
                # chart on the site changes.
                "https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js",
-               # And echarts-gl, for one chart. The city map draws 3,341
-               # points that have to stay smooth while the map is dragged,
-               # and in plain canvas they are half the cost of a frame. This
-               # is the package the scatterGL example uses.
-               #
-               # It is an addition, not a replacement: the map feature-tests
-               # for the series and falls back to the canvas scatter when
-               # the script has not loaded or the machine has no WebGL.
-               "https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js",
            ],
            suppress_callback_exceptions=True)
 server = app.server
