@@ -269,8 +269,12 @@ def refresh_institution_ror(conn, path=None):
     conn.commit()
 
     total = len(institutions)
+    # A database with no institutions in it yet is a normal state, not an
+    # error: the migrations run before the first edition is loaded, and the
+    # test fixtures build an empty schema on purpose.
+    share = f"{len(matches) / total * 100:.1f}%" if total else "no institutions"
     print(f"matched {len(matches):,} of {total:,} institutions "
-          f"({len(matches) / total * 100:.1f}%) against {path} "
+          f"({share}) against {path} "
           f"in {time.time() - started:.1f}s", flush=True)
     for key in sorted(counts):
         print(f"    {key:32} {counts[key]:>7,}", flush=True)

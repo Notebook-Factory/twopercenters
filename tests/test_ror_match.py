@@ -261,3 +261,45 @@ def test_a_successor_that_is_itself_withdrawn_is_not_followed():
                _record('https://ror.org/b', 'B University',
                        status='withdrawn')]
     assert normalize('A University') not in build_index(records)
+
+
+def test_an_empty_database_is_not_an_error(tmp_path):
+    """The migrations run before the first edition is loaded, and the build
+    fixtures create an empty schema on purpose. Reporting a percentage of
+    nothing raised ZeroDivisionError and took the whole build down with it."""
+    import json as _json
+
+    from pipeline.ror_match import refresh_institution_ror
+
+    dump = tmp_path / 'ror-data.json'
+    dump.write_text(_json.dumps([_record('https://ror.org/x', 'Somewhere')]))
+
+    class _Empty:
+        """The smallest thing that answers like a connection with nothing in
+        it: the table exists, and every query returns no rows."""
+
+        def execute(self, sql, *args):
+            class _Result:
+                def fetchone(inner):
+                    return (1,) if 'information_schema' in sql else (0, 0)
+
+                def fetchall(inner):
+                    return []
+            return _Result()
+
+        def cursor(self):
+            class _Cursor:
+                def __enter__(inner):
+                    return inner
+
+                def __exit__(inner, *exc):
+                    return False
+
+                def executemany(inner, *args):
+                    return None
+            return _Cursor()
+
+        def commit(self):
+            return None
+
+    refresh_institution_ror(_Empty(), str(dump))
