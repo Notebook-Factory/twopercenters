@@ -143,6 +143,11 @@ MAP_DRAW_JS = """
                 var LAND = '#141C2E';
                 var BORDER = '#243049';
                 var GROUND = '#0B1020';
+                // The built-up area a city covers, a step above the land and
+                // well below the lights. Invisible at the whole-world view,
+                // which is right: it is there for when a reader zooms in and
+                // wants to know whether a point sits on a city or on a field.
+                var URBAN = '#1E2B45';
                 var muted = '#8894AC';
 
                 var values = payload[measure] || payload.researchers;
@@ -172,6 +177,30 @@ MAP_DRAW_JS = """
                     return (v === null || v === undefined)
                         ? '-' : Math.round(v).toLocaleString();
                 }
+
+                // A point is small and faint because at the whole-world view
+                // its neighbours are on top of it and the light adds up.
+                // Zoom in and they come apart, so the same point on its own
+                // is a speck at a third of full opacity, which is close to
+                // invisible: the map looked like it was fading out as you
+                // went closer. Both size and opacity follow the zoom to keep
+                // a place as bright when it is the only thing on screen.
+                // Brightness does most of the compensating and size barely
+                // moves. Growing both at the same rate turned the zoomed-in
+                // map back into the sized markers this was drawn to get away
+                // from: at eight times, points reached twenty pixels.
+                function steps(zoom) {
+                    return Math.log(Math.max(zoom, 1)) / Math.LN2;
+                }
+                function sizeAt(zoom) {
+                    var spread = Math.min(1 + 0.25 * steps(zoom), 1.9);
+                    return function (value) {
+                        return (1.4 + 4.6 * value[2]) * spread;
+                    };
+                }
+                function opacityAt(zoom) {
+                    return Math.min(0.38 * (1 + 0.55 * steps(zoom)), 0.85);
+                }
                 var LABELS = {researchers: 'on the list',
                               citations: 'citations', papers: 'papers'};
 
@@ -184,6 +213,18 @@ MAP_DRAW_JS = """
                         // hover state of its own.
                         itemStyle: {areaColor: LAND, borderColor: BORDER,
                                     borderWidth: 0.5},
+                        // The urban footprints are features of the same map
+                        // rather than a second layer, so they pan and zoom
+                        // with the countries and there is no second
+                        // viewport to keep in agreement. They are styled by
+                        // name here, which is why they carry one.
+                        regions: (window.__evUrbanNames || []).map(
+                            function (name) {
+                                return {name: name,
+                                        itemStyle: {areaColor: URBAN,
+                                                    borderColor: URBAN,
+                                                    borderWidth: 0}};
+                            }),
                         emphasis: {disabled: true},
                         // Antarctica is a third of the height and holds no
                         // researchers. Cutting the view off below the
@@ -216,7 +257,23 @@ MAP_DRAW_JS = """
                         // this runs 0 to 1 while the label reports the real
                         // largest value.
                         type: 'continuous', min: 0, max: 1,
+                        // The third value in each point, which is the
+                        // brightness. Without this echarts takes the last
+                        // dimension, which here is the row index, so colour
+                        // ran with a point's position in the array instead
+                        // of with its value: London, the largest and the
+                        // first row, came out the darkest colour on the
+                        // scale. Density hid it at the whole-world view and
+                        // it was obvious the moment the map was zoomed in.
+                        dimension: 2,
                         calculable: false,
+                        // This bar is a legend, not a control. Left on,
+                        // echarts' hoverLink highlights whatever sits in the
+                        // range under the cursor, so running the mouse along
+                        // the bar made the whole map flare at one end and do
+                        // nothing anywhere else, which reads as a fault
+                        // rather than as a feature.
+                        hoverLink: false,
                         left: 12, bottom: 12, itemHeight: 110, itemWidth: 10,
                         // Explicit endpoint text. `showLabel` alone drew the
                         // gradient and no numbers at all, which is a scale
@@ -235,7 +292,7 @@ MAP_DRAW_JS = """
                     },
                     series: [{
                         type: 'scatter', coordinateSystem: 'geo',
-                        data: data,
+                        data: data, z: 5,
                         // Small and faint, not sized markers. A point per
                         // city at 17px reads as a pin dropped on a map; at
                         // 2 to 6px and a third of full opacity it reads as a
@@ -243,10 +300,8 @@ MAP_DRAW_JS = """
                         // add up into the shape of a region. That
                         // accumulation is the picture, so the symbol has to
                         // stay small enough for it to happen.
-                        symbolSize: function (value) {
-                            return 1.4 + 4.6 * value[2];
-                        },
-                        itemStyle: {opacity: 0.38, borderWidth: 0},
+                        symbolSize: sizeAt(1),
+                        itemStyle: {opacity: opacityAt(1), borderWidth: 0},
                         // The whole effect. Overlapping points add their
                         // light together instead of the last one painted
                         // winning, which is why a dense region reads as a
@@ -270,19 +325,60 @@ MAP_DRAW_JS = """
                     }]
                 }, true);
                 chart.resize();
+
+                // Roaming fires continuously while the mouse is down, so the
+                // restyle waits for a pause rather than running on every
+                // frame of a drag.
+                var pending = null, applied = 1;
+                function follow() {
+                    var current = ((chart.getOption().geo || [])[0] || {});
+                    var zoom = current.zoom || 1;
+                    if (Math.abs(zoom - applied) < 0.05) { return; }
+                    applied = zoom;
+                    chart.setOption({series: [{
+                        symbolSize: sizeAt(zoom),
+                        itemStyle: {opacity: opacityAt(zoom),
+                                    borderWidth: 0}}]});
+                }
+                chart.off('georoam');
+                chart.on('georoam', function () {
+                    if (pending) { clearTimeout(pending); }
+                    pending = setTimeout(function () {
+                        pending = null;
+                        follow();
+                    }, 90);
+                });
+                el.__evFollowZoom = follow;
             }
 
             // The outline is a megabyte, so it is fetched once per page and
             // every later draw waits on the same promise rather than
             // starting another download.
             if (!window.__evWorldMap) {
-                window.__evWorldMap = fetch('/assets/world.geo.json')
-                    .then(function (response) { return response.json(); })
-                    .then(function (geo) {
-                        window.echarts.registerMap('world', geo);
-                        return true;
-                    })
-                    .catch(function () { return false; });
+                window.__evWorldMap = Promise.all([
+                    fetch('/assets/world.geo.json').then(function (r) {
+                        return r.json(); }),
+                    // The cities are a separate file and a separate
+                    // failure: if this one does not arrive the map still
+                    // draws, with countries and lights and no footprints.
+                    fetch('/assets/urban.geo.json').then(function (r) {
+                        return r.json(); }).catch(function () { return null; })
+                ]).then(function (both) {
+                    var world = both[0];
+                    var urban = both[1];
+                    if (urban && urban.features) {
+                        // Appended, so they draw over the countries rather
+                        // than under them.
+                        window.__evUrbanNames = urban.features.map(
+                            function (feature) {
+                                return feature.properties.name; });
+                        world = {type: 'FeatureCollection',
+                                 features: world.features.concat(
+                                     urban.features)};
+                    }
+                    window.echarts.registerMap('world', world);
+                    return true;
+                }).catch(function () { return false; });
             }
             window.__evWorldMap.then(function (ready) {
                 if (!ready) { return; }

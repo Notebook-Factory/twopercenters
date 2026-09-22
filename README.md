@@ -143,6 +143,14 @@ curl -sL -o data_ror/ror-data.zip \
 python pipeline/ror_match.py
 ```
 
+The map under the choropleth on the home page draws its points from this
+table, over two outline files in `assets/`: `world.geo.json`, the country
+outlines, because ECharts 5 ships no maps of its own, and `urban.geo.json`,
+the built-up areas, so that a reader who zooms in can tell whether a point
+sits on a city or on a field. Both are fetched only when the map is first
+drawn. The outlines come from Natural Earth, which is public domain, by way
+of ECharts' own map data.
+
 Against ROR v2.12-2026-08-25 this matched 19,120 of the 66,079 institution
 names (28.9%), which covers 160,224 of the 230,333 researchers in career-2024
 (69.6%). The two numbers are far apart because the names that match are the

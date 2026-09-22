@@ -411,3 +411,48 @@ def test_the_map_is_painted_in_one_pass():
     hundreds of thousands."""
     from citations_lib.glowmap import MAP_DRAW_JS
     assert 'progressive: 0' in MAP_DRAW_JS
+
+
+def test_colour_runs_with_the_value_and_not_the_row_number():
+    """Echarts' visualMap takes the last data dimension when it is not told
+    which one to use. Each point here is [lng, lat, brightness, row], so
+    colour ran with a city's position in the array: London, the largest and
+    the first row, came out the darkest colour on the scale. Density hid it
+    at the whole-world view and it was plain the moment the map was zoomed."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'dimension: 2,' in MAP_DRAW_JS
+
+
+def test_the_scale_bar_does_not_reach_into_the_map():
+    """hoverLink highlights whatever falls in the range under the cursor, so
+    running the mouse along the bar made the whole map flare at one end and
+    do nothing anywhere else."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'hoverLink: false' in MAP_DRAW_JS
+
+
+def test_the_points_follow_the_zoom():
+    """A point is small and faint because at the whole-world view its
+    neighbours are on top of it. Zoomed in they come apart, and without this
+    the map appeared to fade out as you went closer."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "chart.on('georoam'" in MAP_DRAW_JS
+    assert 'function opacityAt(zoom)' in MAP_DRAW_JS
+    assert 'function sizeAt(zoom)' in MAP_DRAW_JS
+
+
+def test_the_city_footprints_are_here_and_are_optional():
+    """Drawn under the lights so a reader who zooms in can tell whether a
+    point sits on a city or on a field. A separate file and a separate
+    failure: without it the map still draws."""
+    import json
+
+    from citations_lib.glowmap import MAP_DRAW_JS
+    with open('assets/urban.geo.json') as handle:
+        urban = json.load(handle)
+    assert urban['type'] == 'FeatureCollection'
+    assert len(urban['features']) > 2000
+    # Styled by name, so every one of them needs one.
+    assert all(f['properties']['name'] for f in urban['features'])
+    assert '/assets/urban.geo.json' in MAP_DRAW_JS
+    assert '__evUrbanNames' in MAP_DRAW_JS
