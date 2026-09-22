@@ -507,3 +507,32 @@ def test_the_cities_layer_is_gone():
     from citations_lib.glowmap import MAP_DRAW_JS
     assert not os.path.exists('assets/urban.geo.json')
     assert 'urban' not in MAP_DRAW_JS
+
+
+def test_the_wheel_belongs_to_the_page():
+    """With roam true the wheel zooms the map, so a reader scrolling the page
+    stops dead at the map and it dives to street level instead. The plotly
+    map at the top of this page turned its scroll zoom off for exactly that
+    reason; this one repeated the mistake."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "roam: 'move'" in MAP_DRAW_JS
+    assert 'roam: true' not in MAP_DRAW_JS
+
+
+def test_zooming_is_on_buttons_instead():
+    """Taking the wheel away leaves no way to zoom unless something replaces
+    it."""
+    from citations_lib.glowmap import glow_map
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    ids = {getattr(n, 'id', None) for n in walk(glow_map())}
+    for name in ('glowZoomIn', 'glowZoomOut', 'glowZoomReset'):
+        assert any(isinstance(i, str) and i.startswith(name) for i in ids), name

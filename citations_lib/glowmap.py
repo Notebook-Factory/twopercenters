@@ -127,11 +127,23 @@ def glow_map():
                 measures,
             ], className='ev-glow-measures'),
         ], className='ev-glow-head'),
-        html.Div(id='glowMap' + SUFFIX, className='ev-glow-chart'),
+        html.Div([
+            html.Div(id='glowMap' + SUFFIX, className='ev-glow-chart'),
+            html.Div([
+                html.Button('+', id='glowZoomIn' + SUFFIX, n_clicks=0,
+                            title='Zoom in', className='ev-glow-zoom-btn'),
+                html.Button('\u2212', id='glowZoomOut' + SUFFIX, n_clicks=0,
+                            title='Zoom out', className='ev-glow-zoom-btn'),
+                html.Button('\u21ba', id='glowZoomReset' + SUFFIX, n_clicks=0,
+                            title='Whole world',
+                            className='ev-glow-zoom-btn'),
+            ], className='ev-glow-zoom'),
+        ], className='ev-glow-frame'),
         html.Div(year_slider(), id='glowYearHolder' + SUFFIX,
                  className='ev-glow-years'),
         dcc.Store(id='glowMapStore' + SUFFIX),
         html.Div(id='glowMapSink' + SUFFIX, style={'display': 'none'}),
+        html.Div(id='glowZoomSink' + SUFFIX, style={'display': 'none'}),
     ], className='ev-glow')
 
 
@@ -316,7 +328,16 @@ MAP_DRAW_JS = """
                     animation: false,
                     backgroundColor: GROUND,
                     geo: [{
-                        map: 'world', roam: true, silent: true, z: 1,
+                        // Drag to pan, and the wheel is left alone.
+                        //
+                        // With roam true the wheel zooms the map, which
+                        // means a reader scrolling the page stops dead here
+                        // and the map dives to street level instead. The
+                        // plotly map at the top of this page turned its
+                        // scroll zoom off for exactly that reason, and this
+                        // one repeated the mistake. Zooming is on the
+                        // buttons in the corner.
+                        map: 'world', roam: 'move', silent: true, z: 1,
                         // The land is a ground for the light to sit on, not
                         // a thing to read, so it carries no labels and no
                         // hover state of its own.
@@ -510,6 +531,45 @@ MAP_DRAW_JS = """
             return '';
         }
 """
+
+
+# Zooming, on buttons rather than on the wheel. Written against the chart
+# directly because it is one line of state that the server has no reason to
+# hold: the view a reader has dragged to is theirs, and a round trip would
+# make every press wait on it.
+dash.clientside_callback(
+    """
+    function (zoomIn, zoomOut, reset, elementId) {
+        var el = document.getElementById(elementId);
+        var chart = el && window.echarts &&
+                    window.echarts.getInstanceByDom(el);
+        if (!chart) { return ''; }
+        var trigger = (dash_clientside.callback_context.triggered || [])[0];
+        if (!trigger || !trigger.value) { return ''; }
+        var which = trigger.prop_id.split('.')[0];
+        var view = ((chart.getOption().geo || [])[0] || {});
+        var zoom = view.zoom || 1;
+        if (which.indexOf('glowZoomIn') === 0) {
+            zoom = Math.min(zoom * 1.6, 60);
+        } else if (which.indexOf('glowZoomOut') === 0) {
+            zoom = Math.max(zoom / 1.6, 1);
+        } else {
+            zoom = 1;
+        }
+        chart.setOption({geo: [{zoom: zoom,
+                                center: zoom === 1 ? null : view.center}]});
+        // The points are drawn for a zoom level, so they follow it here the
+        // same way they follow a drag.
+        if (el.__evFollowZoom) { el.__evFollowZoom(); }
+        return '';
+    }
+    """,
+    Output('glowZoomSink' + SUFFIX, 'children'),
+    Input('glowZoomIn' + SUFFIX, 'n_clicks'),
+    Input('glowZoomOut' + SUFFIX, 'n_clicks'),
+    Input('glowZoomReset' + SUFFIX, 'n_clicks'),
+    State('glowMap' + SUFFIX, 'id'),
+    prevent_initial_call=True)
 
 
 dash.clientside_callback(

@@ -3590,6 +3590,35 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 }
 .ev-glow-years .rc-slider-mark-text-active { color: var(--ev-text); }
 
+/* The map and its zoom buttons, which sit over its top right corner. */
+.ev-glow-frame { position: relative; }
+.ev-glow-zoom {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ev-glow-zoom-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .95rem;
+  line-height: 1;
+  color: var(--ev-text);
+  background: color-mix(in srgb, #0B1020 80%, transparent);
+  border: 1px solid #243049;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ev-glow-zoom-btn:hover {
+  border-color: var(--ev-accent);
+  color: var(--ev-accent);
+}
+
 .ev-glow-chart {
   height: 560px;
   width: 100%;
