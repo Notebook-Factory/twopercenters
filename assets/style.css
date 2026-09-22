@@ -3550,10 +3550,50 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   margin: .15rem 0 0;
   max-width: 68ch;
 }
+/* Two button rows, granularity then measure, sitting together at the right
+   of the heading. */
+.ev-glow-measures { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+/* The years, as a track under the map. The radio buttons in the toolbar
+   above say the same thing and drive the same selection; this is for walking
+   the editions rather than aiming at one. dcc.Slider ships unstyled, so
+   these are its own class names rather than the app's. */
+.ev-glow-years {
+  padding: .5rem 1.5rem .25rem;
+  background: var(--ev-bg-deep);
+  border: 1px solid var(--ev-surface-2);
+  border-top: 0;
+  border-radius: 0 0 var(--ev-radius) var(--ev-radius);
+  margin-top: -1px;
+}
+.ev-glow-years .rc-slider-rail { background-color: var(--ev-surface-2); }
+.ev-glow-years .rc-slider-track { background-color: transparent; }
+.ev-glow-years .rc-slider-dot {
+  background-color: var(--ev-surface-2);
+  border-color: var(--ev-surface-2);
+}
+.ev-glow-years .rc-slider-dot-active {
+  background-color: var(--ev-accent);
+  border-color: var(--ev-accent);
+}
+.ev-glow-years .rc-slider-handle {
+  background-color: var(--ev-accent);
+  border-color: var(--ev-accent);
+  opacity: 1;
+}
+.ev-glow-years .rc-slider-handle:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev-accent) 35%, transparent);
+}
+.ev-glow-years .rc-slider-mark-text {
+  color: var(--ev-text-muted);
+  font-size: .72rem;
+}
+.ev-glow-years .rc-slider-mark-text-active { color: var(--ev-text); }
+
 .ev-glow-chart {
   height: 560px;
   width: 100%;
-  border-radius: var(--ev-radius);
+  border-radius: var(--ev-radius) var(--ev-radius) 0 0;
   overflow: hidden;
   border: 1px solid var(--ev-surface-2);
 }

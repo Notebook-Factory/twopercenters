@@ -145,12 +145,9 @@ python pipeline/ror_match.py
 
 The map under the choropleth on the home page draws its points from this
 table, over two outline files in `assets/`: `world.geo.json`, the country
-outlines, because ECharts 5 ships no maps of its own, and `urban.geo.json`,
-the built-up area of every city in the world, 11,833 of them, so that a
-reader who zooms in can tell whether a point sits on a city or on a field.
-They are one multi-polygon rather than one shape each, which is the
-difference between 69 ms and 210 ms per zoom step. Both files are fetched
-only when the map is first drawn. The outlines come from Natural Earth, which is public domain, by way
+outlines, because ECharts 5 ships no maps of its own. It is fetched only when
+the map is first drawn. A layer of city footprints was tried and taken out
+again: it cost more per frame than everything else on the map put together. The outlines come from Natural Earth, which is public domain, by way
 of ECharts' own map data.
 
 Against ROR v2.12-2026-08-25 this matched 19,120 of the 66,079 institution

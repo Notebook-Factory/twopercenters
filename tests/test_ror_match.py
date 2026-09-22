@@ -368,7 +368,8 @@ def test_the_scale_says_what_it_is_measuring():
     """showLabel on its own drew the gradient and no numbers, which is a
     scale that says nothing."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert 'text: [commas(largest)' in MAP_DRAW_JS
+    assert 'text: [commas(onCountries ? countryLargest : largest)' \
+        in MAP_DRAW_JS
 
 
 def test_the_world_outline_is_here_and_is_a_map():
@@ -421,7 +422,7 @@ def test_colour_runs_with_the_value_and_not_the_row_number():
     the first row, came out the darkest colour on the scale. Density hid it
     at the whole-world view and it was plain the moment the map was zoomed."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert 'dimension: 2,' in MAP_DRAW_JS
+    assert 'dimension: onCountries ? 0 : 2,' in MAP_DRAW_JS
 
 
 def test_the_scale_bar_does_not_reach_into_the_map():
@@ -442,39 +443,6 @@ def test_the_points_follow_the_zoom():
     assert 'function sizeAt(zoom)' in MAP_DRAW_JS
 
 
-def test_the_city_footprints_are_here_and_are_optional():
-    """Drawn under the lights so a reader who zooms in can tell whether a
-    point sits on a city or on a field. A separate file and a separate
-    failure: without it the map still draws."""
-    import json
-
-    from citations_lib.glowmap import MAP_DRAW_JS
-    with open('assets/urban.geo.json') as handle:
-        urban = json.load(handle)
-    assert urban['type'] == 'FeatureCollection'
-    assert '/assets/urban.geo.json' in MAP_DRAW_JS
-
-
-def test_every_city_is_drawn_as_one_shape():
-    """11,833 cities as separate shapes cost 210 ms a zoom step against 34 ms
-    for the countries alone, and simplifying the outlines barely touched it:
-    the cost is per shape, not per point. As a single multi-polygon it is 69
-    ms, which is what the 2,143 largest cities cost before. They carry no
-    hover and no identity, so there is nothing to lose."""
-    import json
-
-    from citations_lib.glowmap import MAP_DRAW_JS
-    with open('assets/urban.geo.json') as handle:
-        urban = json.load(handle)
-    assert len(urban['features']) == 1
-    feature = urban['features'][0]
-    assert feature['geometry']['type'] == 'MultiPolygon'
-    # Every city, not the 2,143 largest, and not the 9,272 that survive a
-    # heavier simplification: that one quietly dropped a fifth of them.
-    assert len(feature['geometry']['coordinates']) > 11000
-    assert MAP_DRAW_JS.count("map: 'world-cities'") == 1
-
-
 def test_nothing_on_the_map_animates():
     """Echarts animates an option update by default, so every restyle after a
     zoom was a third of a second of the points easing towards their new size
@@ -484,23 +452,58 @@ def test_nothing_on_the_map_animates():
     assert 'animation: false' in MAP_DRAW_JS
 
 
-def test_the_cities_are_a_layer_that_can_stand_aside():
-    """They are the most expensive thing on the map: with them a frame of a
-    drag cost half as much again. In their own layer they can be hidden while
-    the map is moving and brought back when it settles, and because they are
-    only ever shown while the view is still, one copy of the centre and zoom
-    is the whole of the synchronising: there is no per-frame chase to fall
-    behind, which is what made the map look out of step."""
-    from citations_lib.glowmap import MAP_DRAW_JS
-    assert "map: 'world-cities'" in MAP_DRAW_JS
-    assert "registerMap('world-cities'" in MAP_DRAW_JS
-    # The points belong to the countries layer, which is the one that roams.
-    assert 'geoIndex: 0' in MAP_DRAW_JS
-    assert 'show: false' in MAP_DRAW_JS
+def test_the_map_reads_at_two_granularities():
+    """Cities are the located seven tenths of an edition; countries are all
+    of it, because every fact row carries a country while only the matched
+    ones carry coordinates."""
+    from citations_lib.glowmap import MAP_DRAW_JS, map_payload
+    payload = map_payload('career', 2024)
+    assert len(payload['lat']) > 3000
+    assert len(payload['countries']) > 150
+    # Both travel together, so changing granularity is a redraw and not
+    # another round trip.
+    assert "grain === 'country'" in MAP_DRAW_JS
+    assert "type: 'map', geoIndex: 0" in MAP_DRAW_JS
 
 
-def test_a_missing_cities_file_still_leaves_a_map():
-    """Registered from an empty collection when the fetch fails, so the map
-    draws with countries and lights and no footprints."""
+def test_the_country_reading_covers_more_than_the_city_one():
+    from citations_lib.glowmap import map_payload
+    payload = map_payload('career', 2024)
+    located = sum(payload['researchers'])
+    everyone = sum(c['researchers'] for c in payload['countries'])
+    assert everyone > located
+
+
+def test_country_names_reach_the_map_file():
+    """The fact tables carry ISO3 and the outline carries its own spellings:
+    'Czech Rep.', 'Lao PDR', 'Dem. Rep. Congo'. 145 of 175 agree without
+    help and the rest are named in _MAP_NAMES."""
+    import json
+
+    from citations_lib.utils import country_points
+    with open('assets/world.geo.json') as handle:
+        names = {f['properties']['name'] for f in json.load(handle)['features']}
+    points = country_points('career', 2024)
+    missing = [p for p in points if p['name'] not in names]
+    # Taiwan, Hong Kong and Macau have no feature in this outline at all, and
+    # nor do a handful of dependencies. Everything else has to land.
+    assert {p['country_code'] for p in missing} <= {
+        'TWN', 'HKG', 'MAC', 'KNA', 'MCO', 'SMR', 'MTQ', 'GUF', 'GLP', 'UMI'}
+    placed = sum(p['researchers'] for p in points if p['name'] in names)
+    assert placed / sum(p['researchers'] for p in points) > 0.98
+
+
+def test_the_year_track_carries_the_editions_that_exist():
+    """Career runs 2017 to 2024; the single-year series has no 2018."""
+    from citations_lib.glowmap import year_slider
+    assert 2018 in year_slider(True).marks
+    assert 2018 not in year_slider(False).marks
+
+
+def test_the_cities_layer_is_gone():
+    """It cost more than everything else on the map put together."""
+    import os
+
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert "{type: 'FeatureCollection', features: []}" in MAP_DRAW_JS
+    assert not os.path.exists('assets/urban.geo.json')
+    assert 'urban' not in MAP_DRAW_JS

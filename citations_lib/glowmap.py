@@ -20,7 +20,8 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, dcc, html
 from dash.exceptions import PreventUpdate
 
-from citations_lib.utils import city_points
+from citations_lib.utils import (city_points, country_points,
+                                 edition_years, update_yr_options2)
 
 SUFFIX = '_glowmap_'
 
@@ -30,6 +31,14 @@ MEASURES = (
     ('researchers', 'Researchers'),
     ('citations', 'Citations'),
     ('papers', 'Papers'),
+)
+
+# How coarsely to read the same edition. Cities are the located seven tenths
+# of it; countries are all of it, because every fact row carries a country
+# while only the matched ones carry coordinates.
+GRAINS = (
+    ('city', 'Cities'),
+    ('country', 'Countries'),
 )
 
 # Two names per point. Four made the payload 513 KB and one made it 295 KB;
@@ -50,6 +59,10 @@ def map_payload(kind, year):
     """
     points = city_points(kind, year)
     return {
+        # Every country in the edition, which is a short list and travels
+        # with the long one so that changing granularity is a redraw rather
+        # than another round trip.
+        'countries': country_points(kind, year),
         'city': [p['city'] for p in points],
         'country': [p['country_code'] for p in points],
         # Three decimals is about a hundred metres, which is finer than a
@@ -63,19 +76,41 @@ def map_payload(kind, year):
     }
 
 
-def glow_map():
-    """The map, its measure control, and the stores behind them."""
-    measures = html.Div([
+def _segmented(component_id, options, value):
+    """The button row this dashboard uses for every small choice."""
+    return html.Div([
         dbc.RadioItems(
-            id='glowMeasure' + SUFFIX,
-            className='btn-group',
-            inputClassName='btn-check',
+            id=component_id,
+            className='btn-group', inputClassName='btn-check',
             labelClassName='btn btn-outline-primary',
             labelCheckedClassName='active',
-            value=MEASURES[0][0],
-            options=[{'label': label, 'value': key}
-                     for key, label in MEASURES],
+            value=value,
+            options=[{'label': label, 'value': key} for key, label in options],
         )], className='radio-group')
+
+
+def year_slider(career=True, year=None):
+    """The editions, as a track under the map.
+
+    The radio buttons in the toolbar above say the same thing, and they stay:
+    they are what the choropleth at the top of the page uses. This is for the
+    map, where a reader wants to walk the years rather than aim at one, and
+    the two are kept saying the same year in both directions.
+    """
+    years = edition_years('career' if career else 'singleyr')
+    marks = {int(y): {'label': str(y)} for y in years}
+    chosen = int(year) if year else (years[-1] if years else 0)
+    return dcc.Slider(
+        id='glowYear' + SUFFIX,
+        min=min(marks) if marks else 0, max=max(marks) if marks else 0,
+        step=None, marks=marks, value=chosen,
+        included=False, updatemode='mouseup',
+        className='ev-glow-slider')
+
+
+def glow_map():
+    """The map, its controls, and the stores behind them."""
+    measures = _segmented('glowMeasure' + SUFFIX, MEASURES, MEASURES[0][0])
 
     return html.Div([
         html.Div([
@@ -87,9 +122,14 @@ def glow_map():
                        'Drag to pan, scroll to zoom.',
                        className='ev-glow-sub'),
             ]),
-            html.Div(measures, className='ev-glow-measures'),
+            html.Div([
+                _segmented('glowGrain' + SUFFIX, GRAINS, GRAINS[0][0]),
+                measures,
+            ], className='ev-glow-measures'),
         ], className='ev-glow-head'),
         html.Div(id='glowMap' + SUFFIX, className='ev-glow-chart'),
+        html.Div(year_slider(), id='glowYearHolder' + SUFFIX,
+                 className='ev-glow-years'),
         dcc.Store(id='glowMapStore' + SUFFIX),
         html.Div(id='glowMapSink' + SUFFIX, style={'display': 'none'}),
     ], className='ev-glow')
@@ -111,6 +151,47 @@ def _points(year, career):
     return map_payload('career' if career else 'singleyr', int(year))
 
 
+@callback(
+    Output('glowYearHolder' + SUFFIX, 'children'),
+    Input('careerORSingleYrRadioHOME', 'value'),
+    State('selectYrRadioHOME', 'value'))
+def _rebuild_slider(career, year):
+    """The track carries the years this kind of edition has.
+
+    Career runs 2017 to 2024 and the single-year series has no 2018, so the
+    marks are rebuilt rather than relabelled.
+    """
+    if career is None:
+        raise PreventUpdate
+    return year_slider(career, year)
+
+
+@callback(
+    Output('selectYrRadioHOME', 'value', allow_duplicate=True),
+    Input('glowYear' + SUFFIX, 'value'),
+    State('selectYrRadioHOME', 'value'),
+    prevent_initial_call=True)
+def _slider_sets_the_year(year, current):
+    """Sliding moves the toolbar above, which is what everything else on the
+    page reads. The guard is what stops the two from chasing each other:
+    setting a value Dash already holds fires nothing further."""
+    if year is None or str(year) == str(current):
+        raise PreventUpdate
+    return str(year)
+
+
+@callback(
+    Output('glowYear' + SUFFIX, 'value'),
+    Input('selectYrRadioHOME', 'value'),
+    State('glowYear' + SUFFIX, 'value'),
+    prevent_initial_call=True)
+def _the_year_moves_the_slider(year, current):
+    """And the other way, so the buttons and the track never disagree."""
+    if year is None or str(year) == str(current):
+        raise PreventUpdate
+    return int(year)
+
+
 # ---------------------------------------------------------------------------
 # The drawing
 # ---------------------------------------------------------------------------
@@ -123,7 +204,7 @@ def _points(year, career):
 # this far.
 
 MAP_DRAW_JS = """
-        function (payload, measure, elementId) {
+        function (payload, measure, grain, elementId) {
             var el = document.getElementById(elementId);
             if (!el || !window.echarts) { return ''; }
 
@@ -143,11 +224,6 @@ MAP_DRAW_JS = """
                 var LAND = '#141C2E';
                 var BORDER = '#243049';
                 var GROUND = '#0B1020';
-                // The built-up area a city covers, a step above the land and
-                // well below the lights. Invisible at the whole-world view,
-                // which is right: it is there for when a reader zooms in and
-                // wants to know whether a point sits on a city or on a field.
-                var URBAN = '#1E2B45';
                 var muted = '#8894AC';
 
                 var values = payload[measure] || payload.researchers;
@@ -204,6 +280,32 @@ MAP_DRAW_JS = """
                 var LABELS = {researchers: 'on the list',
                               citations: 'citations', papers: 'papers'};
 
+                // The country reading of the same edition. Every fact row
+                // carries a country and only the matched ones carry
+                // coordinates, so this is the whole edition where the lights
+                // are the seven tenths of it that could be placed.
+                var countries = payload.countries || [];
+                var byCountry = {};
+                var countryValues = countries.map(function (c) {
+                    byCountry[c.name] = c;
+                    return c[measure];
+                });
+                var countryLargest = countryValues.length
+                    ? Math.max.apply(null, countryValues) : 1;
+                var countryCeiling = Math.log(1 + countryLargest);
+                var countryData = countries.map(function (c) {
+                    // A gentler power than the lights use. The United States
+                    // has 87,859 researchers and the median country has
+                    // eleven, and a country is a large block of colour: the
+                    // curve that reads well on a two-pixel point makes half
+                    // the world look empty when it is a continent.
+                    return {name: c.name,
+                            value: Math.pow(
+                                Math.log(1 + c[measure]) / countryCeiling,
+                                1.4)};
+                });
+                var onCountries = grain === 'country';
+
                 chart.setOption({
                     // No animation anywhere on this chart. Echarts animates
                     // an option update by default, so every restyle after a
@@ -226,31 +328,21 @@ MAP_DRAW_JS = """
                         // southern tip of the inhabited world gives the rest
                         // of the map the space instead.
                         boundingCoords: [[-180, 84], [180, -58]]
-                    }, {
-                        // The cities, in a layer of their own so that they
-                        // can stand aside while the map is being moved.
-                        //
-                        // They are the most expensive thing on the map: with
-                        // them every frame of a drag costs half as much
-                        // again, which is what made the map feel heavy.
-                        // Hidden during a roam and brought back when it
-                        // settles, they cost nothing while the mouse is
-                        // down, and the two layers land on the same pixel
-                        // because they are given the same projection, the
-                        // same bounds and, on settling, the same centre and
-                        // zoom.
-                        map: 'world-cities', roam: false, silent: true, z: 2,
-                        show: true,
-                        itemStyle: {areaColor: URBAN, borderColor: URBAN,
-                                    borderWidth: 0},
-                        emphasis: {disabled: true},
-                        boundingCoords: [[-180, 84], [180, -58]]
                     }],
                     tooltip: {
                         trigger: 'item',
                         backgroundColor: '#303C54', borderColor: '#4A5670',
                         textStyle: {color: '#E8ECF2', fontSize: 12},
                         formatter: function (p) {
+                            if (onCountries) {
+                                var c = byCountry[p.name];
+                                if (!c) { return ''; }
+                                return ['<strong>' + c.name + '</strong>',
+                                        commas(c.researchers) + ' on the list',
+                                        commas(c.citations) + ' citations',
+                                        commas(c.papers) + ' papers'
+                                       ].join('<br/>');
+                            }
                             var i = p.value[3];
                             var lines = [
                                 '<strong>' + payload.city[i] + ', '
@@ -279,7 +371,10 @@ MAP_DRAW_JS = """
                         // first row, came out the darkest colour on the
                         // scale. Density hid it at the whole-world view and
                         // it was obvious the moment the map was zoomed in.
-                        dimension: 2,
+                        // On the country reading the series is a map and
+                        // each item carries one number, so the dimension to
+                        // read is the first.
+                        dimension: onCountries ? 0 : 2,
                         calculable: false,
                         // This bar is a legend, not a control. Left on,
                         // echarts' hoverLink highlights whatever sits in the
@@ -294,17 +389,38 @@ MAP_DRAW_JS = """
                         // that says nothing. The top of the bar names the
                         // measure as well as its largest value, so the
                         // legend reads without the control above it.
-                        text: [commas(largest) + ' ' + LABELS[measure], '0'],
+                        text: [commas(onCountries ? countryLargest : largest)
+                               + ' ' + LABELS[measure], '0'],
                         textStyle: {color: muted, fontSize: 10},
                         // One hue, dark to light. The brightest places are
                         // near white because that is what the eye reads as
                         // intensity when points are adding up.
-                        inRange: {color: ['#6B4A12', '#C98B1A', '#FFD48A',
-                                          '#FFF7E0']},
+                        // The country reading starts from the land's own
+                        // colour rather than from a dark amber, so a country
+                        // with almost nobody sits a shade above the sea
+                        // instead of reading as a filled-in value.
+                        inRange: {color: onCountries
+                            ? ['#1A2238', '#6B4A12', '#C98B1A', '#FFD48A',
+                               '#FFF7E0']
+                            : ['#6B4A12', '#C98B1A', '#FFD48A', '#FFF7E0']},
                         seriesIndex: 0,
                         formatter: function (value) { return commas(value); }
                     },
-                    series: [{
+                    series: [onCountries ? {
+                        // The country reading fills the outline that is
+                        // already there rather than drawing a second one:
+                        // the series is bound to the geo above, so both
+                        // readings pan and zoom as one thing.
+                        type: 'map', geoIndex: 0, map: 'world',
+                        data: countryData,
+                        // Ten of the 174 countries in career-2024 have no
+                        // feature in this outline at all, Taiwan, Hong Kong
+                        // and Macau among them, which is 3,508 researchers
+                        // that cannot be coloured. They keep their numbers
+                        // everywhere else on the dashboard; it is this map
+                        // file that has no shape for them.
+                        select: {disabled: true}
+                    } : {
                         type: 'scatter', coordinateSystem: 'geo',
                         geoIndex: 0, data: data, z: 5,
                         // Small and faint, not sized markers. A point per
@@ -345,41 +461,26 @@ MAP_DRAW_JS = """
                 // Roaming fires continuously while the mouse is down, so the
                 // restyle waits for a pause rather than running on every
                 // frame of a drag.
-                var pending = null, applied = 1, citiesShown = true;
+                var pending = null, applied = 1;
 
                 function settle() {
                     var view = ((chart.getOption().geo || [])[0] || {});
                     var zoom = view.zoom || 1;
-                    var update = {};
-                    if (Math.abs(zoom - applied) >= 0.05) {
-                        applied = zoom;
-                        update.series = [{
-                            symbolSize: sizeAt(zoom),
-                            itemStyle: {opacity: opacityAt(zoom),
-                                        borderWidth: 0}}];
-                    }
-                    // The cities come back where the countries now are. They
-                    // are only ever shown while the view is still, so this
-                    // one copy is the whole of the synchronising: there is no
-                    // per-frame chase to fall behind.
-                    citiesShown = true;
-                    update.geo = [{}, {show: true, zoom: zoom,
-                                       center: view.center}];
-                    chart.setOption(update);
+                    if (Math.abs(zoom - applied) < 0.05) { return; }
+                    applied = zoom;
+                    chart.setOption({series: [{
+                        symbolSize: sizeAt(zoom),
+                        itemStyle: {opacity: opacityAt(zoom),
+                                    borderWidth: 0}}]});
                 }
 
                 chart.off('georoam');
                 chart.on('georoam', function () {
-                    if (citiesShown) {
-                        // Once, at the start of the movement, not per frame.
-                        citiesShown = false;
-                        chart.setOption({geo: [{}, {show: false}]});
-                    }
                     if (pending) { clearTimeout(pending); }
                     pending = setTimeout(function () {
                         pending = null;
                         settle();
-                    }, 140);
+                    }, 90);
                 });
                 el.__evFollowZoom = settle;
             }
@@ -388,29 +489,13 @@ MAP_DRAW_JS = """
             // every later draw waits on the same promise rather than
             // starting another download.
             if (!window.__evWorldMap) {
-                window.__evWorldMap = Promise.all([
-                    fetch('/assets/world.geo.json').then(function (r) {
-                        return r.json(); }),
-                    // The cities are a separate file and a separate
-                    // failure: if this one does not arrive the map still
-                    // draws, with countries and lights and no footprints.
-                    fetch('/assets/urban.geo.json').then(function (r) {
-                        return r.json(); }).catch(function () { return null; })
-                ]).then(function (both) {
-                    var world = both[0];
-                    var urban = both[1];
-                    window.echarts.registerMap('world', world);
-                    // Registered separately, because it is drawn as its own
-                    // layer. An empty collection still registers, so a
-                    // missing or broken cities file leaves a map with
-                    // countries and lights and no footprints rather than no
-                    // map at all.
-                    window.echarts.registerMap('world-cities',
-                        (urban && urban.features)
-                            ? urban
-                            : {type: 'FeatureCollection', features: []});
-                    return true;
-                }).catch(function () { return false; });
+                window.__evWorldMap = fetch('/assets/world.geo.json')
+                    .then(function (response) { return response.json(); })
+                    .then(function (world) {
+                        window.echarts.registerMap('world', world);
+                        return true;
+                    })
+                    .catch(function () { return false; });
             }
             window.__evWorldMap.then(function (ready) {
                 if (!ready) { return; }
@@ -432,4 +517,5 @@ dash.clientside_callback(
     Output('glowMapSink' + SUFFIX, 'children'),
     Input('glowMapStore' + SUFFIX, 'data'),
     Input('glowMeasure' + SUFFIX, 'value'),
+    Input('glowGrain' + SUFFIX, 'value'),
     State('glowMap' + SUFFIX, 'id'))

@@ -2076,3 +2076,79 @@ def city_points(kind, year, limit_institutes=4):
              'institutes': [name for name in (institutes or []) if name]}
             for (city, country, lat, lng, researchers, citations, papers,
                  institutes) in rows]
+
+
+# The names this dashboard's country codes convert to, against the names the
+# world outline in assets/ actually uses. 145 of the 175 countries in
+# career-2024 agree without help; these are the rest, and the six at the top
+# are 8,008 of the 8,058 researchers behind the disagreement.
+#
+# Taiwan, Hong Kong and Macau have no feature in that outline at all, so they
+# cannot be coloured whatever they are called. That is 3,492 researchers in
+# career-2024, and it is a property of the map file rather than a decision
+# made here.
+_MAP_NAMES = {
+    'kor': 'Korea',
+    'brn': 'Brunei',
+    'tur': 'Turkey',
+    'cze': 'Czech Rep.',
+    'bih': 'Bosnia and Herz.',
+    'kgz': 'Kyrgyzstan',
+    'civ': "Côte d'Ivoire",
+    'fro': 'Faeroe Is.',
+    'lao': 'Lao PDR',
+    'caf': 'Central African Rep.',
+    'cod': 'Dem. Rep. Congo',
+    'cuw': 'Curaçao',
+    'cym': 'Cayman Is.',
+    'lca': 'Saint Lucia',
+    'prk': 'Dem. Rep. Korea',
+    'pyf': 'Fr. Polynesia',
+    'ssd': 'S. Sudan',
+    'swz': 'Swaziland',
+    'mkd': 'Macedonia',
+}
+
+
+@lru_cache(maxsize=512)
+def map_name(country_code):
+    """What the world outline calls this country, or '' if it has no feature.
+
+    The fact tables carry ISO3. The outline carries names, and its own
+    spellings of them: 'Czech Rep.', 'Lao PDR', 'Dem. Rep. Congo'.
+    """
+    if not country_code:
+        return ''
+    code = str(country_code).lower()
+    if code in _MAP_NAMES:
+        return _MAP_NAMES[code]
+    name = str(coco.convert(names=code.upper(), to='name_short'))
+    return '' if name.lower() == 'not found' else name
+
+
+def country_points(kind, year):
+    """Every country the selected edition's researchers work in.
+
+    Unlike city_points this asks the fact table directly rather than going
+    through institution_ror, because every row carries a country while only
+    the located ones carry coordinates. So the country view is the whole
+    edition and the city view is the seven tenths of it that could be placed.
+    """
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None:
+        return []
+    rows = _fetch(
+        f'select country_code, count(*), sum(nc), sum(np) from {table} '
+        f'where edition_id = %s and country_code is not null '
+        f'group by country_code order by count(*) desc',
+        (f'{kind}-{year}',))
+    points = []
+    for code, researchers, citations, papers in rows:
+        name = map_name(code)
+        if not name:
+            continue
+        points.append({'country_code': code.upper(), 'name': name,
+                       'researchers': int(researchers),
+                       'citations': int(citations or 0),
+                       'papers': int(papers or 0)})
+    return points
