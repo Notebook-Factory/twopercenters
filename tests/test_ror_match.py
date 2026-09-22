@@ -393,3 +393,21 @@ def test_the_map_follows_the_toolbar_the_choropleth_already_has():
     inputs = [i['id'] for i in GLOBAL_CALLBACK_MAP[key]['inputs']]
     assert 'selectYrRadioHOME' in inputs
     assert 'careerORSingleYrRadioHOME' in inputs
+
+
+def test_brightness_runs_with_the_logarithm_of_the_value():
+    """London has 4,044 researchers and 54.6 million citations. On a straight
+    scale the citations view put almost every city at the dark end and the
+    map came back nearly blank; on a plain log scale it came back nearly
+    white. The power on the log ratio is what puts the middle back down."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'Math.log(1 + values[i]) / ceiling' in MAP_DRAW_JS
+    assert 'Math.pow(ratio, 2.2)' in MAP_DRAW_JS
+
+
+def test_the_map_is_painted_in_one_pass():
+    """Echarts starts rendering in chunks above 3,000 points by itself, and
+    this map has 3,341, which puts it barely over a threshold meant for
+    hundreds of thousands."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'progressive: 0' in MAP_DRAW_JS

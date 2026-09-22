@@ -135,20 +135,37 @@ MAP_DRAW_JS = """
                     chart.clear();
                     return;
                 }
-                var css = getComputedStyle(document.documentElement);
-                function token(name, fallback) {
-                    var v = css.getPropertyValue(name);
-                    return (v && v.trim()) || fallback;
-                }
-                var land = token('--ev-surface', '#424E66');
-                var border = token('--ev-surface-2', '#4A5670');
-                var muted = token('--ev-text-muted', '#A8B2C4');
+                // These are not theme tokens. A night-lights map is dark
+                // in both themes for the same reason a photograph of a city
+                // at night is: the subject is the light, and light needs
+                // somewhere dark to be seen. A pale ground would leave the
+                // faint places invisible and the bright ones grey.
+                var LAND = '#141C2E';
+                var BORDER = '#243049';
+                var GROUND = '#0B1020';
+                var muted = '#8894AC';
 
                 var values = payload[measure] || payload.researchers;
                 var largest = Math.max.apply(null, values);
+                // Brightness runs with the logarithm of the value, not with
+                // the value. London has 4,044 researchers and 54.6 million
+                // citations; on a straight scale the citations view puts
+                // almost every city at the dark end and the map goes blank
+                // apart from a dozen places. The same log ratio the
+                // composite score is built from keeps a city of 50,000
+                // citations visible next to one of 50 million.
+                var ceiling = Math.log(1 + largest);
                 var data = [];
                 for (var i = 0; i < values.length; i++) {
-                    data.push([payload.lng[i], payload.lat[i], values[i], i]);
+                    // The log ratio alone runs too hot: a city with fifty
+                    // thousand citations is already three fifths of the way
+                    // up a scale that ends at fifty million, so the map came
+                    // back almost uniformly white. Raising it to a power
+                    // puts the middle back down and leaves the bright places
+                    // bright, which is how a city at night actually looks.
+                    var ratio = Math.log(1 + values[i]) / ceiling;
+                    data.push([payload.lng[i], payload.lat[i],
+                               Math.pow(ratio, 2.2), i]);
                 }
 
                 function commas(v) {
@@ -159,13 +176,13 @@ MAP_DRAW_JS = """
                               citations: 'citations', papers: 'papers'};
 
                 chart.setOption({
-                    backgroundColor: token('--ev-bg-deep', '#303C54'),
+                    backgroundColor: GROUND,
                     geo: {
                         map: 'world', roam: true, silent: true,
                         // The land is a ground for the light to sit on, not
                         // a thing to read, so it carries no labels and no
                         // hover state of its own.
-                        itemStyle: {areaColor: land, borderColor: border,
+                        itemStyle: {areaColor: LAND, borderColor: BORDER,
                                     borderWidth: 0.5},
                         emphasis: {disabled: true},
                         // Antarctica is a third of the height and holds no
@@ -195,7 +212,10 @@ MAP_DRAW_JS = """
                             return lines.join('<br/>');
                         }},
                     visualMap: {
-                        type: 'continuous', min: 0, max: largest,
+                        // The mapped dimension is the log ratio above, so
+                        // this runs 0 to 1 while the label reports the real
+                        // largest value.
+                        type: 'continuous', min: 0, max: 1,
                         calculable: false,
                         left: 12, bottom: 12, itemHeight: 110, itemWidth: 10,
                         // Explicit endpoint text. `showLabel` alone drew the
@@ -216,19 +236,30 @@ MAP_DRAW_JS = """
                     series: [{
                         type: 'scatter', coordinateSystem: 'geo',
                         data: data,
-                        // Area with the value rather than radius, or one
-                        // London swamps the map. The floor keeps a city with
-                        // a single researcher visible as a dim point rather
-                        // than as nothing.
+                        // Small and faint, not sized markers. A point per
+                        // city at 17px reads as a pin dropped on a map; at
+                        // 2 to 6px and a third of full opacity it reads as a
+                        // light, and where cities crowd together the lights
+                        // add up into the shape of a region. That
+                        // accumulation is the picture, so the symbol has to
+                        // stay small enough for it to happen.
                         symbolSize: function (value) {
-                            return 2.2 + 17 * Math.sqrt(value[2] / largest);
+                            return 1.4 + 4.6 * value[2];
                         },
-                        itemStyle: {opacity: 0.85, borderWidth: 0},
+                        itemStyle: {opacity: 0.38, borderWidth: 0},
                         // The whole effect. Overlapping points add their
                         // light together instead of the last one painted
                         // winning, which is why a dense region reads as a
                         // glow and not as a pile of dots.
-                        blendMode: 'lighter'
+                        blendMode: 'lighter',
+                        // Painted in one pass rather than in chunks across
+                        // frames. Echarts turns chunked rendering on by
+                        // itself above 3,000 points and this map has 3,341,
+                        // which puts it barely over a threshold meant for
+                        // hundreds of thousands. One pass is both simpler
+                        // and one less thing interacting with the additive
+                        // blending above.
+                        progressive: 0
                         // Echarts' large-scatter mode is deliberately not
                         // switched on here. It is the optimised path for
                         // tens of thousands of points, this map has 3,341,
