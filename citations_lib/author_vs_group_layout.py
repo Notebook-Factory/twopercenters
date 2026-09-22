@@ -28,6 +28,7 @@ import dash_loading_spinners as dls
 from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
 from citations_lib.callback_templates import *
+from citations_lib.controls import kind_toggle
 
 def author_vs_group_layout(default_author=None):
     """The author side is seeded from the dashboard's current author."""
@@ -77,24 +78,8 @@ def author_vs_group_layout(default_author=None):
 
 
     # =============== Career vs Singleyr
-    careerORSingleYr = html.Div([
-        dbc.RadioItems(id = "careerORSingleYrRadio" + SUFFIX, value = True, className = "btn-group", inputClassName = "btn-check", labelClassName = "btn btn-outline-primary",
-            labelCheckedClassName = "active", options = [{"label": "Career", "value": True}, {"label": "Single year", "value": False}, 
-        ])], className = "radio-group")
-    
-    careerORSingleA1 = html.Div([
-        dbc.RadioItems(
-            id = "careerORSingleYrA1" + SUFFIX, 
-            className = "btn-group", 
-            inputClassName = "btn-check", 
-            labelClassName = "btn btn-outline-primary", 
-            labelCheckedClassName = "active", 
-            value = True,
-            options = [
-                {"label": "Career", "value": True}, 
-                {"label": "Single year", "value": False}, 
-        ])], className = "radio-group")
-    
+    careerORSingleYr = kind_toggle("careerORSingleYrRadio" + SUFFIX)    
+    careerORSingleA1 = kind_toggle("careerORSingleYrA1" + SUFFIX)    
     selectYrA1 = html.Div(
         [dbc.RadioItems(
             id = "selectYrRadioA1" + SUFFIX, 

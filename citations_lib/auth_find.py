@@ -29,6 +29,7 @@ from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
 from citations_lib.callback_templates import *
 import dash_loading_spinners as dls
+from citations_lib.controls import kind_toggle
 # The what-if calculator.
 #
 # The composite score is not a black box: it is the sum of six log ratios,
@@ -725,32 +726,8 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # =============== Select dataset!
 
     # =============== Career vs Singleyr
-    careerORSingleYr = html.Div([
-        dbc.RadioItems(
-            id = "careerORSingleYrRadio" + SUFFIX, 
-            className = "btn-group", 
-            inputClassName = "btn-check", 
-            labelClassName = "btn btn-outline-primary", 
-            labelCheckedClassName = "active", 
-            value = True,
-            options = [
-                {"label": "Career", "value": True}, 
-                {"label": "Single year", "value": False}, 
-        ])], className = "radio-group")
-
-    careerORSingleA1 = html.Div([
-        dbc.RadioItems(
-            id = "careerORSingleYrA1" + SUFFIX, 
-            className = "btn-group", 
-            inputClassName = "btn-check", 
-            labelClassName = "btn btn-outline-primary", 
-            labelCheckedClassName = "active", 
-            value = True,
-            options = [
-                {"label": "Career", "value": True}, 
-                {"label": "Single year", "value": False}, 
-        ])], className = "radio-group")
-
+    careerORSingleYr = kind_toggle("careerORSingleYrRadio" + SUFFIX)
+    careerORSingleA1 = kind_toggle("careerORSingleYrA1" + SUFFIX)
     # =============== Year
 
     selectYr = html.Div(

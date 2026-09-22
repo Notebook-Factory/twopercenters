@@ -58,7 +58,7 @@ def generate_update_carsing_callback(input_id, output_id):
                 elif 'singleyr' in list(result['_index']):
                     opts = 'singleyr'
                     val = False
-                return update_cr_options(opts), val
+                return update_cr_options(opts, output_id), val
             else:
                 return [], [], False
 

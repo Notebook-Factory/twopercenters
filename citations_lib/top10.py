@@ -24,6 +24,7 @@ from dash import (ALL, Input, Output, State, callback, callback_context,
 from dash.exceptions import PreventUpdate
 
 from citations_lib.auth_find import WHATIF_METRICS
+from citations_lib.controls import kind_toggle
 from citations_lib.utils import (author_metrics, composite_is_reproducible,
                                  composite_maxima, top_researchers,
                                  update_yr_options2)
@@ -158,16 +159,7 @@ def _toolbar():
     added.
     """
     options, default = update_yr_options2(True)
-    kind = html.Div([
-        dbc.RadioItems(
-            id='top10Kind' + SUFFIX,
-            className='btn-group', inputClassName='btn-check',
-            labelClassName='btn btn-outline-primary',
-            labelCheckedClassName='active',
-            value=True,
-            options=[{'label': 'Career', 'value': True},
-                     {'label': 'Single year', 'value': False}],
-        )], className='radio-group')
+    kind = kind_toggle('top10Kind' + SUFFIX)
     year = html.Div([
         dbc.RadioItems(
             id='top10Year' + SUFFIX,

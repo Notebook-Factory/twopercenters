@@ -1158,10 +1158,10 @@ def test_the_dataset_toggle_is_a_pair_of_icons_with_tooltips():
     radio = toggle.children[0]
     assert [option['value'] for option in radio.options] == [True, False]
     assert all(option['label'] == '' for option in radio.options)
-    assert [option['label_id'] for option in radio.options] == [
-        'kindCareerHOME', 'kindSingleHOME']
-    targets = {tip.target for tip in toggle.children[1:]}
-    assert targets == {'kindCareerHOME', 'kindSingleHOME'}
+    ids = ['kindCareer-careerORSingleYrRadioHOME',
+           'kindSingle-careerORSingleYrRadioHOME']
+    assert [option['label_id'] for option in radio.options] == ids
+    assert {tip.target for tip in toggle.children[1:]} == set(ids)
     assert all(isinstance(tip.children, str) and tip.children
                for tip in toggle.children[1:])
 
@@ -1173,10 +1173,14 @@ def test_the_icon_toggle_is_the_height_of_the_buttons_beside_it():
     it, so the button comes out the same height as the ones with words."""
     with open('assets/style.css') as handle:
         css = handle.read()
-    block = css[css.index('.ev-kind-toggle,'):]
-    assert 'margin-top: 0 !important' in block
+    block = css[css.index('   The dataset toggle, as two icons'):]
     assert 'min-width: 0 !important' in block
-    assert 'height: 1.35em' in block
+    # As tall as a line of the text in the buttons beside it, which is
+    # Bootstrap's 1.5 everywhere except the row above the map, which sets its
+    # own and says so.
+    assert 'height: var(--ev-kind-icon, 1.5em)' in block
+    assert '.ev-glow-measures .ev-kind-toggle { --ev-kind-icon: 1.35em; }' in block
+    assert 'margin-top: 0 !important' in block
     # Lucide's clock-with-a-rewind-arrow for the career-long record, and its
     # calendar for one year on its own.
     assert '.ev-kind-toggle .btn[id^="kindCareer"]::before' in block
@@ -1258,3 +1262,49 @@ def test_the_whole_list_is_converted_without_the_defunct_four():
     finally:
         utils.coco = original
         utils._converted_names.cache_clear()
+
+
+def test_every_dataset_toggle_is_built_by_the_same_helper():
+    """The control means the same thing on every page, so it is spelled out
+    in one place. Six layouts used to write their own copy of it, which is
+    how the words and the sizing drifted apart in the first place."""
+    import glob
+
+    from citations_lib.controls import kind_toggle
+
+    built = kind_toggle('careerORSingleYrRadioTEST')
+    assert built.children[0].id == 'careerORSingleYrRadioTEST'
+
+    for path in glob.glob('citations_lib/*.py') + glob.glob('pages/*.py'):
+        if path.endswith('controls.py') or path.endswith('metric_tab_layout.py'):
+            # metric_tab_layout is not imported by anything; it is left as it
+            # is rather than changed blind.
+            continue
+        with open(path) as handle:
+            source = handle.read()
+        if path.endswith('utils.py'):
+            # update_cr_options builds the disabled-state options for the
+            # author pickers, which are a different control.
+            continue
+        assert '{"label": "Career"' not in source, path
+        assert "{'label': 'Career'" not in source, path
+
+
+def test_the_author_pickers_keep_their_icons_when_an_author_is_chosen():
+    """Choosing an author replaces that picker's options, to grey out a
+    dataset the author has no record in. Rebuilt from the words alone, that
+    callback put "Career" and "Single year" back and left the tooltips
+    pointing at labels that no longer existed."""
+    from citations_lib.utils import update_cr_options
+
+    both = update_cr_options('both', 'careerORSingleYrA1_author_find_')
+    assert [option['label'] for option in both] == ['', '']
+    assert [option['label_id'] for option in both] == [
+        'kindCareer-careerORSingleYrA1_author_find_',
+        'kindSingle-careerORSingleYrA1_author_find_']
+    assert not any('disabled' in option for option in both)
+    # One record only: the choice is locked, which is what disabling both
+    # halves has always meant here.
+    for only in ('career', 'singleyr'):
+        options = update_cr_options(only, 'careerORSingleYrA1_author_find_')
+        assert all(option['disabled'] for option in options)

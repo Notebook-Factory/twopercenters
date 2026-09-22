@@ -8,6 +8,8 @@ import plotly.express as px
 import plotly.colors
 from plotly.subplots import make_subplots
 import country_converter as coco
+
+from citations_lib.controls import kind_options
 import os
 import json
 import re
@@ -1461,13 +1463,18 @@ def update_yr_options2(career):
             options.insert(1, {"label": "2018", "value": '2018',
                                'disabled': True})
     return(options, str(years[-1]) if years else None)
-def update_cr_options(avail):
-    if avail == 'both':
-        return [{"label": "Career", "value": True}, {"label": "Single year", "value": False}]
-    elif avail == 'career':
-        return [{"label": "Career", "value": True, 'disabled': True}, {"label": "Single year", "value": False, 'disabled': True}]
-    elif avail == 'singleyr':
-        return [{"label": "Career", "value": True,'disabled': True}, {"label": "Single year", "value": False, 'disabled': True}]
+def update_cr_options(avail, radio_id):
+    """The dataset options for one author's picker.
+
+    Both halves are disabled when the author has only one of the two
+    records, which locks the choice to the one that exists.
+
+    It takes the radio's id because the options carry the label ids that the
+    icons and their tooltips hang on. Written out here as the words "Career"
+    and "Single year", this callback used to undo the icons the moment an
+    author was chosen.
+    """
+    return kind_options(radio_id, disabled=avail != 'both')
 
 def update_auth_yrs(keys, prefix):
     """Year options for one author: every edition, unavailable ones disabled.

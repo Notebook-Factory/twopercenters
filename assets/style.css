@@ -3045,6 +3045,12 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 18h8'></path><path d='M3 22h18'></path><path d='M14 22a7 7 0 1 0 0-14h-1'></path><path d='M9 14h2'></path><path d='M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z'></path><path d='M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3'></path></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 18h8'></path><path d='M3 22h18'></path><path d='M14 22a7 7 0 1 0 0-14h-1'></path><path d='M9 14h2'></path><path d='M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z'></path><path d='M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3'></path></svg>");
 }
+/* Two lucide glyphs that are used both as icons and as masks on a label,
+   so they are named here rather than written out at each use. */
+:root {
+  --ev-mask-history: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>");
+  --ev-mask-calendar: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'/><path d='M16 2v3'/><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18'/></svg>");
+}
 .ev-ic-calendar {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'></path><path d='M16 2v3'></path><rect x='3' y='3' width='18' height='18' rx='2'></rect><path d='M3 9h18'></path></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'></path><path d='M16 2v3'></path><rect x='3' y='3' width='18' height='18' rx='2'></rect><path d='M3 9h18'></path></svg>");
@@ -3818,43 +3824,41 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 .ev-row-card-close .ev-ic { width: 15px; height: 15px; }
 
 /* ==========================================================================
-   The dataset toggle on the map, as two icons
+   The dataset toggle, as two icons
    ==========================================================================
-   Career and single-year are a pair of icons here rather than a pair of
-   words, so that the three groups above the map are one row of buttons of
-   one size. The rules that size a dataset toggle are keyed to the
-   careerORSingleYr id prefix and shared with the toolbars on the other
-   pages, where the control stands alone and is meant to be large: a 118px
-   minimum per half, 8px by 16px of padding, and 14px of space above. All
-   three are wrong in this row, and all three have to be said louder than the
-   rules they are overriding, which is why these carry !important. */
-.ev-kind-toggle,
-.ev-kind-toggle .btn-group { margin-top: 0 !important; }
+   Career and single-year are a pair of icons rather than a pair of words, on
+   every page that has this control. Words gave it a width of its own: the
+   rules that size a dataset toggle are keyed to the careerORSingleYr id
+   prefix and were written for a toolbar where it stands alone and is meant
+   to be large, 118px per half. That is wrong wherever it stands next to
+   something else, and an icon is the same size whatever it says. The minimum
+   has to be said louder than the rule it overrides, which is why it carries
+   !important. */
 .ev-kind-toggle .btn-group > .form-check {
   flex: 0 0 auto !important;
   min-width: 0 !important;
 }
 .ev-kind-toggle .btn {
   min-width: 0 !important;
-  padding: .3rem .7rem !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-/* The icons themselves, lucide's, as masks on the label rather than as an
-   element inside it: dbc's RadioItems takes a string for a label and nothing
-   else, so there is nowhere to put a span. A mask also inherits the label's
+/* The icons themselves, as masks on the label rather than as an element
+   inside it: dbc's RadioItems takes a string for a label and nothing else,
+   so there is nowhere to put a span. A mask also inherits the label's
    colour, so the selected half's icon turns dark on the accent fill with no
    second rule. */
 .ev-kind-toggle .btn::before {
   content: "";
   display: inline-block;
-  /* As wide as the glyph and as tall as a line of the label text beside it,
-     so this button is exactly the height of the ones with words in them.
+  /* As wide as the glyph and as tall as a line of the text in the buttons
+     beside it, so this button comes out their height. Bootstrap's .btn has
+     line-height 1.5; the row above the map sets its own and says so below.
      mask-size: contain keeps the glyph square inside that taller box. */
   width: 1.05em;
-  height: 1.35em;
+  height: var(--ev-kind-icon, 1.5em);
   background-color: currentColor;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
   -webkit-mask-position: center;  mask-position: center;
@@ -3863,11 +3867,25 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 /* lucide "history": a clock with a rewind arrow, for the record that runs up
    to the year selected. */
 .ev-kind-toggle .btn[id^="kindCareer"]::before {
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>");
-          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>");
+  -webkit-mask-image: var(--ev-mask-history);
+          mask-image: var(--ev-mask-history);
 }
 /* lucide "calendar": one year on its own. */
 .ev-kind-toggle .btn[id^="kindSingle"]::before {
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'/><path d='M16 2v3'/><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18'/></svg>");
-          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'/><path d='M16 2v3'/><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18'/></svg>");
+  -webkit-mask-image: var(--ev-mask-calendar);
+          mask-image: var(--ev-mask-calendar);
+}
+
+/* The row above the map sets its own line-height and has no space above it,
+   both of which the shared rules above and the id-prefixed ones would
+   otherwise decide. */
+.ev-glow-measures .ev-kind-toggle,
+.ev-glow-measures .ev-kind-toggle .btn-group { margin-top: 0 !important; }
+.ev-glow-measures .ev-kind-toggle { --ev-kind-icon: 1.35em; }
+.ev-glow-measures .ev-kind-toggle .btn { padding: .3rem .7rem !important; }
+
+/* The same two glyphs, as ordinary icons, for the prose beside the map. */
+.ev-ic-history {
+  -webkit-mask-image: var(--ev-mask-history);
+          mask-image: var(--ev-mask-history);
 }

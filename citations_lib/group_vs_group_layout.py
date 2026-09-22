@@ -23,6 +23,7 @@ import dash_daq as daq
 from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
 import dash_loading_spinners as dls
+from citations_lib.controls import kind_toggle
 
 def group_vs_group_layout():
     # ========================================================================================== 
@@ -67,11 +68,7 @@ def group_vs_group_layout():
     # =============== Select dataset!
 
     # =============== Career vs Singleyr
-    careerORSingleYr = html.Div([
-        dbc.RadioItems(id = "careerORSingleYrRadio" + SUFFIX, value = True, className = "btn-group", inputClassName = "btn-check", labelClassName = "btn btn-outline-primary",
-            labelCheckedClassName = "active", options = [{"label": "Career", "value": True}, {"label": "Single year", "value": False},
-        ])], className = "radio-group")
-
+    careerORSingleYr = kind_toggle("careerORSingleYrRadio" + SUFFIX)
     # =============== Year
     # def update_yr_options(career):
     #     if career == False: return [{"label": "2017", "value": 0, 'disabled': False}, {"label": "2018", 'disabled': True}, {"label": "2019", "value": 1, 'disabled': False}, 

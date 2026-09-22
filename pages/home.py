@@ -27,6 +27,7 @@ from citations_lib.utils import *
 from citations_lib.glowmap import glow_map
 from citations_lib.utils import city_points, city_researchers
 from citations_lib.top10 import top10_layout
+from citations_lib.controls import kind_toggle
 from citations_lib.single_author_layout import *
 from citations_lib.author_vs_group_layout import *
 from citations_lib.group_vs_group_layout import *
@@ -363,52 +364,37 @@ _MAP_YEAR_OPTIONS, _MAP_DEFAULT_YEAR = update_yr_options2(True)
 # toolbar above it, because the whole page reads the selection those controls
 # hold: the map, the year track under it, and the tables beside it.
 
-# Two icons rather than the words "Career" and "Single year".
-#
-# The words made this control a different size from the two beside it: the
-# rules that size a dataset toggle are keyed to this id prefix and are shared
-# with the toolbars on the other pages, where the toggle stands alone and is
-# meant to be large. Here it sits in a row with the granularity and the
-# measure, and a 118px half against their 60px buttons read as a different
-# system. An icon is the same size whatever it says, so the three groups line
-# up by construction rather than by a running fight with those rules.
-#
-# The icons are lucide's, drawn as CSS masks in style.css: a clock with a
-# rewind arrow for the career-long record, which is everything up to the year
-# selected, and a calendar for one year on its own. Each carries a tooltip,
-# because an icon on its own is a guess.
-careerORSingleYr = html.Div([
-    dbc.RadioItems(
-        id="careerORSingleYrRadio" + SUFFIX, value=True,
-        className="btn-group", inputClassName="btn-check",
-        labelClassName="btn btn-outline-primary",
-        labelCheckedClassName="active",
-        options=[
-            {"label": "", "value": True, "label_id": "kindCareer" + SUFFIX},
-            {"label": "", "value": False, "label_id": "kindSingle" + SUFFIX},
-        ]),
-    dbc.Tooltip("Career-long, up to the year selected",
-                target="kindCareer" + SUFFIX, placement="bottom"),
-    dbc.Tooltip("That year on its own",
-                target="kindSingle" + SUFFIX, placement="bottom"),
-], className="radio-group ev-kind-toggle")
+# The dataset toggle, as two icons rather than the words "Career" and
+# "Single year". Every page's toggle is built by the same helper, so the
+# control that means the same thing in six places also reads the same in all
+# six; see citations_lib/controls.py for why it is icons.
+careerORSingleYr = kind_toggle("careerORSingleYrRadio" + SUFFIX)
 
 
 zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
+# What the map is, in the panel beside it.
+#
+# This text described a choropleth of the median h-index by country, which is
+# what used to be here. The map reads four measures at two granularities now,
+# the year comes from the track underneath rather than from a row of buttons,
+# and a place can be clicked down to a city, so the description was of a
+# picture nobody could see any more.
 explain  =  f'''
                     This dashboard section provides a zoomed-out look at the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
                     You can explore the researchers and institutions that made the cut in each country.
 
-                    #### Global distribution of performance metrics
+                    #### What the map shows
 
-                    Currently, the world map on the left illustrates the distribution of `median` `H-Index` across countries, derived from the academic performance of the top 2% 
-                    researchers throughout their career span (referred to as `Career` data) up to the year `{_MAP_DEFAULT_YEAR}`.
-                    
+                    Every light is a city, and how bright it is says how much of the measure chosen above the map is there: how many of the researchers on the list work in it, how many citations they have between them, how many papers, or the best h-index among them. On **Countries** the same reading fills each country instead.
+
+                    The year is the track under the map. The arrows either side of it step one edition at a time, and so do the arrow keys once the handle has been clicked.
+
                     <div class="danger">
                     <details>
                     <summary><i data-lucide="help-circle"></i><strong>Career vs single-year</strong></summary>
-                    <p>The Elsevier database includes <strong>career-long</strong> and <strong>single-year</strong> records per researcher. For instance, the <strong>career &amp; {_MAP_DEFAULT_YEAR}</strong> selection for H-index shows the score
-                    a researcher accumulated up to 2021, while the <strong>single-year & 2021</strong> displays H-index obtained in that year only.</p>
+                    <p>The Elsevier database holds two records per researcher, and the pair of icons above the map chooses between them.</p>
+                    <p><span class="ev-ic ev-ic-history"></span> <strong>Career-long</strong> is everything accumulated up to the year selected, so <strong>career &amp; {_MAP_DEFAULT_YEAR}</strong> is an h-index built over a working life that reaches {_MAP_DEFAULT_YEAR}.</p>
+                    <p><span class="ev-ic ev-ic-calendar"></span> <strong>Single year</strong> is that year on its own, so <strong>single year &amp; {_MAP_DEFAULT_YEAR}</strong> is the h-index earned in {_MAP_DEFAULT_YEAR} and nothing before it. That series has no 2018, which is why the track loses a mark when you switch to it.</p>
                     </details>
                     </div>
                     <br/>
@@ -416,11 +402,19 @@ explain  =  f'''
                     <details>
                     <summary><i data-lucide="lightbulb"></i><strong>How to use this map</strong></summary>
                     <ul>
-                    <li>Switch between <strong>career</strong> and <strong>single year</strong> datasets using the toolbar above the world map and select a year.</li>
-                    <li>Use the <strong>slider</strong> below the map to switch between the performance metrics that went into the ranking of the researchers.</li>
-                    <li>Use the dropdown to switch between the summary statistics (<strong>min</strong>, <strong>max</strong>, <strong>median</strong>, <strong>25th</strong> and <strong>75th</strong> percentiles). Note that 
-                    <strong>min</strong> and <strong>max</strong> metrics corresponds to an individual researcher from the respective country. </li>
+                    <li>Click a place to list who is there, best composite score first. On <strong>Cities</strong> that is the one city clicked, and there are four Oxfords and two Clevelands on this map, so it is the point rather than the name that is read. On <strong>Countries</strong> it is the whole country.</li>
+                    <li>Click a row in that list for the numbers behind it, which open as a card over the map.</li>
+                    <li>Click a band in the key to take it out of the picture, and double-click one to see that band on its own. Double-clicking it again puts the others back.</li>
+                    <li>Drag the map to pan it, pinch or use the buttons in its corner to zoom, and the third button returns to the whole world.</li>
+                    <li>The summary statistic above the list (<strong>min</strong>, <strong>max</strong>, <strong>median</strong>, <strong>25th</strong> and <strong>75th</strong> percentiles) sets what the summary says about a country or an institution. <strong>min</strong> and <strong>max</strong> are a single researcher; the rest describe the group.</li>
                     </ul>
+                    </details>
+                    </div>
+                    <br/>
+                    <div class="danger">
+                    <details>
+                    <summary><i data-lucide="map-pin"></i><strong>Why some researchers are not on the map as cities</strong></summary>
+                    <p>The published data gives an institution as a name and a country, with no city and no coordinates. The cities here come from matching those names against <a href='https://ror.org' target='_blank'>ROR</a>, which places about seven researchers in ten. The <strong>Countries</strong> reading has no such gap: every row carries a country, so it is the whole edition.</p>
                     </details>
                     </div>
                     <br/>
