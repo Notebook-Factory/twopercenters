@@ -890,12 +890,27 @@ def test_the_icon_buttons_do_not_depend_on_a_runtime_swap():
         assert not hasattr(icon, 'data-lucide')
 
 
-def test_the_row_detail_opens_over_the_table_and_closes():
+def test_the_row_detail_opens_over_the_map_and_closes():
+    """Over the map, not over the list: the list is what the reader is
+    working through, and covering that takes away what they are reading."""
     import app  # noqa: F401
     import pages.home as home
 
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    pane = next(n for n in walk(home.layout)
+                if getattr(n, 'className', '') == 'ev-map-pane')
+    assert any(getattr(c, 'id', None) == 'row-card' for c in pane.children)
+
     class _Context:
-        triggered_id = 'worldtitle'
+        triggered_id = 'row-detail'
 
     original = home.callback_context
     try:
@@ -905,6 +920,32 @@ def test_the_row_detail_opens_over_the_table_and_closes():
         assert home.show_the_row_card('anything', 1)['display'] == 'none'
     finally:
         home.callback_context = original
+
+
+def test_the_explanation_under_the_table_is_still_there():
+    """It was the default content of the summary element, and putting that
+    element inside a card that starts hidden took the text off the page."""
+    import app  # noqa: F401
+    import pages.home as home
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    summary = next(n for n in walk(home.layout)
+                   if getattr(n, 'id', None) == 'worldtitle')
+    assert summary.children
+    # And it is not inside anything that starts hidden.
+    hidden = [n for n in walk(home.layout)
+              if (getattr(n, 'style', None) or {}).get('display') == 'none'
+              and any(getattr(c, 'id', None) == 'worldtitle'
+                      for c in walk(n))]
+    assert not hidden
 
 
 def test_the_table_is_as_tall_as_the_map():

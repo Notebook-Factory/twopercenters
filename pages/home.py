@@ -113,7 +113,7 @@ tbl  = dash_table.DataTable(
 
 
 @callback(
-    Output('worldtitle', 'children',allow_duplicate=True),
+    Output('row-detail', 'children'),
     [Input('instnametable', 'active_cell')],
     [State('glowYear_glowmap_', 'value'),
      State("careerORSingleYrRadio" + SUFFIX, 'value'),
@@ -417,20 +417,27 @@ zart = dls.Ring(
         dcc.Markdown(id='cntrylabel', children="",
                      dangerously_allow_html=True),
         tbl,
-        html.Div(
-            [
-                html.Button(html.Span(className="ev-ic ev-ic-x"),
-                            id="row-card-close", n_clicks=0,
-                            className="ev-row-card-close", title="Close"),
-                dcc.Markdown(id='worldtitle',
-                             dangerously_allow_html=True,
-                             highlight_config=dict(theme='dark'),
-                             children=explain),
-            ],
-            id="row-card", className="ev-row-card", style={'display': 'none'},
-        ),
+        dcc.Markdown(id='worldtitle',
+                     dangerously_allow_html=True,
+                     highlight_config=dict(theme='dark'),
+                     children=explain),
     ], className="ev-list-stack"),
     color="#ECAB4C", width=270)
+
+
+# The card a clicked row opens, over the map rather than over the list it
+# was clicked in: the list is where the reader is working, and covering it
+# takes away the thing they are working through.
+row_card = html.Div(
+    [
+        html.Button(html.Span(className="ev-ic ev-ic-x"),
+                    id="row-card-close", n_clicks=0,
+                    className="ev-row-card-close", title="Close"),
+        dcc.Markdown(id='row-detail', dangerously_allow_html=True,
+                     highlight_config=dict(theme='dark'), children=""),
+    ],
+    id="row-card", className="ev-row-card", style={'display': 'none'},
+)
 
 
 # ============================================================================
@@ -588,7 +595,7 @@ offcanvas = html.Div(
 
 @callback(
     Output("row-card", "style"),
-    Input("worldtitle", "children"),
+    Input("row-detail", "children"),
     Input("row-card-close", "n_clicks"),
     prevent_initial_call=True,
 )
@@ -841,7 +848,8 @@ navigation_row = html.Div(
     [
         dbc.Row(
             [
-                dbc.Col(html.Div([_map_with_kind_toggle(), map_hint],
+                dbc.Col(html.Div([_map_with_kind_toggle(), map_hint,
+                                  row_card],
                                  className="ev-map-pane"),
                         width=8),
                 dbc.Col(html.Div([

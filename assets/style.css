@@ -3740,17 +3740,20 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    table up and meant reading one row cost you the sight of the others. It
    sits over the list now and closes.
 
+   It sits over the map, not over the list: the list is what the reader is
+   working through, and covering that takes away the thing they are reading.
    The glass is a blur of what is behind it plus a translucent fill, which
-   only reads as glass if there is something behind it to blur: it is
-   positioned over the table on purpose rather than floating over the page. */
+   needs something behind it to blur, and the map is the darkest, busiest
+   thing on the page to put it against. It clears the year track below. */
 
-.ev-list-stack { position: relative; }
+.ev-map-pane { position: relative; }
 .ev-row-card {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  max-height: 72%;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 62px;
+  width: min(520px, calc(100% - 2rem));
+  max-height: 62%;
   overflow-y: auto;
   padding: 1rem 1.1rem .6rem;
   border-radius: var(--ev-radius);
