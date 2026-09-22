@@ -252,6 +252,22 @@ _DROPDOWN_METRICS = [
 
 _COUNTRY_NAMES = {}
 
+# The four codes in the data that country_converter has no name for, because
+# the states they name no longer exist: Czechoslovakia, Serbia and
+# Montenegro, the Soviet Union and the Netherlands Antilles. Asking about
+# them is what printed
+#
+#     sux not found in ISO3
+#     ant not found in ISO3
+#     csk not found in ISO3
+#     scg not found in ISO3
+#
+# four times over every time the app started, once per conversion path. The
+# answer is known and is already handled everywhere it matters, so they are
+# not asked about. A code that turns up here later and cannot be resolved
+# still says so, which is the part of that warning worth keeping.
+_DEFUNCT_CODES = frozenset({'csk', 'scg', 'sux', 'ant'})
+
 
 def _country_full_name(code):
     """The display name for an ISO3 code, or None if there isn't one.
@@ -265,8 +281,11 @@ def _country_full_name(code):
     reason (FINDING 5).
     """
     if code not in _COUNTRY_NAMES:
-        name = coco.convert(names=code, to='name_short')
-        _COUNTRY_NAMES[code] = None if name == 'not found' else name
+        if str(code).lower() in _DEFUNCT_CODES:
+            _COUNTRY_NAMES[code] = None
+        else:
+            name = coco.convert(names=code, to='name_short')
+            _COUNTRY_NAMES[code] = None if name == 'not found' else name
     return _COUNTRY_NAMES[code]
 
 
@@ -2129,13 +2148,20 @@ def _converted_names():
     """
     rows = _fetch('select distinct country_code from countries')
     codes = sorted(str(code).upper() for (code,) in rows if code)
-    if not codes:
-        return {}
-    converted = coco.convert(names=codes, to='name_short')
+    # The defunct states have no name to convert to and no feature on the
+    # outline either, so they are left out of the question rather than asked
+    # about and refused. They keep the '' every unnamed code gets.
+    askable = [code for code in codes if code.lower() not in _DEFUNCT_CODES]
+    if not askable:
+        return {code.lower(): '' for code in codes}
+    converted = coco.convert(names=askable, to='name_short')
     if isinstance(converted, str):
         converted = [converted]
-    return {code.lower(): ('' if str(name).lower() == 'not found' else name)
-            for code, name in zip(codes, converted)}
+    names = {code.lower(): ('' if str(name).lower() == 'not found' else name)
+             for code, name in zip(askable, converted)}
+    for code in codes:
+        names.setdefault(code.lower(), '')
+    return names
 
 
 def map_name(country_code):

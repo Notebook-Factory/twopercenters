@@ -1198,3 +1198,63 @@ def test_the_buttons_above_the_map_are_legible_in_the_light_theme():
     # ground above it, or it disappears.
     assert ('.ev-glow-measures .radio-group .btn.active {\n'
             '  background-color: var(--ev-accent) !important;') in css
+
+
+class _Spy:
+    """Stands in for country_converter and records what it was asked."""
+
+    def __init__(self):
+        self.asked = []
+
+    def convert(self, names, to, **kwargs):
+        self.asked.append(names)
+        return 'not found'
+
+
+def test_the_defunct_states_are_not_asked_about():
+    """Four codes in the data name states that no longer exist, so
+    country_converter has no name for them and says so on stderr every time
+    it is asked. The answer is known and already handled, so it is not asked
+    for: what the console said at every start was nothing anybody could act
+    on. A code that turns up later and cannot be resolved still says so."""
+    import citations_lib.utils as utils
+
+    spy = _Spy()
+    original, saved = utils.coco, dict(utils._COUNTRY_NAMES)
+    try:
+        utils.coco = spy
+        utils._COUNTRY_NAMES.clear()
+        for code in ('csk', 'scg', 'sux', 'ant'):
+            assert utils._country_full_name(code) is None
+        assert spy.asked == []
+        utils._country_full_name('usa')
+        assert spy.asked == ['usa']
+    finally:
+        utils.coco = original
+        utils._COUNTRY_NAMES.clear()
+        utils._COUNTRY_NAMES.update(saved)
+
+
+def test_the_whole_list_is_converted_without_the_defunct_four():
+    """The map converts every code in one call, and that call must leave the
+    four out too, or the same four lines come back at the first view of the
+    map instead of at startup."""
+    import citations_lib.utils as utils
+
+    spy = _Spy()
+    original = utils.coco
+    try:
+        utils.coco = spy
+        utils._converted_names.cache_clear()
+        names = utils._converted_names()
+        assert len(spy.asked) == 1
+        asked = {code.lower() for code in spy.asked[0]}
+        assert not asked & {'csk', 'scg', 'sux', 'ant'}
+        assert 'usa' in asked
+        # They are still in the answer, with the empty name an unnamed code
+        # has always had.
+        for code in ('csk', 'scg', 'sux', 'ant'):
+            assert names.get(code) == ''
+    finally:
+        utils.coco = original
+        utils._converted_names.cache_clear()
