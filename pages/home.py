@@ -252,10 +252,11 @@ def _clicked_a_city(city, country_code, is_career, yr):
     Input("careerORSingleYrRadio" + SUFFIX, 'value'),
     Input('glowYear_glowmap_', 'value'),
     Input('stats2', 'value'),
+    State('instnametable', 'style_table'),
     #prevent_initial_call=True
     prevent_initial_call='initial_duplicate' 
     )
-def click_on_map_update(val,is_career,yr,sts):
+def click_on_map_update(val,is_career,yr,sts,table_style):
     """What the summary and the table show when a place is clicked.
 
     The map sends 'country|USA' or 'city|London|GBR', with a counter on the
@@ -265,6 +266,15 @@ def click_on_map_update(val,is_career,yr,sts):
     coordinates that put the point on the map came from.
     """
     if not val:
+        raise PreventUpdate
+    # Moving the year or the dataset refreshes whatever the panel is
+    # showing, so that it never describes a different edition from the map.
+    # If it is showing nothing, there is nothing to refresh: the queries
+    # behind this take about a second each, and running them to fill a panel
+    # nobody has opened is work for its own sake.
+    picked = callback_context.triggered_id == 'glowPicked_glowmap_'
+    showing = (table_style or {}).get('display') == 'block'
+    if not picked and not showing:
         raise PreventUpdate
     parts = str(val).split('|')
     if len(parts) < 2:
@@ -622,11 +632,7 @@ dede = dbc.Navbar(
                                 "Top 10"],
                                id="jump-top10", className="ev-nav-btn",
                                n_clicks=0),
-                    html.Span(className="ev-nav-sep"),
-                    dbc.Button(html.I(**{"data-lucide": "info"}),
-                               id='off', n_clicks=0,
-                               className="ev-nav-btn ev-nav-icon",
-                               title="About this data"),
+
                     dbc.Button([html.I(**{"data-lucide": "users"}), "Compare"],
                                id="jump-compare", className="ev-nav-btn",
                                n_clicks=0),
@@ -635,6 +641,10 @@ dede = dbc.Navbar(
                                id="jump-trends", className="ev-nav-btn",
                                n_clicks=0),
                     html.Span(className="ev-nav-sep"),
+                    dbc.Button(html.I(**{"data-lucide": "info"}),
+                               id='off', n_clicks=0,
+                               className="ev-nav-btn ev-nav-icon",
+                               title="About this data"),
                     dbc.Button(id="theme-toggle", n_clicks=0,
                                className="ev-theme-toggle",
                                title="Switch between dark and light"),
@@ -772,13 +782,16 @@ def _map_with_kind_toggle():
     """The map, with the career/single-year toggle in its header.
 
     The toggle belongs to this page rather than to the map module, because
-    the tables beside the map read it too. It is placed into the slot the
-    map leaves for it.
+    the tables beside the map read it too. It goes into the same row as the
+    granularity and the measure, so the three read as one set of controls
+    rather than one control and a pair of them at opposite ends.
     """
     built = glow_map()
     for node in built.children:
         if getattr(node, 'className', '') == 'ev-glow-head':
-            node.children[0].children = careerORSingleYr
+            node.children = [html.Div(
+                [careerORSingleYr] + list(node.children[1].children),
+                className='ev-glow-measures')]
             break
     return built
 

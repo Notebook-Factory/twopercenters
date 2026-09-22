@@ -609,11 +609,23 @@ def test_a_click_can_name_a_country_or_a_city():
     assert 'silent: false' in MAP_DRAW_JS
 
 
+class _Clicked:
+    """The callback reads which input fired, which only exists inside a
+    callback, so a direct call has to say."""
+    triggered_id = 'glowPicked_glowmap_'
+
+
 def test_clicking_a_city_lists_the_people_in_it():
     import app  # noqa: F401
     import pages.home as home
-    summary, rows, message, style, _cells, _active = home.click_on_map_update(
-        'city|Cambridge|USA|1', True, '2024', 'median')
+    original, home.callback_context = home.callback_context, _Clicked()
+    try:
+        # A click opens the panel whatever it was showing before.
+        summary, rows, message, style, _cells, _active = \
+            home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
+                                     'median', {'display': 'none'})
+    finally:
+        home.callback_context = original
     assert 'Cambridge' in summary
     assert rows and all(r['RESEARCHER'] for r in rows)
     assert 'researchers' in message
@@ -623,8 +635,13 @@ def test_clicking_a_city_lists_the_people_in_it():
 def test_clicking_a_country_still_does_what_it_did():
     import app  # noqa: F401
     import pages.home as home
-    summary, rows, _message, _style, _cells, _active = \
-        home.click_on_map_update('country|USA|2', True, '2024', 'median')
+    original, home.callback_context = home.callback_context, _Clicked()
+    try:
+        summary, rows, _message, _style, _cells, _active = \
+            home.click_on_map_update('country|USA|2', True, '2024', 'median',
+                                     {'display': 'none'})
+    finally:
+        home.callback_context = original
     assert 'USA' in summary
     assert 'H-index' in summary
     assert rows
@@ -771,3 +788,77 @@ def test_every_control_the_map_listens_to_is_on_the_page():
             if name not in on_page:
                 missing.append((key[:40], name))
     assert not missing, missing
+
+
+def test_a_panel_nobody_has_opened_is_not_refreshed():
+    """Moving the year refreshes whatever the panel is showing, so it never
+    describes a different edition from the map. If it is showing nothing
+    there is nothing to refresh, and the queries behind it take about a
+    second each."""
+    import pytest as _pytest
+    from dash.exceptions import PreventUpdate
+
+    import app  # noqa: F401
+    import pages.home as home
+
+    class _Context:
+        triggered_id = 'glowYear_glowmap_'
+
+    hidden = {'height': '400px', 'display': 'none'}
+    shown = {'height': '400px', 'display': 'block'}
+    original = home.callback_context
+    try:
+        home.callback_context = _Context()
+        with _pytest.raises(PreventUpdate):
+            home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
+                                     'median', hidden)
+        # Showing something means it has to keep up with the map.
+        rows = home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
+                                        'median', shown)[1]
+        assert rows
+
+        # And a click opens it whatever it was doing before.
+        _Context.triggered_id = 'glowPicked_glowmap_'
+        rows = home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
+                                        'median', hidden)[1]
+        assert rows
+    finally:
+        home.callback_context = original
+
+
+def test_the_info_button_sits_before_the_theme_switch():
+    import app  # noqa: F401
+    import pages.home as home
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    order = [getattr(n, 'id', None) for n in walk(home.dede)]
+    order = [i for i in order if i in ('off', 'theme-toggle')]
+    assert order == ['off', 'theme-toggle']
+
+
+def test_the_map_controls_are_one_row():
+    """Dataset, granularity and measure read as one set of controls rather
+    than one at each end of the header."""
+    import app  # noqa: F401
+    import pages.home as home
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    rows = [n for n in walk(home.navigation_row)
+            if getattr(n, 'className', '') == 'ev-glow-measures']
+    assert rows and len(rows[0].children) == 3

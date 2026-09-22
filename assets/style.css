@@ -3699,9 +3699,14 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 .ev-pane-head .Select, .ev-pane-head > div:last-child { min-width: 190px; }
 .ev-list-pane > :last-child { flex: 1 1 auto; min-height: 0; }
 
-/* The dataset toggle now lives in the map's header, at its left. */
-.ev-glow-head { justify-content: space-between; }
-.ev-glow-kind { display: flex; align-items: center; }
+/* Dataset, granularity and measure are one row of buttons, set together at
+   the left rather than one group at each end. They wrap as a group on a
+   narrow screen. */
+.ev-glow-head { justify-content: flex-start; flex-wrap: wrap; }
+.ev-glow-measures { align-items: center; }
+/* The toggle is built on the home page, where the toolbar it came from sized
+   its buttons; here it has to match the two groups beside it. */
+.ev-glow-measures .radio-group .btn { font-size: .82rem; }
 
 /* An icon-only navbar button, for "about this data". */
 .ev-nav-icon { padding-left: .55rem; padding-right: .55rem; }
