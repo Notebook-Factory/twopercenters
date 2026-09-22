@@ -3762,7 +3762,9 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   -webkit-backdrop-filter: blur(14px) saturate(140%);
           backdrop-filter: blur(14px) saturate(140%);
   box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
-  z-index: 5;
+  /* Above the hint card, which is absolutely positioned in the same corner
+     of the same pane and would otherwise share a stacking order with it. */
+  z-index: 6;
 }
 /* Without backdrop-filter the fill alone would leave the table legible
    through it, so browsers that cannot blur get an opaque card instead. */

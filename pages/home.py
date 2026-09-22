@@ -535,13 +535,16 @@ map_hint = html.Div(
     Output("map-hint", "style"),
     Input("map-hint-close", "n_clicks"),
     Input('glowPicked_glowmap_', 'value'),
+    Input('row-detail', 'children'),
     prevent_initial_call=True,
 )
-def dismiss_map_hint(_close, _clicked):
+def dismiss_map_hint(_close, _clicked, _row):
     """Hide the hint once it has been read, or made redundant.
 
     Clicking a country is included deliberately: at that point the user has
     done the thing the hint asks for, so the card has nothing left to say.
+    Opening a researcher's detail counts too, and it also keeps the two
+    cards from sitting on top of each other in the same corner.
 
     This sets an inline style rather than swapping in a class that sets
     opacity: 0. The class was being applied correctly, and pointer-events from
