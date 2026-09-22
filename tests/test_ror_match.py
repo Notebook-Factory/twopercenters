@@ -621,9 +621,15 @@ def test_clicking_a_city_lists_the_people_in_it():
     original, home.callback_context = home.callback_context, _Clicked()
     try:
         # A click opens the panel whatever it was showing before.
+        # The click carries where the point is, not what it is called.
+        from citations_lib.utils import city_points
+        point = next(p for p in city_points('career', 2024)
+                     if p['city'] == 'Cambridge'
+                     and p['country_code'] == 'US')
         summary, rows, message, style, _cells, _active = \
-            home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
-                                     'median', {'display': 'none'})
+            home.click_on_map_update(
+                f"city|{round(point['lat'], 3)}|{round(point['lng'], 3)}|1",
+                True, '2024', 'median', {'display': 'none'})
     finally:
         home.callback_context = original
     assert 'Cambridge' in summary
@@ -647,17 +653,51 @@ def test_clicking_a_country_still_does_what_it_did():
     assert rows
 
 
-def test_a_city_is_keyed_on_its_country_too():
-    """There are eleven Springfields in the United States, and a city name on
-    its own does not say which country was clicked."""
-    from citations_lib.utils import city_researchers
-    british, british_total = city_researchers('London', 'GBR', 'career', 2024,
-                                              limit=5)
-    canadian, canadian_total = city_researchers('London', 'CAN', 'career',
-                                                2024, limit=5)
-    assert british_total > canadian_total
-    assert {r['RESEARCHER'] for r in british} != {r['RESEARCHER']
-                                                  for r in canadian}
+def test_a_city_is_keyed_on_where_it_is():
+    """A name is not unique even inside one country: Cleveland is in Ohio and
+    in Tennessee, and this map has four Oxfords. Keying a click on the name
+    and the country merged them; keying it on the coordinates cannot."""
+    from citations_lib.utils import city_points, city_researchers
+    oxfords = [p for p in city_points('career', 2024) if p['city'] == 'Oxford']
+    assert len(oxfords) > 2
+    regions = {p['region'] for p in oxfords}
+    assert 'England' in regions and 'Mississippi' in regions
+
+    for point in oxfords:
+        _rows, total = city_researchers(round(point['lat'], 3),
+                                        round(point['lng'], 3),
+                                        'career', 2024, limit=1)
+        # Each point answers for itself and not for its namesakes.
+        assert total == point['researchers'], point
+
+
+def test_the_coordinates_are_matched_by_distance_not_by_rounding():
+    """The payload carries three decimals and the table carries the
+    registry's full precision, and Python rounds halves to even where
+    Postgres rounds away from zero. Rounding both and comparing missed
+    Cleveland outright."""
+    from citations_lib.utils import city_points, city_researchers
+    cleveland = next(p for p in city_points('career', 2024)
+                     if p['city'] == 'Cleveland' and p['region'] == 'Ohio')
+    _rows, total = city_researchers(round(cleveland['lat'], 3),
+                                    round(cleveland['lng'], 3),
+                                    'career', 2024, limit=1)
+    assert total == cleveland['researchers']
+
+
+def test_a_city_says_which_one_it_is():
+    """ROR carries a subdivision for 136,657 of its 137,398 records, in 221
+    countries, so this is not the US-only field a state makes it look
+    like."""
+    from citations_lib.utils import _fetch, city_points
+    with_region, total = _fetch(
+        'select count(*) filter (where region is not null), count(*) '
+        'from institution_ror')[0]
+    assert with_region / total > 0.95
+    places = {(p['city'], p['region']) for p in city_points('career', 2024)}
+    assert ('Cleveland', 'Ohio') in places
+    assert ('Munich', 'Bavaria') in places
+    assert ('Yokohama', 'Kanagawa') in places
 
 
 def test_the_measures_include_the_h_index_and_name_the_count():
@@ -804,24 +844,26 @@ def test_a_panel_nobody_has_opened_is_not_refreshed():
     class _Context:
         triggered_id = 'glowYear_glowmap_'
 
-    hidden = {'height': '400px', 'display': 'none'}
-    shown = {'height': '400px', 'display': 'block'}
+    from citations_lib.utils import city_points
+    point = next(p for p in city_points('career', 2024)
+                 if p['city'] == 'Cambridge' and p['country_code'] == 'US')
+    clicked = (f"city|{round(point['lat'], 3)}|{round(point['lng'], 3)}|1")
+
+    hidden = {'height': '560px', 'display': 'none'}
+    shown = {'height': '560px', 'display': 'block'}
     original = home.callback_context
     try:
         home.callback_context = _Context()
         with _pytest.raises(PreventUpdate):
-            home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
-                                     'median', hidden)
+            home.click_on_map_update(clicked, True, '2024', 'median', hidden)
         # Showing something means it has to keep up with the map.
-        rows = home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
-                                        'median', shown)[1]
-        assert rows
+        assert home.click_on_map_update(clicked, True, '2024', 'median',
+                                        shown)[1]
 
         # And a click opens it whatever it was doing before.
         _Context.triggered_id = 'glowPicked_glowmap_'
-        rows = home.click_on_map_update('city|Cambridge|USA|1', True, '2024',
-                                        'median', hidden)[1]
-        assert rows
+        assert home.click_on_map_update(clicked, True, '2024', 'median',
+                                        hidden)[1]
     finally:
         home.callback_context = original
 

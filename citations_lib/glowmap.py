@@ -68,6 +68,7 @@ def map_payload(kind, year):
         # than another round trip.
         'countries': country_points(kind, year),
         'city': [p['city'] for p in points],
+        'region': [p['region'] for p in points],
         'country': [p['country_code'] for p in points],
         # Three decimals is about a hundred metres, which is finer than a
         # city, and saves a fifth of the payload.
@@ -401,8 +402,10 @@ MAP_DRAW_JS = """
                             }
                             var i = p.value[3];
                             var lines = [
-                                '<strong>' + payload.city[i] + ', '
-                                + payload.country[i] + '</strong>',
+                                '<strong>' + payload.city[i]
+                                + (payload.region[i]
+                                   ? ', ' + payload.region[i] : '')
+                                + ', ' + payload.country[i] + '</strong>',
                                 commas(payload.researchers[i])
                                     + ' on the list',
                                 commas(payload.citations[i]) + ' citations',
@@ -539,8 +542,9 @@ MAP_DRAW_JS = """
                     }
                     var i = params.value && params.value[3];
                     if (i === undefined || i === null) { return; }
-                    pick('city|' + payload.city[i] + '|'
-                         + payload.country[i]);
+                    // Where it is, not what it is called: there are
+                    // Clevelands in Ohio and in Tennessee, and four Oxfords.
+                    pick('city|' + payload.lat[i] + '|' + payload.lng[i]);
                 });
 
                 // Roaming fires continuously while the mouse is down, so the

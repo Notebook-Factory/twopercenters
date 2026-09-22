@@ -101,6 +101,10 @@ def _entry_for(record):
             'ror_name': display,
             'country': (details.get('country_code') or '').lower(),
             'city': details.get('name'),
+            # Ohio for Cleveland, Kanagawa for Yokohama. Nearly every record
+            # has one, in 221 countries, so it is not the US-only field a
+            # state makes it look like.
+            'region': details.get('country_subdivision_name'),
             'lat': details.get('lat'),
             'lng': details.get('lng')}
 
@@ -259,12 +263,13 @@ def refresh_institution_ror(conn, path=None):
     with conn.cursor() as cur:
         cur.executemany(
             'insert into institution_ror (institution_id, ror_id, ror_name, '
-            'city, country_code, lat, lng, matched_on, name_type, '
+            'city, region, country_code, lat, lng, matched_on, name_type, '
             'via_successor, dump_version) '
-            'values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            'values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
             [(institution_id, m['ror_id'], m['ror_name'], m['city'],
-              m['country'], m['lat'], m['lng'], m['matched_on'], m['kind'],
-              bool(m.get('via_successor')), os.path.basename(path))
+              m.get('region'), m['country'], m['lat'], m['lng'],
+              m['matched_on'], m['kind'], bool(m.get('via_successor')),
+              os.path.basename(path))
              for institution_id, m in matches.items()])
     conn.commit()
 

@@ -198,30 +198,39 @@ World map interactions
 """
 
 
-def _clicked_a_city(city, country_code, is_career, yr):
+def _clicked_a_city(lat, lng, is_career, yr):
     """One city's researchers, in the same shape the country view uses.
 
     There is no aggregate for a city, because the summaries this dashboard
     keeps are per country, field and institution. What a city does have is
     the people in it, so the summary says what can be counted directly and
     the table lists them, best score first.
+
+    The point is identified by where it is rather than by what it is called,
+    because a name is not unique even inside one country: Cleveland is in
+    Ohio and in Tennessee, and there are four Oxfords on this map.
     """
     kind = 'career' if is_career else 'singleyr'
-    rows, total = city_researchers(city, country_code, kind, yr,
+    rows, total = city_researchers(lat, lng, kind, yr,
                                    limit=COUNTRY_ROW_LIMIT)
     if not rows:
         raise PreventUpdate
     points = [p for p in city_points(kind, int(yr))
-              if p['city'] == city and p['country_code'] == country_code]
+              if abs(p['lat'] - lat) < 0.001 and abs(p['lng'] - lng) < 0.001]
     place = points[0] if points else None
+    city = place['city'] if place else ''
+    country_code = place['country_code'] if place else ''
     when = f"Career-long up to {yr}" if is_career else f"Single-year data in {yr}"
     country_full = str(coco.convert(names=country_code, to='name_short'))
     if country_full in ('not found', 'None'):
         country_full = country_code
+    where = ', '.join(part for part in
+                      (city, (place or {}).get('region'), country_full)
+                      if part)
     if place:
         summary = f"""
                 ---
-                ##### **{city}, {country_full}**
+                ##### **{where}**
                 - `Researchers on the list:` **{place['researchers']:,}**
                 - `Citations, summed:` **{place['citations']:,}**
                 - `Papers, summed:` **{place['papers']:,}**
@@ -230,7 +239,7 @@ def _clicked_a_city(city, country_code, is_career, yr):
     else:
         summary = f"""
                 ---
-                ##### **{city}, {country_full}**
+                ##### **{where}**
                 - `Researchers on the list:` **{total:,}**
                """
     shown = len(rows)
@@ -282,7 +291,7 @@ def click_on_map_update(val,is_career,yr,sts,table_style):
     if len(parts) < 2:
         raise PreventUpdate
     if parts[0] == 'city':
-        return _clicked_a_city(parts[1], parts[2], is_career, yr)
+        return _clicked_a_city(float(parts[1]), float(parts[2]), is_career, yr)
     val = {'points': [{'location': parts[1]}]}
     if sts == 'median':
         st_idx = 2

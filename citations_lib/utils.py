@@ -2059,7 +2059,8 @@ def city_points(kind, year, limit_institutes=4):
     if table is None:
         return []
     rows = _fetch(
-        f'select r.city, r.country_code, r.lat, r.lng, '
+        f'select r.city, max(r.region) as region, r.country_code, '
+        f'r.lat, r.lng, '
         f'count(*) as researchers, sum(m.nc) as citations, '
         f'sum(m.np) as papers, max(m.h) as h, '
         f'(array_agg(i.inst_name order by m.nc desc nulls last))[1:%s] '
@@ -2067,17 +2068,22 @@ def city_points(kind, year, limit_institutes=4):
         f'join institution_ror r on r.institution_id = m.institution_id '
         f'join institutions i on i.institution_id = m.institution_id '
         f'where m.edition_id = %s and r.lat is not null '
+        # Not grouped by region: the registry occasionally records two
+        # different subdivisions against one set of coordinates, and
+        # grouping on it split 22 cities into two points sitting on exactly
+        # the same spot with their researchers divided between them.
         f'group by r.city, r.country_code, r.lat, r.lng '
         f'order by researchers desc',
         (limit_institutes, f'{kind}-{year}'))
-    return [{'city': city, 'country_code': (country or '').upper(),
+    return [{'city': city, 'region': region or '',
+             'country_code': (country or '').upper(),
              'lat': float(lat), 'lng': float(lng),
              'researchers': int(researchers),
              'citations': int(citations or 0), 'papers': int(papers or 0),
              'h': int(best_h or 0),
              'institutes': [name for name in (institutes or []) if name]}
-            for (city, country, lat, lng, researchers, citations, papers,
-                 best_h, institutes) in rows]
+            for (city, region, country, lat, lng, researchers, citations,
+                 papers, best_h, institutes) in rows]
 
 
 # The names this dashboard's country codes convert to, against the names the
@@ -2177,35 +2183,44 @@ def country_points(kind, year):
     return points
 
 
-def city_researchers(city, country_code, kind, year, limit=None):
-    """Who works in one city in one edition, and how many there are.
+def city_researchers(lat, lng, kind, year, limit=None):
+    """Who works at one point on the map, and how many there are.
 
-    Returns (rows, total). The rows are shaped like country_researchers' so
-    the same table can show either, and the total is the true count rather
-    than the length of a page of it.
+    Returns (rows, total), the rows shaped like country_researchers' so the
+    same table can show either, and the total the true count rather than the
+    length of a page of it.
 
-    Keyed on the city and the country together, because a city name is not
-    unique: there are eleven Springfields in the United States, and this
-    asks for the one in the country that was clicked.
+    Keyed on the coordinates rather than on the name, because a name is not
+    unique even inside one country: there are Clevelands in Ohio and in
+    Tennessee, and Oxfords in Massachusetts, Mississippi and Ohio. The map
+    draws them as separate points and a click has to mean the one that was
+    clicked. The rounding matches what city_points puts in the payload, so
+    the two always agree about which point this is.
     """
     table = _TABLE_BY_KIND.get(kind)
     if table is None:
         return [], 0
-    code = str(country_code or '').lower()
     edition_id = f'{kind}-{year}'
+    # Within a hundred metres of the point, rather than equal to it after
+    # rounding. The payload carries three decimals and the table carries the
+    # registry's full precision, and the two languages do not round halves
+    # the same way: Python rounds to even and Postgres rounds away from
+    # zero, which is enough to miss a city outright. Nothing on this map is
+    # a hundred metres from another place.
+    where = ('where m.edition_id = %s '
+             'and abs(r.lat - %s) < 0.001 and abs(r.lng - %s) < 0.001')
+    params = (edition_id, float(lat), float(lng))
     total = _fetch(
         f'select count(*) from {table} m '
         f'join institution_ror r on r.institution_id = m.institution_id '
-        f'where m.edition_id = %s and r.city = %s and r.country_code = %s',
-        (edition_id, city, iso2(code)))[0][0]
+        f'{where}', params)[0][0]
     rows = _fetch(
         f'select a.authfull_display, i.inst_name from {table} m '
         f'join institution_ror r on r.institution_id = m.institution_id '
         f'join authors a on a.author_id = m.author_id '
         f'left join institutions i on i.institution_id = m.institution_id '
-        f'where m.edition_id = %s and r.city = %s and r.country_code = %s '
-        f'order by m.c desc nulls last'
+        f'{where} order by m.c desc nulls last'
         + (' limit %s' if limit else ''),
-        (edition_id, city, iso2(code)) + ((limit,) if limit else ()))
+        params + ((limit,) if limit else ()))
     return ([{'INSTITUTE': inst or '', 'RESEARCHER': name}
              for name, inst in rows], int(total))
