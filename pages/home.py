@@ -25,6 +25,7 @@ import dash_loading_spinners as dls
 from citations_lib.create_fig_helper_functions import *
 from citations_lib.utils import *
 from citations_lib.glowmap import glow_map
+from citations_lib.utils import city_points, city_researchers
 from citations_lib.top10 import top10_layout
 from citations_lib.single_author_layout import *
 from citations_lib.author_vs_group_layout import *
@@ -190,54 +191,56 @@ compare_row = html.Div([
     ])
 
 
-@callback(
-    Output('nav', 'figure',allow_duplicate=True),
-    [Input('selectYrRadio' + SUFFIX, 'value'),
-    Input('stats2', 'value'),
-    Input("careerORSingleYrRadio" + SUFFIX, 'value')],
-    prevent_initial_call=True)
-def update_world(yr,sts,career):
-    if yr is None or sts is None or career is None:
-        raise PreventUpdate
-    else:
-        if career:
-            prefix = 'career'
-        else:
-            prefix = 'singleyr'
-        df =  get_world_df(yr,sts,prefix)
-        fig = px.choropleth(data_frame=df,
-                            locations='code',
-                            color=sts,
-                            color_continuous_scale="viridis",
-                            #range_color=(0, 15000),
-                            animation_frame='metric',
-                            hover_data=['country','metric_name','metric'])
-        fig.update_layout(
-                    autosize=True,
-                    height = 700,
-                    coloraxis_colorbar_thickness=23,
-                    coloraxis_colorbar_orientation = "h",
-                    coloraxis_colorbar_y = -0.1,
-                    plot_bgcolor= bgc,
-                    paper_bgcolor= bgc,
-                    )
-        # geo_bgcolor is the rectangle behind the globe itself, which is what
-        # stayed dark in the light theme.
-        fig.update_layout(geo_bgcolor=bgc,margin={'l':0, 'r':0,'b':0,'t':0})
-        # bgcolor is the grip's fill, not merely a backdrop: transparent
-        # drew it as an empty ring. activebgcolor only applies while the grip
-        # is being dragged, which is why setting that alone changed nothing.
-        fig.update_layout(sliders=[dict(bgcolor='#00B4D8',
-                                activebgcolor='#00B4D8',
-                                bordercolor='#7E8AA0')])
-        fig.update_geos(projection=dict(scale = 1.25), center=dict(lat=22),
-                showframe=False)
-    return fig
-
-
 """
 World map interactions
 """
+
+
+def _clicked_a_city(city, country_code, is_career, yr):
+    """One city's researchers, in the same shape the country view uses.
+
+    There is no aggregate for a city, because the summaries this dashboard
+    keeps are per country, field and institution. What a city does have is
+    the people in it, so the summary says what can be counted directly and
+    the table lists them, best score first.
+    """
+    kind = 'career' if is_career else 'singleyr'
+    rows, total = city_researchers(city, country_code, kind, yr,
+                                   limit=COUNTRY_ROW_LIMIT)
+    if not rows:
+        raise PreventUpdate
+    points = [p for p in city_points(kind, int(yr))
+              if p['city'] == city and p['country_code'] == country_code]
+    place = points[0] if points else None
+    when = f"Career-long up to {yr}" if is_career else f"Single-year data in {yr}"
+    country_full = str(coco.convert(names=country_code, to='name_short'))
+    if country_full in ('not found', 'None'):
+        country_full = country_code
+    if place:
+        summary = f"""
+                ---
+                ##### **{city}, {country_full}**
+                - `Researchers on the list:` **{place['researchers']:,}**
+                - `Citations, summed:` **{place['citations']:,}**
+                - `Papers, summed:` **{place['papers']:,}**
+                - `Best h-index here:` **{place['h']}**
+               """
+    else:
+        summary = f"""
+                ---
+                ##### **{city}, {country_full}**
+                - `Researchers on the list:` **{total:,}**
+               """
+    shown = len(rows)
+    listing = (f'<strong>{shown:,}</strong> of <strong>{total:,}</strong> '
+               f'researchers, by score' if total > shown
+               else f'<strong>{total:,}</strong> researchers')
+    message = (f'<div class="danger"><center><strong>{when}</strong><br/>'
+               f'{listing} in <strong>{city}</strong>'
+               f'<br/><u>Click a row to see that researcher</u></center></div>')
+    return (summary, rows, message,
+            {'height': '400px', 'overflowY': 'auto', 'display': 'block'},
+            [], None)
 @callback(
     Output('worldtitle', 'children',allow_duplicate=True),
     Output('instnametable','data'),
@@ -245,7 +248,7 @@ World map interactions
     Output('instnametable','style_table'),
     Output("instnametable", "selected_cells"),
     Output("instnametable", "active_cell"),
-    Input('nav', 'clickData'),
+    Input('glowPicked_glowmap_', 'value'),
     Input("careerORSingleYrRadio" + SUFFIX, 'value'),
     Input("selectYrRadio" + SUFFIX, 'value'),
     Input('stats2', 'value'),
@@ -253,8 +256,22 @@ World map interactions
     prevent_initial_call='initial_duplicate' 
     )
 def click_on_map_update(val,is_career,yr,sts):
-    if val is None:
+    """What the summary and the table show when a place is clicked.
+
+    The map sends 'country|USA' or 'city|London|GBR', with a counter on the
+    end so that clicking the same place twice is still a change Dash can
+    see. A country reads from the Elasticsearch aggregates, which is what
+    they exist for; a city reads from institution_ror, which is where the
+    coordinates that put the point on the map came from.
+    """
+    if not val:
         raise PreventUpdate
+    parts = str(val).split('|')
+    if len(parts) < 2:
+        raise PreventUpdate
+    if parts[0] == 'city':
+        return _clicked_a_city(parts[1], parts[2], is_career, yr)
+    val = {'points': [{'location': parts[1]}]}
     if sts == 'median':
         st_idx = 2
     elif sts == 'min':
@@ -319,61 +336,27 @@ def click_on_map_update(val,is_career,yr,sts):
 # career edition now, so loading a new edition moves it without an edit here.
 _MAP_YEAR_OPTIONS, _MAP_DEFAULT_YEAR = update_yr_options2(True)
 
-df =  get_world_df(_MAP_DEFAULT_YEAR,'median','career') 
-fig = px.choropleth(data_frame=df,
-                        locations='code',
-                        color='median',
-                        color_continuous_scale="viridis",
-                        #range_color=(0, 15000),
-                        animation_frame='metric',
-                        hover_data=['country','metric_name','metric'])
-fig.update_layout(#width=900,
-                height = 700,
-                autosize = True,
-                coloraxis_colorbar_thickness=23,
-                coloraxis_colorbar_orientation = "h",
-                coloraxis_colorbar_y = -0.1,
-                plot_bgcolor= bgc,
-                paper_bgcolor= bgc)
-fig.update_layout(sliders=[ dict(# bgcolor is the grip's fill, not merely a
-                                 # backdrop: transparent drew it as an empty
-                                 # ring. activebgcolor applies only while
-                                 # dragging, so setting it alone did nothing.
-                                 bgcolor='#00B4D8',
-                                 activebgcolor='#00B4D8',
-                                 bordercolor='#7E8AA0',
-                                 steps = [{'label':'H-index'}, {'label':'#cites'}, {'label':'#pprs'}, {'label':'Hm-index'}, {'label':'#pprs-s'}, {'label':'#pprs-sf'},{'label':'#pprs-sfl'},{'label':'C'}],
-                                 )
-                            ],
-                updatemenus = [dict(bgcolor = '#ECAB4C')])
-fig.update_layout(geo_bgcolor=bgc,margin={'l':0, 'r':0,'b':0,'t':0})
-fig.update_geos(projection=dict(scale = 1.25), center=dict(lat=22),
-                showframe=False)
+# The plotly choropleth that used to live here is gone: the echarts map in
+# citations_lib/glowmap.py took its place, which reads at two granularities
+# rather than one and can be clicked down to a city. What stays is the
+# toolbar above it, because the whole page reads the selection those controls
+# hold: the map, the year track under it, and the tables beside it.
 
 careerORSingleYr = html.Div([
     dbc.RadioItems(id = "careerORSingleYrRadio" + SUFFIX, value = True, className = "btn-group", inputClassName = "btn-check", labelClassName = "btn btn-outline-primary",
         labelCheckedClassName = "active", options = [{"label": "Career", "value": True}, {"label": "Single year", "value": False},
     ])], className = "radio-group")
 
+
 @callback(
     Output('selectYrRadio' + SUFFIX, 'options'),
-    Output('selectYrRadio' + SUFFIX, 'value'), 
+    Output('selectYrRadio' + SUFFIX, 'value'),
     [Input('careerORSingleYrRadio' + SUFFIX, 'value')],
     prevent_initial_call=True)
 def update_yr_opts(career):
-    return(update_yr_options2(career)[0],update_yr_options2(career)[1])
+    return(update_yr_options2(career)[0], update_yr_options2(career)[1])
 
-kek = dls.Ring(
-        # scrollZoom off: the wheel over the map used to zoom it, so the page
-        # could not be scrolled past the map at all. Zoom stays available
-        # through the modebar's box-zoom and double-click to reset.
-        dcc.Graph(id="nav", figure=fig,
-                  config={'scrollZoom': False, 'displaylogo': False}),
-        color="#ECAB4C",
-        #speed_multiplier=2,
-        width=270)
 
-#kek = dcc.Graph(id="nav",figure=fig)
 zort = html.Div([dbc.RadioItems(id='selectYrRadio' + SUFFIX,
                       className = "btn-group",
                       labelCheckedClassName = "active",
@@ -514,12 +497,14 @@ map_hint = html.Div(
                 html.I(**{"data-lucide": "mouse-pointer-click"}),
                 html.Div(
                     [
-                        html.Div("Researchers by country",
+                        html.Div("Click a place to read it",
                                  className="ev-hint-title"),
                         html.Div(
-                            "Click any country on the map to list the "
-                            "institutions and researchers it contributes, "
-                            "for the dataset and year selected above.",
+                            "On Cities, every point is a city and clicking "
+                            "one lists the researchers who work there, best "
+                            "score first. On Countries, clicking a country "
+                            "lists what it contributes. Either way it "
+                            "follows the dataset and year selected above.",
                             className="ev-hint-body"),
                     ]
                 ),
@@ -535,7 +520,7 @@ map_hint = html.Div(
 @callback(
     Output("map-hint", "style"),
     Input("map-hint-close", "n_clicks"),
-    Input("nav", "clickData"),
+    Input('glowPicked_glowmap_', 'value'),
     prevent_initial_call=True,
 )
 def dismiss_map_hint(_close, _clicked):
@@ -812,16 +797,13 @@ navigation_row = html.Div(
         row1,
         dbc.Row(
             [
-                dbc.Col(html.Div([kek, map_hint], className="ev-map-pane"),
+                dbc.Col(html.Div([glow_map(), map_hint],
+                                 className="ev-map-pane"),
                         width=8),
                 dbc.Col(zart, width=4),
             ],
             className="ev-panes",
         ),
-        # Under the choropleth, on the same selection and the same toolbar.
-        # The two maps answer different questions: the one above fills a
-        # country with one colour, and a country is not where anybody works.
-        glow_map(),
     ],
     className="ev-stage",
 )

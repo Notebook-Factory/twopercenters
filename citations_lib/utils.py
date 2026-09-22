@@ -2061,7 +2061,7 @@ def city_points(kind, year, limit_institutes=4):
     rows = _fetch(
         f'select r.city, r.country_code, r.lat, r.lng, '
         f'count(*) as researchers, sum(m.nc) as citations, '
-        f'sum(m.np) as papers, '
+        f'sum(m.np) as papers, max(m.h) as h, '
         f'(array_agg(i.inst_name order by m.nc desc nulls last))[1:%s] '
         f'from {table} m '
         f'join institution_ror r on r.institution_id = m.institution_id '
@@ -2074,9 +2074,10 @@ def city_points(kind, year, limit_institutes=4):
              'lat': float(lat), 'lng': float(lng),
              'researchers': int(researchers),
              'citations': int(citations or 0), 'papers': int(papers or 0),
+             'h': int(best_h or 0),
              'institutes': [name for name in (institutes or []) if name]}
             for (city, country, lat, lng, researchers, citations, papers,
-                 institutes) in rows]
+                 best_h, institutes) in rows]
 
 
 # The names this dashboard's country codes convert to, against the names the
@@ -2158,17 +2159,53 @@ def country_points(kind, year):
     if table is None:
         return []
     rows = _fetch(
-        f'select country_code, count(*), sum(nc), sum(np) from {table} '
+        f'select country_code, count(*), sum(nc), sum(np), max(h) '
+        f'from {table} '
         f'where edition_id = %s and country_code is not null '
         f'group by country_code order by count(*) desc',
         (f'{kind}-{year}',))
     points = []
-    for code, researchers, citations, papers in rows:
+    for code, researchers, citations, papers, best_h in rows:
         name = map_name(code)
         if not name:
             continue
         points.append({'country_code': code.upper(), 'name': name,
                        'researchers': int(researchers),
                        'citations': int(citations or 0),
-                       'papers': int(papers or 0)})
+                       'papers': int(papers or 0),
+                       'h': int(best_h or 0)})
     return points
+
+
+def city_researchers(city, country_code, kind, year, limit=None):
+    """Who works in one city in one edition, and how many there are.
+
+    Returns (rows, total). The rows are shaped like country_researchers' so
+    the same table can show either, and the total is the true count rather
+    than the length of a page of it.
+
+    Keyed on the city and the country together, because a city name is not
+    unique: there are eleven Springfields in the United States, and this
+    asks for the one in the country that was clicked.
+    """
+    table = _TABLE_BY_KIND.get(kind)
+    if table is None:
+        return [], 0
+    code = str(country_code or '').lower()
+    edition_id = f'{kind}-{year}'
+    total = _fetch(
+        f'select count(*) from {table} m '
+        f'join institution_ror r on r.institution_id = m.institution_id '
+        f'where m.edition_id = %s and r.city = %s and r.country_code = %s',
+        (edition_id, city, iso2(code)))[0][0]
+    rows = _fetch(
+        f'select a.authfull_display, i.inst_name from {table} m '
+        f'join institution_ror r on r.institution_id = m.institution_id '
+        f'join authors a on a.author_id = m.author_id '
+        f'left join institutions i on i.institution_id = m.institution_id '
+        f'where m.edition_id = %s and r.city = %s and r.country_code = %s '
+        f'order by m.c desc nulls last'
+        + (' limit %s' if limit else ''),
+        (edition_id, city, iso2(code)) + ((limit,) if limit else ()))
+    return ([{'INSTITUTE': inst or '', 'RESEARCHER': name}
+             for name, inst in rows], int(total))

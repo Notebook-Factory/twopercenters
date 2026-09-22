@@ -17,7 +17,8 @@ a property of free-text affiliation strings rather than of the dashboard.
 """
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, callback, dcc, html
+from dash import (Input, Output, State, callback, callback_context, dcc,
+                  html)
 from dash.exceptions import PreventUpdate
 
 from citations_lib.utils import (city_points, country_points,
@@ -28,9 +29,12 @@ SUFFIX = '_glowmap_'
 # The three questions the same rows can answer. `key` is the field in the
 # payload; the label is what the control says.
 MEASURES = (
-    ('researchers', 'Researchers'),
+    ('researchers', 'Researcher count'),
     ('citations', 'Citations'),
     ('papers', 'Papers'),
+    # The best h-index at a place, not the sum of them: adding h-indices
+    # together produces a number that means nothing at all.
+    ('h', 'Top h-index'),
 )
 
 # How coarsely to read the same edition. Cities are the located seven tenths
@@ -72,6 +76,7 @@ def map_payload(kind, year):
         'researchers': [p['researchers'] for p in points],
         'citations': [p['citations'] for p in points],
         'papers': [p['papers'] for p in points],
+        'h': [p['h'] for p in points],
         'institutes': [p['institutes'][:INSTITUTES_PER_POINT] for p in points],
     }
 
@@ -139,8 +144,22 @@ def glow_map():
                             className='ev-glow-zoom-btn'),
             ], className='ev-glow-zoom'),
         ], className='ev-glow-frame'),
-        html.Div(year_slider(), id='glowYearHolder' + SUFFIX,
-                 className='ev-glow-years'),
+        html.Div([
+            html.Button('\u2039', id='glowYearBack' + SUFFIX, n_clicks=0,
+                        title='The edition before',
+                        className='ev-glow-step'),
+            html.Div(year_slider(), id='glowYearHolder' + SUFFIX,
+                     className='ev-glow-years'),
+            html.Button('\u203a', id='glowYearNext' + SUFFIX, n_clicks=0,
+                        title='The edition after',
+                        className='ev-glow-step'),
+        ], className='ev-glow-track'),
+        # How a click on the map reaches the server. This Dash is 2.15,
+        # before dash_clientside.set_props, so the draw function writes into
+        # this the way a person typing would and Dash sees a value change.
+        # It carries 'country|USA' or 'city|London|GBR'.
+        dcc.Input(id='glowPicked' + SUFFIX, value='', type='text',
+                  style={'display': 'none'}),
         dcc.Store(id='glowMapStore' + SUFFIX),
         html.Div(id='glowMapSink' + SUFFIX, style={'display': 'none'}),
         html.Div(id='glowZoomSink' + SUFFIX, style={'display': 'none'}),
@@ -176,6 +195,37 @@ def _rebuild_slider(career, year):
     if career is None:
         raise PreventUpdate
     return year_slider(career, year)
+
+
+@callback(
+    Output('glowYear' + SUFFIX, 'value', allow_duplicate=True),
+    Input('glowYearBack' + SUFFIX, 'n_clicks'),
+    Input('glowYearNext' + SUFFIX, 'n_clicks'),
+    State('glowYear' + SUFFIX, 'value'),
+    State('glowYear' + SUFFIX, 'marks'),
+    prevent_initial_call=True)
+def _step_a_year(back, forward, year, marks):
+    """One edition at a time, from the arrows either side of the track.
+
+    The editions are not consecutive in every series, since the single-year
+    one has no 2018, so this steps along the marks that exist rather than
+    adding one to the year.
+    """
+    if not marks or year is None:
+        raise PreventUpdate
+    years = sorted(int(mark) for mark in marks)
+    try:
+        at = years.index(int(year))
+    except ValueError:
+        raise PreventUpdate
+    which = callback_context.triggered_id or ''
+    step = -1 if str(which).startswith('glowYearBack') else 1
+    moved = min(max(at + step, 0), len(years) - 1)
+    if moved == at:
+        # Already at one end. Returning the same value would be a no-op
+        # anyway, but saying so keeps it out of the callback graph.
+        raise PreventUpdate
+    return years[moved]
 
 
 @callback(
@@ -290,7 +340,8 @@ MAP_DRAW_JS = """
                     return Math.min(0.38 * (1 + 0.55 * steps(zoom)), 0.85);
                 }
                 var LABELS = {researchers: 'on the list',
-                              citations: 'citations', papers: 'papers'};
+                              citations: 'citations', papers: 'papers',
+                              h: 'the best h-index'};
 
                 // The country reading of the same edition. Every fact row
                 // carries a country and only the matched ones carry
@@ -318,6 +369,18 @@ MAP_DRAW_JS = """
                 });
                 var onCountries = grain === 'country';
 
+                function pick(what) {
+                    var input = document.getElementById('glowPicked_glowmap_');
+                    if (!input || !what) { return; }
+                    var setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value').set;
+                    // The same place twice running is a change Dash would
+                    // not see, so a counter makes each click its own value.
+                    window.__evPickCount = (window.__evPickCount || 0) + 1;
+                    setter.call(input, what + '|' + window.__evPickCount);
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+
                 chart.setOption({
                     // No animation anywhere on this chart. Echarts animates
                     // an option update by default, so every restyle after a
@@ -337,7 +400,9 @@ MAP_DRAW_JS = """
                         // scroll zoom off for exactly that reason, and this
                         // one repeated the mistake. Zooming is on the
                         // buttons in the corner.
-                        map: 'world', roam: 'move', silent: true, z: 1,
+                        // Not silent: on the country reading a click has
+                        // to reach the region under the cursor.
+                        map: 'world', roam: 'move', silent: false, z: 1,
                         // The land is a ground for the light to sit on, not
                         // a thing to read, so it carries no labels and no
                         // hover state of its own.
@@ -363,7 +428,8 @@ MAP_DRAW_JS = """
                                 return ['<strong>' + c.name + '</strong>',
                                         commas(c.researchers) + ' on the list',
                                         commas(c.citations) + ' citations',
-                                        commas(c.papers) + ' papers'
+                                        commas(c.papers) + ' papers',
+                                        'best h-index ' + commas(c.h)
                                        ].join('<br/>');
                             }
                             var i = p.value[3];
@@ -373,7 +439,8 @@ MAP_DRAW_JS = """
                                 commas(payload.researchers[i])
                                     + ' on the list',
                                 commas(payload.citations[i]) + ' citations',
-                                commas(payload.papers[i]) + ' papers'];
+                                commas(payload.papers[i]) + ' papers',
+                                'best h-index ' + commas(payload.h[i])];
                             var named = payload.institutes[i] || [];
                             if (named.length) {
                                 lines.push('');
@@ -488,6 +555,22 @@ MAP_DRAW_JS = """
                     }]
                 }, true);
                 chart.resize();
+
+                // A click names a place. On the country reading that is the
+                // region under the cursor; on the city reading it is the
+                // point, which carries its row in the payload.
+                chart.off('click');
+                chart.on('click', function (params) {
+                    if (onCountries) {
+                        var c = byCountry[params.name];
+                        if (c) { pick('country|' + c.country_code); }
+                        return;
+                    }
+                    var i = params.value && params.value[3];
+                    if (i === undefined || i === null) { return; }
+                    pick('city|' + payload.city[i] + '|'
+                         + payload.country[i]);
+                });
 
                 // Roaming fires continuously while the mouse is down, so the
                 // restyle waits for a pause rather than running on every

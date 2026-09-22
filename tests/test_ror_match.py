@@ -594,3 +594,76 @@ def test_the_points_are_drawn_by_the_canvas_renderer():
     assert "type: 'scatter', coordinateSystem: 'geo'" in MAP_DRAW_JS
     with open('app.py') as handle:
         assert 'echarts-gl' not in handle.read()
+
+
+def test_a_click_can_name_a_country_or_a_city():
+    """The map sends 'country|USA' or 'city|London|GBR', with a counter on
+    the end so clicking the same place twice is still a change Dash sees."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "pick('country|'" in MAP_DRAW_JS
+    assert "pick('city|'" in MAP_DRAW_JS
+    assert '__evPickCount' in MAP_DRAW_JS
+    # The country reading needs the click to reach the region, so the geo
+    # cannot be silent.
+    assert 'silent: false' in MAP_DRAW_JS
+
+
+def test_clicking_a_city_lists_the_people_in_it():
+    import app  # noqa: F401
+    import pages.home as home
+    summary, rows, message, style, _cells, _active = home.click_on_map_update(
+        'city|Cambridge|USA|1', True, '2024', 'median')
+    assert 'Cambridge' in summary
+    assert rows and all(r['RESEARCHER'] for r in rows)
+    assert 'researchers' in message
+    assert style['display'] == 'block'
+
+
+def test_clicking_a_country_still_does_what_it_did():
+    import app  # noqa: F401
+    import pages.home as home
+    summary, rows, _message, _style, _cells, _active = \
+        home.click_on_map_update('country|USA|2', True, '2024', 'median')
+    assert 'USA' in summary
+    assert 'H-index' in summary
+    assert rows
+
+
+def test_a_city_is_keyed_on_its_country_too():
+    """There are eleven Springfields in the United States, and a city name on
+    its own does not say which country was clicked."""
+    from citations_lib.utils import city_researchers
+    british, british_total = city_researchers('London', 'GBR', 'career', 2024,
+                                              limit=5)
+    canadian, canadian_total = city_researchers('London', 'CAN', 'career',
+                                                2024, limit=5)
+    assert british_total > canadian_total
+    assert {r['RESEARCHER'] for r in british} != {r['RESEARCHER']
+                                                  for r in canadian}
+
+
+def test_the_measures_include_the_h_index_and_name_the_count():
+    from citations_lib.glowmap import MEASURES
+    labels = dict(MEASURES)
+    assert labels['researchers'] == 'Researcher count'
+    # The best h-index at a place, not the sum: adding h-indices together
+    # produces a number that means nothing.
+    assert labels['h'] == 'Top h-index'
+
+
+def test_the_year_arrows_step_along_the_editions_that_exist():
+    import citations_lib.glowmap as module
+
+    class _Context:
+        triggered_id = 'glowYearNext_glowmap_'
+
+    marks = {y: {'label': str(y)} for y in (2017, 2019, 2020)}
+    original = module.callback_context
+    try:
+        module.callback_context = _Context()
+        assert module._step_a_year(0, 1, 2019, marks) == 2020
+        _Context.triggered_id = 'glowYearBack_glowmap_'
+        # The single-year series has no 2018, so back from 2019 is 2017.
+        assert module._step_a_year(1, 0, 2019, marks) == 2017
+    finally:
+        module.callback_context = original
