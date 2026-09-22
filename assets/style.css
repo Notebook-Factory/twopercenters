@@ -3053,6 +3053,14 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6'/><path d='M10 14 21 3'/><path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6'/><path d='M10 14 21 3'/><path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>");
 }
+.ev-ic-info {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M12 16v-4'/><path d='M12 8h.01'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M12 16v-4'/><path d='M12 8h.01'/></svg>");
+}
+.ev-ic-x {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M18 6 6 18'/><path d='m6 6 12 12'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M18 6 6 18'/><path d='m6 6 12 12'/></svg>");
+}
 .ev-ic-quote {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path><path d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path></svg>");
           mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path><path d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'></path></svg>");
@@ -3704,9 +3712,80 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    narrow screen. */
 .ev-glow-head { justify-content: flex-start; flex-wrap: wrap; }
 .ev-glow-measures { align-items: center; }
-/* The toggle is built on the home page, where the toolbar it came from sized
-   its buttons; here it has to match the two groups beside it. */
-.ev-glow-measures .radio-group .btn { font-size: .82rem; }
+/* The three groups are one set of controls, so they are sized and coloured
+   as one. The dataset toggle carried orange from a rule that exists to keep
+   it apart from a cyan year picker beside it; on this map the year picker is
+   the track underneath and there is nothing to be told apart from, so it
+   takes the same cyan as its neighbours. The rule it is overriding is
+   !important, which is why this one is too. */
+.ev-glow-measures .radio-group .btn-group > .form-check > .btn,
+.ev-glow-measures .radio-group .btn {
+  padding: .3rem .65rem;
+  font-size: .82rem;
+  line-height: 1.35;
+}
+.ev-glow-measures [id^="careerORSingleYr"] .btn.active {
+  background-color: var(--ev-accent) !important;
+  border-color: var(--ev-accent) !important;
+  color: #10151D !important;
+}
 
 /* An icon-only navbar button, for "about this data". */
 .ev-nav-icon { padding-left: .55rem; padding-right: .55rem; }
+
+/* ==========================================================================
+   The card over the list
+   ==========================================================================
+   Clicking a row used to print its detail under the table, which pushed the
+   table up and meant reading one row cost you the sight of the others. It
+   sits over the list now and closes.
+
+   The glass is a blur of what is behind it plus a translucent fill, which
+   only reads as glass if there is something behind it to blur: it is
+   positioned over the table on purpose rather than floating over the page. */
+
+.ev-list-stack { position: relative; }
+.ev-row-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 72%;
+  overflow-y: auto;
+  padding: 1rem 1.1rem .6rem;
+  border-radius: var(--ev-radius);
+  border: 1px solid color-mix(in srgb, var(--ev-text) 14%, transparent);
+  background: color-mix(in srgb, var(--ev-surface) 62%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+          backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+  z-index: 5;
+}
+/* Without backdrop-filter the fill alone would leave the table legible
+   through it, so browsers that cannot blur get an opaque card instead. */
+@supports not ((backdrop-filter: blur(1px)) or
+               (-webkit-backdrop-filter: blur(1px))) {
+  .ev-row-card { background: var(--ev-surface); }
+}
+.ev-row-card > :last-child { margin-bottom: 0; }
+.ev-row-card-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ev-text-muted);
+  cursor: pointer;
+}
+.ev-row-card-close:hover {
+  color: var(--ev-text);
+  border-color: var(--ev-surface-2);
+}
+.ev-row-card-close .ev-ic { width: 15px; height: 15px; }

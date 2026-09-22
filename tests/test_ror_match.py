@@ -862,3 +862,67 @@ def test_the_map_controls_are_one_row():
     rows = [n for n in walk(home.navigation_row)
             if getattr(n, 'className', '') == 'ev-glow-measures']
     assert rows and len(rows[0].children) == 3
+
+
+def test_the_icon_buttons_do_not_depend_on_a_runtime_swap():
+    """lucide replaces every <i data-lucide> with an <svg> after render, and
+    a click that starts on an element swapped before the mouse comes up
+    never becomes a click. Both icon-only buttons on this page needed
+    pressing twice because of it; they are CSS masks now, which nothing
+    replaces."""
+    import app  # noqa: F401
+    import pages.home as home
+
+    def walk(node):
+        yield node
+        children = getattr(node, 'children', None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                yield from walk(child)
+        elif children is not None:
+            yield from walk(children)
+
+    for name in ('off', 'map-hint-close'):
+        button = next(n for n in walk(home.layout)
+                      if getattr(n, 'id', None) == name)
+        icon = button.children
+        assert 'ev-ic' in getattr(icon, 'className', ''), name
+        assert not hasattr(icon, 'data-lucide')
+
+
+def test_the_row_detail_opens_over_the_table_and_closes():
+    import app  # noqa: F401
+    import pages.home as home
+
+    class _Context:
+        triggered_id = 'worldtitle'
+
+    original = home.callback_context
+    try:
+        home.callback_context = _Context()
+        assert home.show_the_row_card('anything', 0)['display'] == 'block'
+        _Context.triggered_id = 'row-card-close'
+        assert home.show_the_row_card('anything', 1)['display'] == 'none'
+    finally:
+        home.callback_context = original
+
+
+def test_the_table_is_as_tall_as_the_map():
+    """It was 300px with the summary printed underneath. The summary is a
+    card over it now, so the list can run the height of the map beside it."""
+    with open('pages/home.py') as handle:
+        source = handle.read()
+    assert "'height': '300px'" not in source
+    assert "'height': '400px'" not in source
+    assert source.count("'height': '560px'") >= 2
+
+
+def test_the_dataset_toggle_matches_the_buttons_beside_it():
+    """It carried orange from a rule that keeps it apart from a cyan year
+    picker. On this map the year picker is the track underneath, so there is
+    nothing to be told apart from."""
+    with open('assets/style.css') as handle:
+        css = handle.read()
+    scoped = css[css.index('.ev-glow-measures [id^="careerORSingleYr"]'):]
+    scoped = scoped[:scoped.index('}')]
+    assert 'var(--ev-accent)' in scoped

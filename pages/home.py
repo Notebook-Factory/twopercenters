@@ -94,7 +94,9 @@ tbl  = dash_table.DataTable(
         'border': 'none',
         'borderBottom': '1px solid var(--ev-surface-2)',
     },
-    style_table={'height': '300px', 'overflowY': 'auto','display':'none'},
+    # Runs the height of the map beside it. It was 300px with the summary
+    # printed underneath; the summary is a card over it now.
+    style_table={'height': '560px', 'overflowY': 'auto', 'display': 'none'},
     page_action='native',
     page_size=20,
     sort_action='native',
@@ -239,7 +241,7 @@ def _clicked_a_city(city, country_code, is_career, yr):
                f'{listing} in <strong>{city}</strong>'
                f'<br/><u>Click a row to see that researcher</u></center></div>')
     return (summary, rows, message,
-            {'height': '400px', 'overflowY': 'auto', 'display': 'block'},
+            {'height': '560px', 'overflowY': 'auto', 'display': 'block'},
             [], None)
 @callback(
     Output('worldtitle', 'children',allow_duplicate=True),
@@ -340,7 +342,7 @@ def click_on_map_update(val,is_career,yr,sts,table_style):
            f'<br/><span class="ev-of-total">{total_authors:,} worldwide '
            f'in this selection</span>'
            f'<br/><u>Click a row to see that researcher</u></center></div>')
-    return(self_cit,career_all_c, msg, {'height': '400px', 'overflowY': 'auto','display':'block'},[],None)
+    return(self_cit,career_all_c, msg, {'height': '560px', 'overflowY': 'auto', 'display': 'block'},[],None)
 
 # The map's opening frame. Was pinned to '2021'; it follows the most recent
 # career edition now, so loading a new edition moves it without an edit here.
@@ -404,13 +406,31 @@ explain  =  f'''
                     </div>
                     <br/>
                     '''
-zart = dls.Ring(dbc.Row([dcc.Markdown(id='cntrylabel', children="", dangerously_allow_html=True),
-                    tbl,dcc.Markdown(id='worldtitle',
-                    dangerously_allow_html = True,
-                    highlight_config  = dict(theme='dark'),
-                    children = explain,
-                    ),
-                    ]),color="#ECAB4C",width=270)
+# The table, and the card that opens over it.
+#
+# The detail for a clicked row used to print under the table, which pushed
+# the table up and meant reading one row cost you the sight of the others.
+# It is a card over the list now, dismissable, so the table can run the full
+# height of the map beside it.
+zart = dls.Ring(
+    html.Div([
+        dcc.Markdown(id='cntrylabel', children="",
+                     dangerously_allow_html=True),
+        tbl,
+        html.Div(
+            [
+                html.Button(html.Span(className="ev-ic ev-ic-x"),
+                            id="row-card-close", n_clicks=0,
+                            className="ev-row-card-close", title="Close"),
+                dcc.Markdown(id='worldtitle',
+                             dangerously_allow_html=True,
+                             highlight_config=dict(theme='dark'),
+                             children=explain),
+            ],
+            id="row-card", className="ev-row-card", style={'display': 'none'},
+        ),
+    ], className="ev-list-stack"),
+    color="#ECAB4C", width=270)
 
 
 # ============================================================================
@@ -475,7 +495,7 @@ def sync_trends_author(chosen, current):
 map_hint = html.Div(
     [
         html.Button(
-            html.I(**{"data-lucide": "x"}),
+            html.Span(className="ev-ic ev-ic-x"),
             id="map-hint-close", n_clicks=0, className="ev-hint-close",
             title="Dismiss",
         ),
@@ -567,6 +587,21 @@ offcanvas = html.Div(
 
 
 @callback(
+    Output("row-card", "style"),
+    Input("worldtitle", "children"),
+    Input("row-card-close", "n_clicks"),
+    prevent_initial_call=True,
+)
+def show_the_row_card(_summary, _close):
+    """Open the card when there is something new to read in it, close it on
+    the button. Which of the two happened is read from the trigger rather
+    than from the values, because a summary can legitimately be the same
+    text twice running."""
+    closing = callback_context.triggered_id == "row-card-close"
+    return {'display': 'none'} if closing else {'display': 'block'}
+
+
+@callback(
     Output("offcanvas", "is_open"),
     Input("off", "n_clicks"),
     [State("offcanvas", "is_open")],
@@ -641,7 +676,13 @@ dede = dbc.Navbar(
                                id="jump-trends", className="ev-nav-btn",
                                n_clicks=0),
                     html.Span(className="ev-nav-sep"),
-                    dbc.Button(html.I(**{"data-lucide": "info"}),
+                    # A mask icon rather than a lucide <i>. Those are
+                    # replaced in the DOM after render, and a click that
+                    # starts on an element which is swapped before the mouse
+                    # comes up never becomes a click at all, which is why
+                    # this button and the hint's close button both needed
+                    # pressing twice.
+                    dbc.Button(html.Span(className="ev-ic ev-ic-info"),
                                id='off', n_clicks=0,
                                className="ev-nav-btn ev-nav-icon",
                                title="About this data"),
