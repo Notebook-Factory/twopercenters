@@ -536,3 +536,34 @@ def test_zooming_is_on_buttons_instead():
     ids = {getattr(n, 'id', None) for n in walk(glow_map())}
     for name in ('glowZoomIn', 'glowZoomOut', 'glowZoomReset'):
         assert any(isinstance(i, str) and i.startswith(name) for i in ids), name
+
+
+def test_both_layers_share_one_projection():
+    """boundingCoords cropped the south to give the map more room, and it
+    also gave the geo a different projection from the one the WebGL scatter
+    assumes: those points landed north and east of the land they belong to."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'boundingCoords' not in MAP_DRAW_JS
+
+
+def test_every_roam_frame_repaints():
+    """A series with a blend mode is composited on a canvas layer of its own,
+    and a layer nothing marks dirty is put back where it was: the map slid
+    under a drag and the points stayed behind."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    handler = MAP_DRAW_JS[MAP_DRAW_JS.index("chart.on('georoam'"):]
+    handler = handler[:handler.index('el.__evFollowZoom')]
+    assert 'zr.refresh()' in handler
+
+
+def test_the_city_points_prefer_webgl_and_survive_without_it():
+    """WebGL draws them near enough for free. What can be checked here is the
+    fallback, because a build machine has no WebGL: the feature test builds a
+    throwaway chart and asks whether echarts kept a scatterGL series, so a
+    missing script and a missing graphics context both answer no."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "type: 'scatterGL'" in MAP_DRAW_JS
+    assert "type: 'scatter', coordinateSystem: 'geo'" in MAP_DRAW_JS
+    probe = MAP_DRAW_JS[MAP_DRAW_JS.index('function glAvailable()'):]
+    probe = probe[:probe.index('function draw()')]
+    assert 'try {' in probe and 'catch (e)' in probe and 'answer = false;' in probe
