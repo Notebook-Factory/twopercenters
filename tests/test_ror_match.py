@@ -731,7 +731,7 @@ def test_the_two_readings_do_not_share_a_colour_ramp():
     and the countries are a cool single hue, so the two pictures cannot be
     confused at a glance."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    ramps = MAP_DRAW_JS[MAP_DRAW_JS.index('pieces: bands('):]
+    ramps = MAP_DRAW_JS[MAP_DRAW_JS.index('pieces: onCountries'):]
     ramps = ramps[:ramps.index('hoverLink')]
     assert '#35B3CE' in ramps          # the cool ramp, for countries
     assert '#FFD48A' in ramps          # the warm one, for cities
@@ -1017,7 +1017,7 @@ def test_the_legend_speaks_in_real_units():
     which is a fair question to have to ask of a legend."""
     from citations_lib.glowmap import MAP_DRAW_JS
     assert "type: 'piecewise'" in MAP_DRAW_JS
-    assert 'function bands(largest, colours)' in MAP_DRAW_JS
+    assert 'function bands(largest, colours, power)' in MAP_DRAW_JS
     # The raw value, not the brightness: the log curve means nothing to a
     # reader.
     assert 'dimension: onCountries ? 0 : 4' in MAP_DRAW_JS
@@ -1038,3 +1038,27 @@ def test_the_raw_value_travels_with_each_point():
     """The legend reads it, and it is the number a reader recognises."""
     from citations_lib.glowmap import MAP_DRAW_JS
     assert 'Math.pow(ratio, 2.2), i, values[i]]' in MAP_DRAW_JS
+
+
+def test_a_country_carries_its_count_and_not_a_ratio():
+    """The bands are written in researchers, so the number they read has to
+    be in researchers too. The country series used to carry a log ratio
+    between nought and one, which every band but the bottom one is above:
+    the whole world came back the darkest colour."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    block = MAP_DRAW_JS[MAP_DRAW_JS.index('var countryData'):]
+    block = block[:block.index('var onCountries')]
+    assert 'value: c[measure]' in block
+    assert 'Math.pow' not in block
+
+
+def test_the_countries_are_banded_on_their_own_curve():
+    """A country is a large block of colour and a point is two pixels. The
+    spacing that reads well on the lights leaves half the world in one band
+    when it is a continent, so the two readings space their bands
+    differently: 1.4 for the countries, 2.2 for the lights."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    pieces = MAP_DRAW_JS[MAP_DRAW_JS.index('pieces: onCountries'):]
+    pieces = pieces[:pieces.index('hoverLink')]
+    assert '1.4)' in pieces
+    assert '2.2)' in pieces

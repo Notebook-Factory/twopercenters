@@ -321,11 +321,15 @@ MAP_DRAW_JS = """
                 // actually means, and their widths are where the curve puts
                 // them, so a reader can see that the top band is a tenth of
                 // the range and most of the map is in the bottom one.
-                function bands(largest, colours) {
+                // `power` is the same curve the reading it belongs to is
+                // drawn with, so the bands fall where the colour actually
+                // changes: 2.2 for the city lights, the gentler 1.4 for the
+                // countries.
+                function bands(largest, colours, power) {
                     var edges = [0];
                     var top = Math.log(1 + largest);
                     for (var b = 1; b < colours.length; b++) {
-                        var at = Math.pow(b / colours.length, 1 / 2.2);
+                        var at = Math.pow(b / colours.length, 1 / power);
                         edges.push(Math.round(Math.exp(at * top) - 1));
                     }
                     var pieces = [];
@@ -354,17 +358,15 @@ MAP_DRAW_JS = """
                 });
                 var countryLargest = countryValues.length
                     ? Math.max.apply(null, countryValues) : 1;
-                var countryCeiling = Math.log(1 + countryLargest);
+                // The number a country carries is the count itself, in the
+                // units the legend is written in. It used to carry a log
+                // ratio between nought and one instead, which the bands,
+                // being in researchers, read as nought: every country in
+                // the world fell in the bottom band and the map came back
+                // one flat colour. Where the bands sit is the gentler curve
+                // now, and that is bands()' business, not the data's.
                 var countryData = countries.map(function (c) {
-                    // A gentler power than the lights use. The United States
-                    // has 87,859 researchers and the median country has
-                    // eleven, and a country is a large block of colour: the
-                    // curve that reads well on a two-pixel point makes half
-                    // the world look empty when it is a continent.
-                    return {name: c.name,
-                            value: Math.pow(
-                                Math.log(1 + c[measure]) / countryCeiling,
-                                1.4)};
+                    return {name: c.name, value: c[measure]};
                 });
                 var onCountries = grain === 'country';
 
@@ -462,13 +464,19 @@ MAP_DRAW_JS = """
                         // country reading. Not the brightness, which is the
                         // log curve and means nothing to a reader.
                         dimension: onCountries ? 0 : 4,
-                        pieces: bands(
-                            onCountries ? countryLargest : largest,
-                            onCountries
-                                ? ['#16233A', '#164E63', '#1D7F9B', '#35B3CE',
-                                   '#8FE3F2', '#E8FBFF']
-                                : ['#6B4A12', '#C98B1A', '#FFD48A',
-                                   '#FFF7E0']),
+                        pieces: onCountries
+                            // A gentler curve than the lights use. The
+                            // United States has 87,859 researchers and the
+                            // median country has eleven, and a country is a
+                            // large block of colour: the spacing that reads
+                            // well on a two-pixel point leaves half the
+                            // world in one band when it is a continent.
+                            ? bands(countryLargest,
+                                    ['#16233A', '#164E63', '#1D7F9B',
+                                     '#35B3CE', '#8FE3F2', '#E8FBFF'], 1.4)
+                            : bands(largest,
+                                    ['#6B4A12', '#C98B1A', '#FFD48A',
+                                     '#FFF7E0'], 2.2),
                         // A legend, not a control: with hoverLink on,
                         // running the mouse along it made the map flare.
                         hoverLink: false,
