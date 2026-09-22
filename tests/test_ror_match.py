@@ -507,3 +507,47 @@ def test_the_cities_layer_is_gone():
     from citations_lib.glowmap import MAP_DRAW_JS
     assert not os.path.exists('assets/urban.geo.json')
     assert 'urban' not in MAP_DRAW_JS
+
+
+def test_the_city_points_prefer_webgl_and_survive_without_it():
+    """The points are half the cost of a frame in canvas, and dragging the
+    map is what suffered for it. WebGL draws them near enough for free.
+
+    What can be checked here is the fallback, because a build machine has no
+    WebGL: the feature test is a real one, building a throwaway chart and
+    asking whether echarts kept a scatterGL series, so a missing script or a
+    missing graphics context both answer no and the canvas scatter is used.
+    """
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "type: 'scatterGL'" in MAP_DRAW_JS
+    assert "type: 'scatter', coordinateSystem: 'geo'" in MAP_DRAW_JS
+    assert 'function glAvailable()' in MAP_DRAW_JS
+    # The test has to be able to fail safely: no throw escapes it.
+    probe = MAP_DRAW_JS[MAP_DRAW_JS.index('function glAvailable()'):]
+    probe = probe[:probe.index('function draw()')]
+    assert 'try {' in probe and 'catch (e)' in probe
+    assert 'answer = false;' in probe
+
+
+def test_the_webgl_scatter_takes_one_symbol_size():
+    """It takes a number for the whole series where the canvas one takes a
+    function, so on that path the measure is carried by colour alone, which
+    is what the night-lights maps this is modelled on do anyway."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'function sizeOnGL(zoom)' in MAP_DRAW_JS
+    assert 'symbolSize: sizeOnGL(1)' in MAP_DRAW_JS
+
+
+def test_the_bloom_is_off():
+    """A glow that spreads light into its neighbours makes a dense region
+    read brighter than its numbers are, on a map whose whole point is which
+    place is brighter."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert 'postEffect: {enable: false}' in MAP_DRAW_JS
+
+
+def test_the_gl_script_is_loaded_and_is_an_addition():
+    with open('app.py') as handle:
+        source = handle.read()
+    assert 'echarts-gl' in source
+    assert 'echarts@5.5.1' in source
