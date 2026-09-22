@@ -344,11 +344,12 @@ MAP_DRAW_JS = """
                         itemStyle: {areaColor: LAND, borderColor: BORDER,
                                     borderWidth: 0.5},
                         emphasis: {disabled: true},
-                        // Antarctica is a third of the height and holds no
-                        // researchers. Cutting the view off below the
-                        // southern tip of the inhabited world gives the rest
-                        // of the map the space instead.
-                        boundingCoords: [[-180, 84], [180, -58]]
+                        // No boundingCoords. Cropping the south gave the
+                        // map more room, and it also gave the geo a
+                        // different projection from the one the WebGL
+                        // scatter assumes, which is why the points landed
+                        // north and east of the land they belong to. One
+                        // projection for both, and Antarctica stays.
                     }],
                     tooltip: {
                         trigger: 'item',
@@ -497,6 +498,13 @@ MAP_DRAW_JS = """
 
                 chart.off('georoam');
                 chart.on('georoam', function () {
+                    // Repaint now, every frame of the drag, not only when it
+                    // settles. A series with a blend mode is composited on a
+                    // canvas layer of its own, and a layer that nothing has
+                    // marked dirty is put back where it was: the map slides
+                    // and the points stay behind it.
+                    var zr = chart.getZr();
+                    if (zr) { zr.refresh(); }
                     if (pending) { clearTimeout(pending); }
                     pending = setTimeout(function () {
                         pending = null;
