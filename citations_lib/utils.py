@@ -2036,6 +2036,7 @@ def openalex_author(name, timeout=2.5):
 # The map
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=32)
 def city_points(kind, year, limit_institutes=4):
     """Every place the selected edition's researchers work, with what is
     there.
@@ -2110,7 +2111,26 @@ _MAP_NAMES = {
 }
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=1)
+def _converted_names():
+    """Every country code in the data, converted in one call.
+
+    country_converter takes about 15 ms per lookup and there are 175 codes,
+    so asking it one at a time cost 2.6 seconds on the first view of the map.
+    Asked for the whole list at once it takes a fraction of that, and the
+    answer is the same for every edition.
+    """
+    rows = _fetch('select distinct country_code from countries')
+    codes = sorted(str(code).upper() for (code,) in rows if code)
+    if not codes:
+        return {}
+    converted = coco.convert(names=codes, to='name_short')
+    if isinstance(converted, str):
+        converted = [converted]
+    return {code.lower(): ('' if str(name).lower() == 'not found' else name)
+            for code, name in zip(codes, converted)}
+
+
 def map_name(country_code):
     """What the world outline calls this country, or '' if it has no feature.
 
@@ -2122,10 +2142,10 @@ def map_name(country_code):
     code = str(country_code).lower()
     if code in _MAP_NAMES:
         return _MAP_NAMES[code]
-    name = str(coco.convert(names=code.upper(), to='name_short'))
-    return '' if name.lower() == 'not found' else name
+    return _converted_names().get(code, '')
 
 
+@lru_cache(maxsize=32)
 def country_points(kind, year):
     """Every country the selected edition's researchers work in.
 

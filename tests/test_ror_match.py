@@ -406,13 +406,39 @@ def test_brightness_runs_with_the_logarithm_of_the_value():
     assert 'Math.pow(ratio, 2.2)' in MAP_DRAW_JS
 
 
-def test_the_points_are_painted_in_chunks():
-    """Measured on a frame of a drag: 36 ms with the points painted in one
-    pass, 24 ms in chunks, which is 27 frames a second against 42. This was
-    off once, for determinism, and determinism is not what a map that is
-    being dragged around needs."""
+def test_every_point_is_a_real_element():
+    """Chunked rendering is what made the points stay behind when the map was
+    dragged. Echarts turns it on by itself above 3,000 points and this map
+    has 3,341: chunked, the display list holds 917 things, the 217 countries
+    and one 700-point chunk, and the other 2,641 points sit in an incremental
+    layer that a roam does not re-project. Off, the list holds 3,558 and
+    every point moves with the map."""
     from citations_lib.glowmap import MAP_DRAW_JS
-    assert 'progressive: 700' in MAP_DRAW_JS
+    assert 'progressive: 0' in MAP_DRAW_JS
+    assert 'progressiveThreshold: 100000' in MAP_DRAW_JS
+
+
+def test_the_lookups_are_cached():
+    """Both readings of an edition are asked for again every time the year
+    moves, and they are the same rows each time."""
+    from citations_lib.utils import city_points, country_points
+    assert hasattr(city_points, 'cache_info')
+    assert hasattr(country_points, 'cache_info')
+
+
+def test_country_names_are_converted_in_one_call():
+    """country_converter takes about 15 ms a lookup and there are 175 codes,
+    so one at a time cost 2.6 seconds on the first view of the map."""
+    import time
+
+    from citations_lib.utils import _converted_names
+    _converted_names.cache_clear()
+    start = time.time()
+    names = _converted_names()
+    elapsed = time.time() - start
+    assert len(names) > 150
+    assert elapsed < 1.5, f'{elapsed:.1f}s to convert every country name'
+
 
 
 def test_colour_runs_with_the_value_and_not_the_row_number():

@@ -460,16 +460,24 @@ MAP_DRAW_JS = """
                         // winning, which is why a dense region reads as a
                         // glow and not as a pile of dots.
                         blendMode: 'lighter',
-                        // Painted in chunks across frames rather than all at
-                        // once. This was off, for determinism, and that was
-                        // the wrong trade: a frame of a drag costs 36 ms
-                        // with the points painted in one pass and 24 ms in
-                        // chunks, which is the difference between 27 and 42
-                        // frames a second. The cost of it is that a fast
-                        // drag can show part of the points while it is
-                        // moving, and all of them the moment it stops.
-                        progressive: 700,
-                        progressiveThreshold: 1200
+                        // Every point painted in one pass, and chunked
+                        // rendering explicitly refused.
+                        //
+                        // Echarts turns chunking on by itself above 3,000
+                        // points, and this map has 3,341. Chunked, the
+                        // display list holds 917 things: the 217 countries
+                        // and one 700-point chunk. The other 2,641 points
+                        // live in an incremental layer that a roam does not
+                        // re-project, so dragging the map moved the land and
+                        // left most of the lights where they were. Off, the
+                        // list holds 3,558 things and every point moves with
+                        // the map.
+                        //
+                        // It costs about 12 ms a frame. The speed it
+                        // appeared to buy was partly an illusion anyway,
+                        // since it was drawing a fifth of the points.
+                        progressive: 0,
+                        progressiveThreshold: 100000
                         // Echarts' large-scatter mode is deliberately not
                         // switched on here. It is the optimised path for
                         // tens of thousands of points, this map has 3,341,
