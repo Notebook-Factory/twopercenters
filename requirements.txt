@@ -16,4 +16,3 @@ elasticsearch>=7.17,<8
 dash-loading-spinners
 psycopg[binary]==3.2.3
 pyarrow==17.0.0
-

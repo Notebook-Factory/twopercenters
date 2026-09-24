@@ -24,6 +24,7 @@ app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.SLATE],
            ],
            suppress_callback_exceptions=True)
 server = app.server
+
 app.title = "Evidence"
 # The pages exist only if a reader can get to them. Dash registers a page the
 # moment its module is imported, but it puts no link anywhere, so /retraction
