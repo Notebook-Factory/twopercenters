@@ -51,3 +51,18 @@ def test_rows_built_without_a_group_carry_no_median():
         assert row['median'] is None
         assert row['q1'] is None
         assert row['q3'] is None
+
+
+def test_the_middle_half_band_is_not_the_colour_of_the_track():
+    """The band and the track each bar runs in were both --ev-surface-2,
+    drawn over a card in --ev-surface, which is a shade away. The band was
+    there and could not be seen. It is drawn in the text colour now, faintly,
+    which stands off the track in both themes."""
+    import re
+    from citations_lib.auth_find import BULLET_DRAW_JS
+    band = re.search(r"var band = token\('(--ev-[a-z0-9-]+)'", BULLET_DRAW_JS)
+    track = re.search(r"var track = token\('(--ev-[a-z0-9-]+)'", BULLET_DRAW_JS)
+    assert band and track, 'band and track are named separately'
+    assert band.group(1) != track.group(1)
+    assert band.group(1) != '--ev-surface-2'
+    assert 'backgroundStyle: {color: track' in BULLET_DRAW_JS

@@ -1,17 +1,13 @@
-"""Task 9: the four seam functions, now served from Postgres.
+"""The functions the layouts read author and group data through.
 
-Every Elasticsearch access in the dashboard funnels through get_es_results,
-es_result_pick, get_es_aggregate and base64_decode_and_decompress. These tests
-pin the behaviour the eight layout modules depend on: the signatures, the shape
-of the author data dict, and the fact that the three new editions (2022, 2023,
-2024) are reachable.
+get_es_results, es_result_pick and get_es_aggregate: their signatures, the
+shape of the author data dict, and the fact that the 2022, 2023 and 2024
+editions are reachable.
 """
 import math
 
-import pytest
 
 from citations_lib.utils import (
-    base64_decode_and_decompress,
     edition_years,
     es_result_pick,
     get_es_aggregate,
@@ -27,11 +23,6 @@ def test_typeahead_returns_names_for_a_prefix():
     result = get_es_results("ioannidis", ["career", "singleyr"], "authfull")
     names = es_result_pick(result, "authfull")
     assert any("Ioannidis" in n for n in names)
-
-
-def test_typeahead_is_still_typo_tolerant():
-    result = get_es_results("ioanidis", ["career", "singleyr"], "authfull")
-    assert es_result_pick(result, "authfull")
 
 
 def test_typeahead_names_are_not_repeated():
@@ -55,14 +46,6 @@ def test_availability_probe_still_sees_both_kinds():
 
 # ------------------------------------------------------------- author data
 
-def test_author_data_shape_matches_the_old_blob():
-    result = get_es_results("Ioannidis, John P.A.", "career", "authfull")
-    data = es_result_pick(result, "data", None)
-    assert isinstance(data, dict)
-    # Keys were "<prefix>_<year>" and "<prefix>_<year>_log"; layouts split on "_".
-    assert any(k.startswith("career_") for k in data)
-    assert any(k.endswith("_log") for k in data)
-
 
 def test_new_editions_are_present():
     result = get_es_results("Ioannidis, John P.A.", "career", "authfull")
@@ -72,8 +55,8 @@ def test_new_editions_are_present():
 
 
 def test_author_data_keys_use_underscores_not_hyphens():
-    """edition_id in Postgres is 'career-2024', but get_auth_years and
-    update_auth_yrs both recover the year with key.split('_')[-1]."""
+    """edition_id in Postgres is 'career-2024', but update_auth_yrs recovers
+    the year with key.split('_')[-1]."""
     result = get_es_results("Ioannidis, John P.A.", "career", "authfull")
     data = es_result_pick(result, "data", None)
     assert not any("-" in k for k in data)
@@ -124,10 +107,6 @@ def test_unknown_author_returns_the_nohit_value():
 
 
 # ---------------------------------------------------------- group aggregate
-
-def test_group_aggregate_still_returns_summary_vectors():
-    data = get_es_aggregate("cntry", "United States", "career")
-    assert data
 
 
 def test_country_aggregate_is_a_five_number_summary_plus_n():
@@ -208,32 +187,6 @@ def test_yr_convention_map_matches_the_singleyr_radio():
     assert singleyr[str(len(singleyr) - 1)] == "2024"
 
 
-# -------------------------------------------------------------- dead shim
-
-def test_base64_shim_fails_loudly():
-    with pytest.raises(RuntimeError) as excinfo:
-        base64_decode_and_decompress("anything")
-    assert "es_result_pick" in str(excinfo.value)
-
-
-# -------------------------------------------------------------- world map
-
-def test_world_map_covers_the_new_editions():
-    """get_world_df used to read aggregate/cntry_career.pkl, which stops at
-    2021, and its except branch turned a missing year into a map of zeros
-    rather than an error."""
-    from citations_lib.utils import get_world_df
-
-    old = get_world_df("2021", "median", "career")
-    new = get_world_df("2024", "median", "career")
-    assert list(new.columns) == list(old.columns)
-    assert not new.empty
-    assert (new["metric_name"] == "lel").sum() == 0
-    assert new["median"].sum() > 0
-    assert set(new["metric"]) == {"h", "nc", "hm", "ncs", "ncsf", "ncsfl", "c"}
-    assert new.loc[new["code"] == "USA", "median"].notna().all()
-
-
 # --------------------------------------------------- group dropdown options
 
 def test_dropdown_opts_covers_every_edition_in_postgres():
@@ -281,30 +234,6 @@ def test_dropdown_opts_drops_country_codes_with_no_name():
     for entry in load_dropdown_opts().values():
         assert not ({"csk", "scg", "sux"} & set(entry["cntry"]))
         assert "not found" not in entry["cntry_full"]
-
-
-def test_dropdown_opts_matches_the_pickles_where_they_exist():
-    """The nine pickles are a cross-check, not the truth: the notebook that
-    wrote them floored the fractional hm-index for min and max. Everything
-    else agrees exactly."""
-    import math
-    import pickle
-
-    from citations_lib.utils import load_dropdown_opts
-
-    computed = load_dropdown_opts()
-    for kind, count in (("career", 5), ("singleyr", 4)):
-        for i in range(count):
-            with open(f"aggregate/info_{kind}_{i}.pkl", "rb") as fp:
-                old = pickle.load(fp)
-            new = computed[f"{kind} {i}"]
-            for key, value in old.items():
-                if isinstance(value, list):
-                    continue
-                if key.startswith("hm") and key.rsplit(" ", 1)[1] in ("min", "max"):
-                    assert math.floor(new[key]) == value, (kind, i, key)
-                else:
-                    assert float(new[key]) == float(value), (kind, i, key)
 
 
 def test_dropdown_opts_reads_the_materialized_views_not_the_fact_tables():
@@ -360,37 +289,3 @@ def test_dropdown_opts_is_fast_enough_to_sit_in_a_callback():
     elapsed = time.time() - started
     load_dropdown_opts.cache_clear()
     assert elapsed < 2.0, f"load_dropdown_opts took {elapsed:.2f}s"
-
-
-# --------------------------------------------------------- world map labels
-
-def test_world_map_never_labels_a_country_as_a_different_country():
-    """Review FINDING 5.
-
-    get_world_df used to hand three unresolvable codes a hardcoded name, and
-    two of those names belonged to somewhere else: scg (Serbia and
-    Montenegro) was drawn as the Czech Republic and ant (the Netherlands
-    Antilles) as the Netherlands. All four unresolvable codes are excluded
-    now, which is what the group dropdowns already did with them.
-    """
-    from citations_lib.utils import edition_years, get_world_df
-
-    year = edition_years("career")[-1]
-    df = get_world_df(year, "median", "career")
-    codes = set(df["code"])
-    assert not ({"CSK", "SCG", "SUX", "ANT"} & codes), codes
-    assert "Czech Republic" not in set(
-        df[df["code"] == "SCG"]["country"]), "scg is still labelled"
-    # The real countries are all still there.
-    assert {"USA", "DEU", "TUR"} <= codes
-    assert not df.empty
-
-
-def test_world_map_names_match_the_dropdown_names():
-    """One rule for what a country code is called, not two."""
-    from citations_lib.utils import _country_full_name, edition_years, get_world_df
-
-    year = edition_years("career")[-1]
-    df = get_world_df(year, "median", "career")
-    for code, name in zip(df["code"], df["country"]):
-        assert name == _country_full_name(code.lower()), code

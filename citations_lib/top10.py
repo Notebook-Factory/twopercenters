@@ -283,9 +283,9 @@ def top10_layout():
             html.Div([
                 html.H3('The ten highest composite scores',
                         className='ev-top10-title'),
-                html.P('Every bar is that researcher\'s score taken apart '
-                       'into the six indicators that make it up. Click any '
-                       'name to open them in Explore.',
+                html.P('Each bar splits a researcher\'s score into its six '
+                       'indicators. Click a name to open that researcher in '
+                       'Explore.',
                        className='ev-top10-sub'),
             ], className='ev-top10-head'),
             html.Div(id='top10CompositeNote' + SUFFIX,
@@ -301,11 +301,11 @@ def top10_layout():
         ], className='ev-top10-main'),
         html.Div([
             html.Div([
-                html.H3('The ten highest of each indicator',
+                html.H3('The top ten for each indicator',
                         className='ev-top10-title'),
-                html.P('Who leads each of the six indicators that make up '
-                       'the score. Hover a name to follow that person across '
-                       'all six; click to open them in Explore.',
+                html.P('The leaders on each of the six indicators behind '
+                       'the score. Hover a name to highlight that person in '
+                       'all six charts, or click it to open them in Explore.',
                        className='ev-top10-sub'),
                 # What the two colours mean, next to the charts that use
                 # them rather than in a sentence above them. Written out
@@ -318,11 +318,11 @@ def top10_layout():
                               className='ev-legend-item'),
                     html.Span([html.Span(className='ev-top10-key '
                                                    'ev-top10-key-dim'),
-                               html.Span('leads this indicator only')],
+                               html.Span('not in the top ten overall')],
                               className='ev-legend-item'),
                     html.Span([html.Span(className='ev-top10-key '
                                                    'ev-top10-key-follow'),
-                               html.Span('the one you are hovering')],
+                               html.Span('the researcher under your cursor')],
                               className='ev-legend-item'),
                 ], className='ev-top10-legend'),
             ], className='ev-top10-head'),
@@ -394,10 +394,10 @@ def _charts(career, year, ns):
     if not composite['reproducible']:
         note = html.Div(
             [html.Span(className='ev-ic ev-ic-triangle-alert'),
-             html.Span('This edition\'s published scores cannot be '
-                       'recomputed from the maxima recorded for it, so the '
-                       'six parts below do not add up to the score beside '
-                       'them. Every other edition reproduces exactly.')],
+             html.Span('In this edition, the published scores cannot be '
+                       'rebuilt from the recorded maxima, so the six parts '
+                       'below do not add up to the score beside them. Every '
+                       'other edition adds up exactly.')],
             className='ev-top10-warning')
 
     legend = [html.Span([html.Span(className='ev-top10-key',
@@ -407,11 +407,11 @@ def _charts(career, year, ns):
               for entry in composite['series']]
     legend.append(html.Span(
         [html.Span(className='ev-top10-key ev-top10-key-self'),
-         html.Span('self-citations, under each name, against a scale that '
-                   'ends at 30%')],
+         html.Span('self-citation share, under each name (the scale ends '
+                   'at 30%)')],
         className='ev-legend-item'))
     legend.append(html.Span(
-        'each part is that indicator against the edition maximum, and the '
+        'each part is that indicator relative to the edition maximum; the '
         'six add up to the published score',
         className='ev-legend-item ev-legend-note'))
     return composite, grid, composite_rows(composite), note, legend

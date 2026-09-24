@@ -5,8 +5,9 @@ the dashboard: typing into the author dropdown (typeahead) and picking an
 author (fetch). `bench/build_legacy_index.py` reproduces the blob-era
 Elasticsearch indices (`career`, `singleyr`) directly from `data_clean/` so
 the "before" numbers can be measured locally, without the original dokku host
-or the composite pickles that `elasticSearchIdx.py` expects (see the
-docstring in `bench/build_legacy_index.py` for why those pickles aren't used).
+or the composite pickles that the old `elasticSearchIdx.py` expected (removed
+after commit 91102d5; see the docstring in `bench/build_legacy_index.py` for
+why those pickles aren't used).
 
 ## Reproducing the baseline
 

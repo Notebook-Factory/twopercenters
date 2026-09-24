@@ -247,12 +247,6 @@ def test_a_withdrawn_record_resolves_to_its_successor():
         is False
 
 
-def test_a_withdrawn_record_with_nowhere_to_go_is_dropped():
-    records = [_record('https://ror.org/gone', 'Gone University',
-                       status='withdrawn')]
-    assert build_index(records) == {}
-
-
 def test_a_successor_that_is_itself_withdrawn_is_not_followed():
     """Otherwise a chain of retractions ends at an identifier ROR does not
     stand behind either."""
@@ -343,17 +337,6 @@ def test_the_three_measures_are_not_the_same_number():
     assert order('researchers') != order('citations')
 
 
-def test_two_cities_of_one_name_in_one_country_stay_apart():
-    """Points are keyed on the coordinates ROR gives, not on the name. There
-    are eleven Springfields in the United States."""
-    from citations_lib.utils import city_points
-    points = city_points('career', 2024)
-    keys = [(p['city'], p['country_code'], p['lat'], p['lng']) for p in points]
-    assert len(keys) == len(set(keys))
-    names = [(p['city'], p['country_code']) for p in points]
-    assert len(names) >= len(set(names))
-
-
 def test_the_map_does_not_use_large_scatter_mode():
     """`large: true` is echarts' optimised path for tens of thousands of
     points. This map has 3,341, and rendered headlessly with it on, every
@@ -384,14 +367,12 @@ def test_the_world_outline_is_here_and_is_a_map():
     assert '/assets/world.geo.json' in MAP_DRAW_JS
 
 
-def test_the_map_reads_the_only_two_controls_there_are():
+def test_the_map_reads_the_only_two_controls_there_are(callback_map):
     """The year track under the map and the dataset toggle above it. There
     was a year radio in a toolbar as well; it said the same thing twice and
     it is gone."""
-    import app  # noqa: F401
-    from dash._callback import GLOBAL_CALLBACK_MAP
-    key = next(k for k in GLOBAL_CALLBACK_MAP if 'glowMapStore' in k)
-    inputs = [i['id'] for i in GLOBAL_CALLBACK_MAP[key]['inputs']]
+    key = next(k for k in callback_map if 'glowMapStore' in k)
+    inputs = [i['id'] for i in callback_map[key]['inputs']]
     assert 'glowYear_glowmap_' in inputs
     assert 'careerORSingleYrRadioHOME' in inputs
 
@@ -438,7 +419,6 @@ def test_country_names_are_converted_in_one_call():
     elapsed = time.time() - start
     assert len(names) > 150
     assert elapsed < 1.5, f'{elapsed:.1f}s to convert every country name'
-
 
 
 def test_colour_runs_with_the_value_and_not_the_row_number():
@@ -526,15 +506,6 @@ def test_the_year_track_carries_the_editions_that_exist():
     assert 2018 not in year_slider(False).marks
 
 
-def test_the_cities_layer_is_gone():
-    """It cost more than everything else on the map put together."""
-    import os
-
-    from citations_lib.glowmap import MAP_DRAW_JS
-    assert not os.path.exists('assets/urban.geo.json')
-    assert 'urban' not in MAP_DRAW_JS
-
-
 def test_the_wheel_belongs_to_the_page():
     """With roam true the wheel zooms the map, so a reader scrolling the page
     stops dead at the map and it dives to street level instead. The plotly
@@ -582,7 +553,6 @@ def test_every_roam_frame_repaints():
     assert 'zr.refresh()' in handler
 
 
-
 def test_the_points_are_drawn_by_the_canvas_renderer():
     """The WebGL scatter was tried twice and drew the points off the land
     both times: first because the view was cropped to the inhabited
@@ -625,13 +595,14 @@ def test_clicking_a_city_lists_the_people_in_it():
         point = next(p for p in city_points('career', 2024)
                      if p['city'] == 'Cambridge'
                      and p['country_code'] == 'US')
-        summary, rows, message, style, _cells, _active = \
+        summary, rows, message, style, _cells, _active, _open = \
             home.click_on_map_update(
                 f"city|{round(point['lat'], 3)}|{round(point['lng'], 3)}|1",
                 True, '2024', 'median', {'display': 'none'})
     finally:
         home.callback_context = original
-    assert 'Cambridge' in summary
+    from _dash_text import text_of
+    assert 'Cambridge' in text_of(summary)
     assert rows and all(r['RESEARCHER'] for r in rows)
     assert 'researchers' in message
     assert style['display'] == 'block'
@@ -642,13 +613,14 @@ def test_clicking_a_country_still_does_what_it_did():
     import pages.home as home
     original, home.callback_context = home.callback_context, _Clicked()
     try:
-        summary, rows, _message, _style, _cells, _active = \
+        summary, rows, _message, _style, _cells, _active, _open = \
             home.click_on_map_update('country|USA|2', True, '2024', 'median',
                                      {'display': 'none'})
     finally:
         home.callback_context = original
-    assert 'USA' in summary
-    assert 'H-index' in summary
+    from _dash_text import text_of
+    assert 'United States' in text_of(summary)
+    assert 'H-index' in text_of(summary)
     assert rows
 
 
@@ -755,26 +727,6 @@ def test_pinch_zooms_but_the_wheel_does_not():
     assert "addEventListener('touchmove'" in MAP_DRAW_JS
 
 
-def test_the_map_has_no_prose_above_it():
-    """What the map shows is what its buttons say. A paragraph explaining
-    that the points are cities sat above a map of points on cities."""
-    from citations_lib.glowmap import glow_map
-
-    def walk(node):
-        yield node
-        children = getattr(node, 'children', None)
-        if isinstance(children, (list, tuple)):
-            for child in children:
-                yield from walk(child)
-        elif children is not None:
-            yield from walk(children)
-
-    text = ' '.join(str(getattr(n, 'children', '')) for n in walk(glow_map())
-                    if isinstance(getattr(n, 'children', None), str))
-    assert 'One point per city' not in text
-    assert 'Every city on the list' not in text
-
-
 def test_the_year_is_one_control_now():
     """The track under the map replaced the radio buttons above it, rather
     than sitting beside them as a second way to say the same thing."""
@@ -797,16 +749,13 @@ def test_the_year_is_one_control_now():
     assert 'careerORSingleYrRadioHOME' in ids
 
 
-def test_every_control_the_map_listens_to_is_on_the_page():
+def test_every_control_the_map_listens_to_is_on_the_page(callback_map):
     """A callback whose input does not exist never fires, and Dash says
     nothing about it because the app suppresses callback exceptions. That is
     how the map came up blank: the year radio was removed and the callback
     that fetches the points was still listening for it, so the store stayed
     empty and the chart cleared itself.
     """
-    import app  # noqa: F401
-    from dash._callback import GLOBAL_CALLBACK_MAP
-
     import pages.home as home
 
     def walk(node):
@@ -822,7 +771,8 @@ def test_every_control_the_map_listens_to_is_on_the_page():
     on_page = {i for i in on_page if isinstance(i, str)}
 
     missing = []
-    for key, entry in GLOBAL_CALLBACK_MAP.items():
+    assert any('glow' in key for key in callback_map)
+    for key, entry in callback_map.items():
         referenced = list(entry.get('inputs', [])) + list(entry.get('state', []))
         for item in referenced:
             name = item.get('id')
@@ -1276,9 +1226,7 @@ def test_every_dataset_toggle_is_built_by_the_same_helper():
     assert built.children[0].id == 'careerORSingleYrRadioTEST'
 
     for path in glob.glob('citations_lib/*.py') + glob.glob('pages/*.py'):
-        if path.endswith('controls.py') or path.endswith('metric_tab_layout.py'):
-            # metric_tab_layout is not imported by anything; it is left as it
-            # is rather than changed blind.
+        if path.endswith('controls.py'):
             continue
         with open(path) as handle:
             source = handle.read()

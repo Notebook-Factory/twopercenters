@@ -190,7 +190,7 @@ def _upsert_dimensions(conn, frame):
     An institution is identified by its normalised name alone, so its
     `country_code` is whichever country it was first seen with. 3,389 of the
     66,079 institution names appear with more than one country across the
-    editions; the task report records what that costs.
+    editions.
     """
     countries = {}
     institutions = {}
@@ -718,10 +718,9 @@ def _check_load_order(conn, edition):
     invariant was documented before it was enforced, which is a trap for
     whoever adds version 9 next September; this is the enforcement.
 
-    The check is per kind, not global, because a real build interleaves them:
-    career 2018 is loaded before singleyr 2017, since version 1 is the only
-    directory carrying two career years and only one singleyr year. Within a
-    kind the sequence is strictly ascending.
+    The check is per kind because identity resolution runs within one kind
+    (see pipeline/matching.py), so the order between kinds does not affect
+    the ids it assigns.
     """
     latest = conn.execute(
         "select max(data_year) from editions where kind = %s",
@@ -734,37 +733,14 @@ def _check_load_order(conn, edition):
             "oldest first, as build() does, or rebuild from an empty schema.")
 
 
-# firstyr backfill: attempted, measured, and NOT shipped.
-#
-# The version-1 single-year file carries no firstyr at all. All 106,368 rows
-# of singleyr-2017 have none and every other edition has one for every row.
-# firstyr is the third component of the blocking key, so every author in that
-# edition is blocked as (surname, initial, NULL) and cannot join their own
-# career record: John Ioannidis is two authors in this data for exactly that
-# reason.
-#
-# Filling it from the same year's career file works on its own terms. It
-# recovered 68,890 of the 106,368 rows, the rest being researchers who had
-# one strong year without a career-long standing and so have no career row to
-# borrow from.
-#
-# It is not shipped because it breaks an invariant the incremental resolver
-# depends on. Ambiguity is a property of a whole (surname, initial, firstyr)
-# block, and _relevant_prior_observations relies on that: it fetches prior
-# rows by `where a.is_ambiguous`, which is only complete if every author in a
-# block shares the flag. Changing firstyr for some rows of an
-# already-resolved edition moves them between blocks, and the rebuild
-# produced blocks holding both confident and ambiguous authors, which that
-# fetch then reads incompletely. The result was a remap trying to merge two
-# singleyr-2017 rows onto one author, refused by
-# singleyr_metrics_author_id_edition_id_key. Measured on the current
-# database, there are zero such mixed blocks, so this is a fault the backfill
-# introduces rather than one it reveals.
-#
-# Doing it properly means either backfilling before any edition is loaded, so
-# no blocking key ever changes after the fact, or making the prior fetch
-# complete for a block regardless of flags. Both are real work and neither
-# belongs in the same change as the matcher.
+# Known gap: singleyr-2017 carries no firstyr, and firstyr is part of the
+# blocking key, so none of its 106,368 rows can join the same person's career
+# record (John Ioannidis is two authors for this reason). Borrowing firstyr
+# from the career file recovers 68,890 rows, but doing it after editions are
+# loaded moves rows between blocks, and _relevant_prior_observations assumes
+# every author in a block shares the is_ambiguous flag. Fixing it means
+# backfilling before any edition is loaded, or making that fetch complete for
+# a block regardless of the flag.
 
 
 def _load_file(conn, edition):

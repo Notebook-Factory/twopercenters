@@ -93,14 +93,14 @@ def _coverage_figure(year, highlight=None):
         template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)', height=380,
         margin=dict(l=50, r=20, t=50, b=50), showlegend=False,
-        yaxis=dict(title='Share of that rank range on the list (%)',
+        yaxis=dict(title='Share of ranks on the list (%)',
                    range=[0, 108]),
-        xaxis=dict(title='Overall rank among all scientists scored'),
+        xaxis=dict(title='Overall Scopus rank'),
         hoverlabel=HOVER,
     )
     figure.add_annotation(
         xref='paper', x=0.02, yref='y', y=104, showarrow=False,
-        text=f'every rank up to {RANK_CUTOFF:,} is here',
+        text=f'every rank up to {RANK_CUTOFF:,} is listed',
         font=dict(color=FULL, size=11), xanchor='left')
     return figure
 
@@ -112,34 +112,34 @@ def _summary(year, rank=None):
 
     items = [
         html.Li([html.Strong(f"{data['published']:,}"),
-                 ' researchers are published in this edition.']),
+                 ' researchers are on the list in this edition.']),
         html.Li([html.Strong(f"{data['highest_rank']:,}"),
-                 ' is the largest rank among them, so at least that many '
-                 'scientists were scored.']),
+                 ' is the highest rank on the list, so Scopus scored at least '
+                 'that many scientists.']),
         html.Li(['Every rank up to ', html.Strong(f'{RANK_CUTOFF:,}'),
-                 ' appears. Past it, a researcher is here only if they are '
-                 'near the top of their own subfield.']),
+                 ' is on the list. Beyond that, only researchers near the top '
+                 'of their subfield are.']),
     ]
     if rank:
         band = next((b for b in data['bands']
                      if b['low'] <= rank <= b['high']), None)
         if band is None:
             verdict = html.Li(
-                f'Rank {rank:,} is beyond the largest rank in this edition.',
+                f'Rank {rank:,} is past the last rank in this edition.',
                 className='ev-verdict')
         elif band['share'] > 0.999:
             verdict = html.Li(
-                [f'Rank {rank:,} sits in a band that is ',
+                [f'Rank {rank:,} falls in a range that is ',
                  html.Strong('entirely'),
-                 ' on the list. Every rank around it is published too.'],
+                 ' on the list.'],
                 className='ev-verdict')
         else:
             verdict = html.Li(
-                [f'Rank {rank:,} sits in a band where only ',
+                [f'Rank {rank:,} falls in a range where only ',
                  html.Strong(f"{100 * band['share']:.1f}%"),
-                 ' of ranks appear. Someone at this rank is here on subfield '
-                 'standing, not on overall position, which is why the number '
-                 'can exceed the size of the list.'],
+                 ' of ranks are on the list. A researcher here was listed for '
+                 'their subfield standing, not their overall rank, which is '
+                 'how the rank can exceed the size of the list.'],
                 className='ev-verdict')
         items.append(verdict)
     return html.Ul(items, className='ev-caveats')
@@ -150,13 +150,13 @@ layout = dbc.Container(fluid=True, children=[
     dbc.Row(dbc.Col([
         html.H3('How the list is built', className='ev-title'),
         dcc.Markdown(
-            'A researcher can be ranked **214,011** in an edition holding '
-            '**159,683** people. That looks impossible and is not.\n\n'
-            '`rank` is a position among **every scientist Scopus scored**, '
-            'not among the ones published here. The list is two rules joined: '
-            'everyone in the global top 100,000, plus the top of each '
-            'subfield. So a specialist can carry a rank far larger than the '
-            'list and still belong on it.',
+            'A researcher can be ranked **214,011** in an edition that lists '
+            'only **159,683** people. That is not an error.\n\n'
+            'The rank counts **every scientist Scopus scored**, not just the '
+            'people on this list. Two rules decide who is listed: everyone in '
+            'the global top 100,000, plus the researchers near the top of each '
+            'subfield. So a specialist can hold a rank far larger than the '
+            'list and still be on it.',
             className='ev-lede'),
     ], width=12)),
     html.Br(),
@@ -174,7 +174,7 @@ layout = dbc.Container(fluid=True, children=[
                       config={'displayModeBar': False}),
         ], md=8),
         dbc.Col(html.Div([
-            html.Div('Locate a rank', className='ev-kicker'),
+            html.Div('Find a rank', className='ev-kicker'),
             dcc.Input(id='ranking-rank', type='number', min=1, step=1,
                       placeholder='e.g. 214011', debounce=True,
                       className='ev-input'),
@@ -183,11 +183,11 @@ layout = dbc.Container(fluid=True, children=[
     ]),
     html.Br(),
     dbc.Row(dbc.Col(dcc.Markdown(
-        'Bars in cyan are rank ranges where **every** rank is on the list. '
-        'Bars in orange are ranges where only some are, and the height says '
-        'how many. The decay is the signature of the subfield rule: the '
-        'further down the overall ranking you go, the more exceptional you '
-        'have to be within your own field to appear.',
+        'Cyan bars are rank ranges where **every** rank is on the list. '
+        'Orange bars are ranges where only some are, and the height shows '
+        'what share. The further down the overall ranking, the smaller that '
+        'share, because past 100,000 only researchers who stand out in their '
+        'own subfield are listed.',
         className='ev-caption'), width=12)),
     html.Br(),
 ])

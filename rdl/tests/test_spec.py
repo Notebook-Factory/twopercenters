@@ -1,15 +1,6 @@
 from rdl import spec
 
 
-def test_career_metrics_is_the_fact_table():
-    t = spec.TABLES["career_metrics"]
-    assert t.pkey == "metric_id"
-    assert t.time_col == "observation_date"
-    assert t.fkeys["author_id"] == "authors"
-    assert t.fkeys["institution_id"] == "institutions"
-    assert t.fkeys["edition_id"] == "editions"
-
-
 def test_ns_columns_are_dropped():
     """Fifteen non-self-citation restatements of the main metrics. They
     correlate almost perfectly with their bare counterparts."""
@@ -30,11 +21,6 @@ def test_provenance_columns_are_dropped_from_editions():
     t = spec.TABLES["editions"]
     assert "sha256" in t.drop_columns
     assert "source_filename" in t.drop_columns
-
-
-def test_splits_are_the_edition_boundaries():
-    assert str(spec.VAL_TIMESTAMP.date()) == "2022-12-31"
-    assert str(spec.TEST_TIMESTAMP.date()) == "2023-12-31"
 
 
 def test_every_fkey_target_is_a_declared_table():

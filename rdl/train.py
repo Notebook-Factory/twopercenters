@@ -86,8 +86,6 @@ def persistence_baseline(task, split: str, dataset, source_col: str):
     Returns None when the task declares no persistence column, which is the
     case for tasks whose target has no present-day counterpart.
     """
-    import pandas as pd
-
     table = task.get_table(split, mask_input_cols=False)
     labels = table.df
     cm = dataset.get_db(upto_test_timestamp=False).table_dict[

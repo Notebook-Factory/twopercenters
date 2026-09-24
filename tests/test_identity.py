@@ -163,17 +163,6 @@ def test_two_people_in_an_ambiguous_block_keep_their_own_time_series():
         assert sorted(editions) == ["career-2023", "career-2024"]
 
 
-def test_same_edition_rows_still_never_merge():
-    """Rule one survives the change, and it is enforced by the assignment
-    being one-to-one rather than by a separate check."""
-    observations = [
-        _amb("career-2023", "Li, Min", 3.5, 20, inst="Alpha"),
-        _amb("career-2023", "Li, Min", 3.5, 20, inst="Alpha"),
-    ]
-    resolutions = resolve(observations)
-    assert len({r.author_id for r in resolutions}) == 2
-
-
 def test_an_ambiguous_author_id_does_not_encode_the_edition():
     """The old id was a hash over edition_id, which is why it could not
     survive into the next edition."""

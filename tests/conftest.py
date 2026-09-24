@@ -17,6 +17,7 @@ import os
 from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
+import pytest
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -60,3 +61,32 @@ def _ensure_database_exists(url):
 
 
 _ensure_database_exists(os.environ["TEST_DATABASE_URL"])
+
+
+@pytest.fixture(scope="session")
+def callback_map():
+    """Every registered callback, keyed by its outputs.
+
+    Read from the app after one request, because that is when Dash moves
+    callbacks out of dash._callback.GLOBAL_CALLBACK_MAP and empties it. A
+    test that reads the global map directly sees everything or nothing
+    depending on whether an earlier test has made a request.
+    """
+    import app
+
+    app.server.test_client().get("/")
+    return app.app.callback_map
+
+
+@pytest.fixture(scope="session")
+def dash_callback(callback_map):
+    """Look up a registered callback by a piece of its output id and return
+    the plain function behind it, so a test can call it with the values the
+    browser would send. Callbacks declared inside layout builders can only
+    be reached this way."""
+    def lookup(output_fragment):
+        keys = [key for key in callback_map if output_fragment in key]
+        assert len(keys) == 1, (output_fragment, keys)
+        return callback_map[keys[0]]["callback"].__wrapped__
+
+    return lookup

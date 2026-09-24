@@ -214,15 +214,7 @@
     }
     highlight(hits, index);
   });
-
-  // A fresh set of results starts unhighlighted, so Down always begins at the
-  // top rather than at wherever the previous list happened to be.
-  new MutationObserver(function () {
-    var box = document.getElementById('spotlight-results');
-    if (box && !box.querySelector('.' + HILITE)) { return; }
-  }).observe(document.body, {childList: true, subtree: true});
 })();
-
 
 // Close the map hint on the first click, without waiting for the server.
 //

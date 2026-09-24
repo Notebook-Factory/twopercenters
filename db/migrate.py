@@ -4,7 +4,6 @@ Deliberately not Alembic: this project has one schema, no branching history, and
 adding a migration framework would be more machinery than the problem needs.
 """
 import os
-import sys
 
 from db.connection import connect
 

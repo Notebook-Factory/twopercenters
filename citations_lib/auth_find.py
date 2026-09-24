@@ -6,28 +6,27 @@
 # ==========================================================================================
 
 # =============== misc libs & modules
-import numpy as np
 import math
-import pickle
-import json
-from sys import getsizeof
 # =============== Plotly libs & modules
-import plotly.graph_objects as go
 import country_converter as coco
-
 
 # =============== Plotly Dash libraries
 import dash
-from dash import html, dcc, callback, ctx #, Input, Output
+from dash import html, dcc, callback_context
+from citations_lib.callbacks import callback, clientside_callback
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import dash_daq as daq
 
 # =============== Custom lib
-from citations_lib.create_fig_helper_functions import *
-from citations_lib.utils import *
-from citations_lib.callback_templates import *
+from citations_lib.utils import (
+    composite_is_reproducible, composite_maxima, composite_score,
+    es_result_pick, get_es_aggregate, get_es_results, get_inst_field_cntry,
+    openalex_author, score_standing)
+from citations_lib.callback_templates import (
+    generate_es_dropdown_callback, generate_update_cards_callback,
+    generate_update_carsing_callback, generate_update_years_callback)
 import dash_loading_spinners as dls
 from citations_lib.controls import kind_toggle
 # The what-if calculator.
@@ -39,18 +38,18 @@ from citations_lib.controls import kind_toggle
 # the same edition.
 #
 # Everything the calculator draws is magenta, and everything published is
-# cyan, on every gauge and on the rank at once. A reader who looks away and
+# cyan, on every bar and on the rank at once. A reader who looks away and
 # back has to be able to tell in one glance whether the number in front of
 # them is the researcher's or their own invention.
 #
-# Magenta rather than orange: the orange line across each gauge already means
+# Magenta rather than orange: the orange tick on each bar row already means
 # the group median, and a what-if bar in the same colour would sit right on
 # top of the thing it has to be told apart from.
 GAUGE_BAR = '#00B4D8'
 WHATIF_BAR = '#D86CB4'
 
-# The six indicators, in the order the gauges are drawn, with the short label
-# that goes under each input box.
+# The six indicators, in the order the bullet rows are drawn, with the short
+# label each input box carries as its tooltip.
 WHATIF_METRICS = (
     ('nc', 'Citations'),
     ('h', 'H-index'),
@@ -181,8 +180,8 @@ def comparison_legend(group_label):
         html.Span([html.Span(className='ev-legend-band'),
                    html.Span('middle half of '), html.Strong(str(group_label))],
                   className='ev-legend-item'),
-        html.Span([html.Span('bar length is the share of the edition maximum, '
-                             'the same denominator the composite score uses')],
+        html.Span([html.Span('bar length is relative to the edition maximum, '
+                             'as in the composite score')],
                   className='ev-legend-item ev-legend-note'),
     ]
 
@@ -212,6 +211,67 @@ def preset_choice(year_options, preset, career):
     # show nothing.
     year = wanted_year if wanted_year in available else dash.no_update
     return dash.no_update, year, bool(preset.get('ns')), None
+
+
+# The what-if boxes, one per bullet row.
+def bullet_inputs(state, suffix='_author_find_'):
+    """The six number boxes, aligned with the rows of the chart.
+
+    They are the readout as well as the control: the value used to appear
+    twice, once inside the gauge arc and again in a box underneath it.
+    """
+    cells = []
+    for metric, label in WHATIF_METRICS:
+        value = state['actual'].get(metric)
+        # The h-index counts papers, so it cannot exceed the number of
+        # papers. That ceiling is real and we know it, so the input
+        # enforces it rather than letting someone claim an h-index of 900
+        # from 120 papers. (It holds in the data too: h > np in 912 of
+        # 1,402,942 published rows, so the cap is set above the published
+        # value on the rare row where the publishers' own figure breaks
+        # it.)
+        maximum = None
+        if metric == 'h' and state.get('np'):
+            maximum = max(int(state['np']), int(value or 0))
+        # Hm is a fractional h-index and the only one of the six that is
+        # not a whole number. Everything else is a count, and a count in a
+        # box reading 284984.0 looks like a bug.
+        if value is not None:
+            value = round(value, 1) if metric == 'hm' else int(value)
+        # The tooltip goes on a wrapper: dbc.Input 1.3.1 rejects `title`
+        # outright rather than passing it through to the <input>.
+        cells.append(html.Div(
+            dbc.Input(
+                id = 'whatIf-' + metric + suffix, type = 'number',
+                value = value, min = 0, max = maximum,
+                step = 0.1 if metric == 'hm' else 1,
+                disabled = True, debounce = False,
+                className = 'ev-whatif-input'),
+            title = label + (f' (max {maximum:,})' if maximum else '')))
+
+    # The composite box is a readout, not a control: the score is the sum
+    # of the six above it, so it is never typed into. It is the fastest
+    # thing on the card to watch while a what-if is being edited.
+    total = composite_score(state['actual'], state['maxima'])
+    cells.append(html.Div(
+        dbc.Input(id = 'whatIf-c' + suffix, type = 'text',
+                  value = '' if total is None else f'{total:.2f}',
+                  disabled = True, readonly = True,
+                  className = 'ev-whatif-input ev-whatif-derived'),
+        title = 'Composite score, the sum of the six above'))
+
+    # What the boxes are for once what-if is on. Opened by the what-if
+    # callback, not by hovering, and closed on the first edit or after a few
+    # seconds; hovering the box brings it back. Last in the column, so the
+    # boxes above keep their places beside their rows.
+    cells.append(dbc.Tooltip(
+        [html.Strong('You can edit these now. '),
+         'Type a new value into any box to recompute the composite score and '
+         'see where it would rank. The other numbers stay as published.'],
+        id = 'whatIfTip' + suffix, target = 'whatIf-nc' + suffix,
+        placement = 'left', is_open = False, trigger = 'hover',
+        className = 'ev-whatif-tip'))
+    return cells
 
 
 def card_header(name, institute, country, field, edition=None):
@@ -260,9 +320,15 @@ def rank_stats(scopus_rank, list_rank, published, whatif=False, was=None):
             html.Div(detail, className='ev-rank-detail'),
         ], className='ev-rank-cell')
 
+    if published and isinstance(list_rank, int) and list_rank > published:
+        # A what-if score below everyone published is not on the list.
+        list_cell = cell(None, 'off the list',
+                         f'below all {published:,} published')
+    else:
+        list_cell = cell(list_rank, 'on this list',
+                         f'of {published:,} published' if published else '')
     cells = [
-        cell(list_rank, 'on this list',
-             f'of {published:,} published' if published else ''),
+        list_cell,
         cell(scopus_rank, 'Scopus rank', 'among everyone scored'),
     ]
     if whatif:
@@ -271,10 +337,12 @@ def rank_stats(scopus_rank, list_rank, published, whatif=False, was=None):
                                  className='ev-id-badge'))
     children = [html.Div(cells, className='ev-rank-row')]
     if whatif and was:
+        def number(value):
+            return f'{value:,}' if isinstance(value, int) else '-'
         children.append(html.Div(
             [html.Span('published: '),
-             html.Strong(f"{was['list_rank']:,}"), html.Span(' on this list, '),
-             html.Strong(f"{was['scopus_rank']:,}"), html.Span(' Scopus')],
+             html.Strong(number(was['list_rank'])), html.Span(' on this list, '),
+             html.Strong(number(was['scopus_rank'])), html.Span(' Scopus')],
             className='ev-rank-was'))
     return children
 
@@ -361,93 +429,6 @@ def rank_chart_payload(list_rank, scopus_rank, published, whatif=False):
             'whatif': bool(whatif)}
 
 
-# BEGIN: RUN ONLY ON DATA CHANGE ------------------------------------------------
-"""
-The following is to avoid es queries to retrive information re 
-the whole entries. By default the max size is 10k. Using scroll, pagination,
-token etc., it is possible to retrieve the whole data, yet often pointless. 
-It defeats the purpose of using ES. Just for consistency, following will use 
-indexes instead of pd dataframes to export author list, c-scores list and 
-the number of records etc. 
-"""
-# query = { "query": { "match_all": {} }, "_source": ['authfull'] }
-page_size = 8000
-
-# info_all  = {}
-# all_auth_career = []
-# all_auth_singleyr = []
-# for total_pages, page_counter, page_items, page_data in es_scroll('career', query, page_size=page_size):
-#     all_auth_career.append(page_data['hits']['hits'])
-# for total_pages, page_counter, page_items, page_data in es_scroll('singleyr', query, page_size=page_size):
-#     all_auth_singleyr.append(page_data['hits']['hits'])
-
-# career_all = [d['_source']['authfull']
-#                     for tmp in all_auth_career
-#                     for d in tmp]
-# singleyr_all = [d['_source']['authfull']
-#                     for tmp in all_auth_singleyr
-#                     for d in tmp]
-
-# info_all['career'] = {}
-# info_all['career']['total'] = len(career_all)
-# info_all['singleyr'] = {}
-# info_all['singleyr']['total'] = len(singleyr_all)
-# all_authors = set(career_all + singleyr_all)
-# info_all['total'] = len(all_authors)
-
-# # Write it all 
-# write_pickle(all_authors,'all_auth_names.pickle')
-# # Write summary 
-# write_json(info_all,"cumulative_summary.json")
-
-# query = { "query": { "match_all": {} }, "_source": ['data'] }
-# page_size = 8000
-
-# career_data = []
-# singleyr_data = []
-# for total_pages, page_counter, page_items, page_data in es_scroll('career', query, page_size=page_size):
-#      career_data.append(page_data['hits']['hits'])
-
-# This is a bit tricky...F
-# for tmp in career_data:
-#     for d in tmp:
-#         aa = base64_decode_and_decompress(d['_source']['data'],False)
-#         print(aa)
-#         break
-
-# career_all_c = [base64_decode_and_decompress(d['_source']['data'])
-#                     for tmp in career_data
-#                     for d in tmp]
-#write_pickle(career_all_c,'career_c.pickle')
-
-# for total_pages, page_counter, page_items, page_data in es_scroll('singleyr', query, page_size=page_size):
-#      singleyr_data.append(page_data['hits']['hits'])
-
-
-# COUNTRY DATA AGG
-
-# query = { "query": { "match_all": {} }, "_source": ['cntry','data'] }
-
-# career_data = []
-# for total_pages, page_counter, page_items, page_data in es_scroll('career_cntry', query, page_size=page_size):
-#      career_data.append(page_data['hits']['hits'])
-# career_all_c = [{'ct': d['_source']['cntry'],'dat': base64_decode_and_decompress(d['_source']['data'],False)}
-#                     for tmp in career_data
-#                     for d in tmp]
-# write_pickle(career_all_c,'cntry_career.pkl')
-
-# singleyr_data = []
-# for total_pages, page_counter, page_items, page_data in es_scroll('singleyr_cntry', query, page_size=page_size):
-#      singleyr_data.append(page_data['hits']['hits'])
-# singleyr_all_c = [{'ct': d['_source']['cntry'],'dat': base64_decode_and_decompress(d['_source']['data'],False)}
-#                     for tmp in singleyr_data
-#                     for d in tmp]
-# write_pickle(singleyr_all_c,'cntry_singleyr.pkl')
-
-
-# END: RUN ONLY ON DATA CHANGE ------------------------------------------------
-
-
 # The bullet rows.
 #
 # Drawn in the browser so a what-if keystroke redraws without waiting on a
@@ -495,7 +476,13 @@ BULLET_DRAW_JS = """
                                            : token('--ev-green', '#84B460');
             var orange = token('--ev-orange', '#F09048');
             var text = token('--ev-text', '#E8ECF2');
-            var band = token('--ev-surface-2', '#4A5670');
+            // The track each bar runs in, and the group's middle half. They
+            // were one colour, and --ev-surface-2 is a shade away from the
+            // card it sits on, so the band could not be seen. The band is the
+            // text colour, faintly: light on the dark theme, dark on the
+            // light one, and off the track in both.
+            var track = token('--ev-surface-2', '#4A5670');
+            var band = token('--ev-text', '#E8ECF2');
 
             function commas(v) {
                 var n = (Math.round(v * 10) / 10);
@@ -512,9 +499,9 @@ BULLET_DRAW_JS = """
 
             var series = [];
             if (hasGroup) { series.push(
-                // Spacer, then the group's middle half. A band drawn from q1
-                // rather than from zero says where most of the group actually
-                // sits, which a gauge could not show at all.
+                // A band drawn from q1 rather than from zero says where most
+                // of the group actually sits, which a gauge could not show at
+                // all.
                 // The group's middle half, drawn as a custom rect rather than
                 // as a stacked bar. A stacked pair is its own bar group, and
                 // echarts offsets bar groups within the category slot, so the
@@ -531,7 +518,7 @@ BULLET_DRAW_JS = """
                              shape: {x: a[0], y: a[1] - 9,
                                      width: Math.max(b[0] - a[0], 1),
                                      height: 18},
-                             style: {fill: band, opacity: 0.5}};
+                             style: {fill: band, opacity: 0.16}};
                  },
                  encode: {x: [1, 2], y: 0}, tooltip: {show: false},
                  data: rows.map(function (r, i) { return [i, r.q1, r.q3]; })});
@@ -546,7 +533,7 @@ BULLET_DRAW_JS = """
                 // there was nothing to read its length against.
                 {type: 'bar', barWidth: 8, barGap: '-100%', z: 3,
                  showBackground: true,
-                 backgroundStyle: {color: band, opacity: 0.65,
+                 backgroundStyle: {color: track, opacity: 0.65,
                                    borderRadius: 2},
                  itemStyle: {color: accent, borderRadius: 2},
                  data: rows.map(function (r) {
@@ -574,8 +561,6 @@ BULLET_DRAW_JS = """
 
             chart.setOption({
                 animationDuration: 260,
-                // Room on the right for the input column, which is laid out
-                // by CSS and sits over the chart.
                 // 116px on the right is the input column, which is laid
                 // out by CSS and sits over the chart. A card with no
                 // comparison group has no inputs either, so that space is
@@ -665,7 +650,7 @@ def register_bullet_chart(store_id, element_id, sink_id):
     is why the function above is a module-level constant rather than a string
     inside one tab's factory. The ids differ; the chart does not.
     """
-    dash.clientside_callback(
+    clientside_callback(
         BULLET_DRAW_JS,
         Output(sink_id, 'children'),
         Input(store_id, 'data'),
@@ -682,67 +667,12 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     a callback writing into a component that may not be mounted.
     """
 
-    # ========================================================================================== 
-    # ========================================================================================== 
-    # Data Preparation
-    # ========================================================================================== 
-    # ========================================================================================== 
-
-    #dfs_career, dfs_singleyr, dfs_career_log, dfs_singleyr_log, _, _, _, _ = load_standardized_data()
-    # vert_slider_length = 500
-    # dropdown_opts = dict()
-    # for i in range(5):
-    #     with open(f'data/aggregate_info/info_career_{i}.pkl', 'rb') as fp: info = pickle.load(fp)
-    #     dropdown_opts['career ' + str(i)] = info
-    # for i in range(4):
-    #     with open(f'data/aggregate_info/info_singleyr_{i}.pkl', 'rb') as fp: info = pickle.load(fp)
-    #     dropdown_opts['singleyr ' + str(i)] = info
-
-    # ========================================================================================== 
-    # ========================================================================================== 
-    # Color formatting
-    # ========================================================================================== 
-    # ========================================================================================== 
     darkAccent1 = '#394459' # navy ground (Evidence)
-    darkAccent2 = '#4A5670' # raised surface
-    darkAccent3 = '#E8ECF2' # near-white text
-    lightAccent1 = '#00B4D8' # cyan leaf, primary accent
     highlight1 = '#84B460' # green leaf
-    highlight2 = '#D86CB4' # magenta leaf
-
-    g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
-    g2c = [highlight2, darkAccent3] # bar plot bar 3
-    # Transparent, not a colour: the page's own background shows through,
-    # so a chart follows the light/dark switch without being redrawn.
-    bgc = 'rgba(0,0,0,0)' # chart background: inherit the page
     SUFFIX = '_author_find_'
 
-    # ========================================================================================== 
-    # ========================================================================================== 
-    # Row 1: select dataset!
-    # ========================================================================================== 
-    # ========================================================================================== 
-
-    # =============== Select dataset!
-
-    # =============== Career vs Singleyr
-    careerORSingleYr = kind_toggle("careerORSingleYrRadio" + SUFFIX)
     careerORSingleA1 = kind_toggle("careerORSingleYrA1" + SUFFIX)
-    # =============== Year
 
-    selectYr = html.Div(
-        [dbc.RadioItems(
-            id = "selectYrRadio" + SUFFIX, 
-            className = "btn-group", 
-            inputClassName = "btn-check", 
-            labelClassName = "btn btn-outline-primary", 
-            labelCheckedClassName = "active", 
-            style = {'size':'sm'}, 
-            value = 0,
-            options = update_yr_options(career = True)
-        )
-    ], className = "radio-group year-picker")
-    
     selectYrA1 = html.Div(
         [dbc.RadioItems(
             id = "selectYrRadioA1" + SUFFIX, 
@@ -755,31 +685,6 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             options = [{"label": "2017", "value": "2017", 'disabled': False}]
         )
     ], className = "radio-group year-picker")
-
-
-    @callback(
-        Output('selectYrRadio' + SUFFIX, 'options'), 
-        Input('careerORSingleYrRadio' + SUFFIX, 'value'))
-    def update_yr_opts(career):
-        return(update_yr_options(career))
-
-    # The "Select dataset" card that used to sit here was a large bordered box
-    # whose whole content was the words "Select dataset", restating what the
-    # control beside it already said. The two controls carry their own captions
-    # now, in the same labelled-toolbar shape the home page uses.
-    row1 = html.Div(
-        [
-            html.Div(
-                [
-                    html.Div(careerORSingleYr, className="ev-picker-left"),
-                    html.Span(className="ev-picker-sep"),
-                    html.Div(selectYr, className="ev-picker-right"),
-                ],
-                className="ev-picker",
-            ),
-        ],
-        className="ev-toolbar ev-panel-toolbar",
-    )
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -795,10 +700,10 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     output_ids = ['InfoAuthor1' + SUFFIX, 'FieldAuthor1' + SUFFIX, 'CountryAuthor1' + SUFFIX, 'InstitutionAuthor1' + SUFFIX]
     generate_update_cards_callback('selectYrRadioA1' + SUFFIX, output_ids, 'author1OptionsDropdown' + SUFFIX, 'careerORSingleYrA1' + SUFFIX,darkAccent1, highlight1)
 
-    # What the gauges are measured against. The label used to be the whole
+    # The group the reference marks describe. The label used to be the whole
     # sentence, three times over ("Max and median (red) by country"), which
     # said the line was red when it is orange and left no room for the thing
-    # a reader actually picks. The sentence is a legend under the gauges now
+    # a reader actually picks. The sentence is a legend under the control now
     # and names the group, so the control is just the group.
     upper = html.Div([
         html.Span('Compare against', className='ev-control-label'),
@@ -809,8 +714,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             multi=False, id="upper" + SUFFIX, value='cntry',
             clearable=False, searchable=False),
     ], className='ev-compare')
- 
-   
+
     row2 = dbc.Container([
         dbc.Row(dbc.Col(html.Div([
             html.Div(author1Options, className="ev-author-search"),
@@ -836,13 +740,6 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # Main Author Figure
     # ========================================================================================== 
     # ========================================================================================== 
-    # =============== Empty fig
-    empty_fig = go.Figure()
-    empty_fig.update_layout(height = 10, plot_bgcolor = bgc, paper_bgcolor = bgc)
-    empty_fig.update_xaxes(visible = False)
-    empty_fig.update_yaxes(visible = False)
-    # =============== Toggle: log-transformed values!
-    logTransf = daq.BooleanSwitch(label = 'Log transformed', labelPosition = 'bottom', id = 'logTransfToggleMain' + SUFFIX)
     # =============== Toggle: % self-citations
     selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
     # =============== Toggle: the what-if calculator
@@ -850,9 +747,9 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                                id = 'whatIfToggle' + SUFFIX,
                                color = WHATIF_BAR)
     whatIfStore = dcc.Store(id = 'whatIfStore' + SUFFIX)
-    # =============== Figure title
-    #figTitle = html.Div(' ', id = 'figTitleCard' + SUFFIX, style = {'color':lightAccent1, 'font-size':25})
-    # =============== C score figure
+    # Closes the what-if tip a few seconds after it opens.
+    whatIfTipTimer = dcc.Interval(id = 'whatIfTipTimer' + SUFFIX,
+                                  interval = 8000, disabled = True)
     # =============== The author card
     #
     # Built as a shell here rather than inside the callback, because the
@@ -898,7 +795,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # shipped as JSON. Colours are read off the CSS custom properties at draw
     # time, which is the one thing the server-rendered plotly charts on this
     # page cannot do: this strip follows a theme switch.
-    dash.clientside_callback(
+    clientside_callback(
         """
         function (payload, elementId) {
             var el = document.getElementById(elementId);
@@ -943,7 +840,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             chart.setOption({
                 animationDuration: 400,
                 // The last axis tick sits at the maximum, so it needs room to
-                       // its right or it is drawn half off the chart.
+                // its right or it is drawn half off the chart.
                 grid: {left: 6, right: 20, top: 32, bottom: 6, containLabel: true},
                 xAxis: {
                     type: 'log', min: 1, max: span,
@@ -1025,7 +922,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # It always prints the published figures. A what-if is an invention, and
     # an invention that leaves the site looking like a record is the one
     # outcome this whole page is built to prevent.
-    dash.clientside_callback(
+    clientside_callback(
         """
         function (nx, nimg, ncopy, share, strip) {
             var trig = (dash_clientside.callback_context.triggered || [])[0];
@@ -1044,7 +941,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             }
             function commas(v) {
                 return (v === null || v === undefined) ? '-'
-                    : v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    : v.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
             }
 
             var host = document.createElement('div');
@@ -1244,79 +1141,21 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # is the seventh bullet row now, which is where it belongs -- beside the
     # six terms it is the sum of -- so the card has the width to itself.
     metricsFigAuthor_c = dbc.Row(dbc.Col(identityCard, width = 12))
-    formulaRow = dbc.Row(dbc.Col(id = 'c_score_formula' + SUFFIX,
-                                 width = {'offset': 1, 'size': 10}))
-
-    # =============== The what-if boxes, one per bullet row
-    def _bullet_inputs(state):
-        """The six number boxes, aligned with the rows of the chart.
-
-        They are the readout as well as the control: the value used to appear
-        twice, once inside the gauge arc and again in a box underneath it.
-        """
-        cells = []
-        for metric, label in WHATIF_METRICS:
-            value = state['actual'].get(metric)
-            # The h-index counts papers, so it cannot exceed the number of
-            # papers. That ceiling is real and we know it, so the input
-            # enforces it rather than letting someone claim an h-index of 900
-            # from 120 papers. (It holds in the data too: h > np in 912 of
-            # 1,402,942 published rows, so the cap is set above the published
-            # value on the rare row where the publishers' own figure breaks
-            # it.)
-            maximum = None
-            if metric == 'h' and state.get('np'):
-                maximum = max(int(state['np']), int(value or 0))
-            # Hm is a fractional h-index and the only one of the six that is
-            # not a whole number. Everything else is a count, and a count in a
-            # box reading 284984.0 looks like a bug.
-            if value is not None:
-                value = round(value, 1) if metric == 'hm' else int(value)
-            # The tooltip goes on a wrapper: dbc.Input 1.3.1 rejects `title`
-            # outright rather than passing it through to the <input>.
-            cells.append(html.Div(
-                dbc.Input(
-                    id = 'whatIf-' + metric + SUFFIX, type = 'number',
-                    value = value, min = 0, max = maximum,
-                    step = 0.1 if metric == 'hm' else 1,
-                    disabled = True, debounce = False,
-                    className = 'ev-whatif-input'),
-                title = label + (f' (max {maximum:,})' if maximum else '')))
-
-        # The composite box is a readout, not a control: the score is the sum
-        # of the six above it, so it is never typed into. It is the fastest
-        # thing on the card to watch while a what-if is being edited.
-        total = composite_score(state['actual'], state['maxima'])
-        cells.append(html.Div(
-            dbc.Input(id = 'whatIf-c' + SUFFIX, type = 'text',
-                      value = '' if total is None else f'{total:.2f}',
-                      disabled = True, readonly = True,
-                      className = 'ev-whatif-input ev-whatif-derived'),
-            title = 'Composite score, the sum of the six above'))
-        return cells
-
     def _whatif_note(state):
         if not state['reproducible']:
             return html.Div(
-                'The what-if calculator is off for this edition: its '
-                'published scores cannot be reproduced from the maxima '
-                'recorded with it, so any score it computed here would '
-                'disagree with the one printed above.',
-                className = 'ev-whatif-note ev-whatif-note-off')
-        return html.Div(
-            'Change any of the six numbers and the composite score is '
-            'recomputed with the published formula, then looked up in this '
-            'edition. Nothing is predicted: this is where that score would '
-            'have placed, holding the other indicators fixed. Real citations '
-            'rarely move only one of them.',
-            className = 'ev-whatif-note')
+                'The what-if calculator is off for this edition. Its '
+                'published scores cannot be rebuilt from the recorded maxima, '
+                'so a score computed here would not match the one shown '
+                'above.',
+                className = 'ev-whatif-note')
+        # Where the calculator works there is nothing to say here: switching
+        # it on opens a tip on the boxes themselves (whatif_tip).
+        return None
 
     # =============== Figure callbacks
-
-
     @callback(
         Output('2author_figs' + SUFFIX, 'children'), 
-        Output('c_score_formula' + SUFFIX, 'children'),
         Output('whatIfStore' + SUFFIX, 'data'),
         Output('whatIfToggle' + SUFFIX, 'on'),
         Output('cardHeader' + SUFFIX, 'children'),
@@ -1331,50 +1170,52 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         [Input('careerORSingleYrA1' + SUFFIX, 'value'),
         Input('selectYrRadioA1' + SUFFIX,'value'),
         Input('selfCToggle' + SUFFIX, 'on'), 
-        #Input('logTransfToggleMain' + SUFFIX, 'on'),
         Input('author1OptionsDropdown' + SUFFIX, 'value'), 
         Input("upper" + SUFFIX,'value')], 
-        # Input('ncSlider1' + SUFFIX, 'value'), Input('hSlider1' + SUFFIX, 'value'), Input('hmSlider1' + SUFFIX, 'value'), 
-        # Input('ncsSlider1' + SUFFIX, 'value'), Input('ncsfSlider1' + SUFFIX, 'value'), Input('ncsflSlider1' + SUFFIX, 'value'), 
-        # Input('ncSlider2' + SUFFIX, 'value'), Input('hSlider2' + SUFFIX, 'value'), Input('hmSlider2' + SUFFIX, 'value'), 
-        # Input('ncsSlider2' + SUFFIX, 'value'), Input('ncsfSlider2' + SUFFIX, 'value'), Input('ncsflSlider2' + SUFFIX, 'value'),
-        #Input('ncWDD' + SUFFIX, 'value'), Input('hWDD' + SUFFIX, 'value'), Input('hmWDD' + SUFFIX, 'value'),
-        #Input('ncsWDD' + SUFFIX, 'value'), Input('ncsfWDD' + SUFFIX, 'value'), Input('ncsflWDD' + SUFFIX, 'value')
         )
-    # nc1, h1, hm1, ncs1, ncsf1, ncsfl1, nc2, h2, hm2, ncs2, ncsf2, ncsfl2
-    def update_author_figso_and_rank(career1, yr1, ns, group1_name,uplim): # weights: ncW, hW, hmW, ncsW, ncsfW, ncsflW):
+    def update_author_figso_and_rank(career1, yr1, ns, group1_name,uplim):
         '''
         group1_name: author name
-        group2_name: author name
         '''
+        # One value per output, in the order the decorator lists them: the
+        # empty card, for when there is no author to draw. This used to carry
+        # a fourteenth value (a leftover empty figure) that shifted every
+        # value after it one output along, so Dash rejected the whole return.
+        no_author = (["No dataset selected"], None, False,
+                     card_header(None, None, None, None), [], [], None,
+                     'ev-id-card', None, [], None, [])
         if career1 == None or yr1 == None: raise PreventUpdate
         elif group1_name == None:
-            return (["No dataset selected"], empty_fig, '', None, False,
-                    card_header(None, None, None, None), [], [], None,
-                    'ev-id-card', None, [], None, [])
+            return no_author
         else:
-            metrics_list = ['nc (ns)', 'h (ns)', 'hm (ns)',  'ncs (ns)', 'ncsf (ns)', 'ncsfl (ns)', 'c (ns)'] if ns else ['nc', 'h', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c' ]
             prefix1 = 'career' if career1 else 'singleyr'
             # exact=True: the author name comes from the dropdown.
             results = get_es_results(group1_name, prefix1, 'authfull', exact=True)
-            data1 = {}
-            data1_log = {}
-            if results is not None:
-                data = es_result_pick(results, 'data', None)
-                data1_log  = data[f'{prefix1}_{yr1}_log']
-                data1 =  data[f'{prefix1}_{yr1}']
-            logTransf = False
-            
+            # A name that finds nobody (a stale dropdown value, or a kind this
+            # author has no rows in) leaves nothing to draw. Everything below
+            # reads the author's row, so this returns the empty card rather
+            # than reaching it with no row at all.
+            if results is None:
+                return no_author
+            data = es_result_pick(results, 'data', None)
+            data1 = data[f'{prefix1}_{yr1}']
 
             names = get_inst_field_cntry(data, prefix1, yr1)
             # The stored country is a lowercase ISO3 code ("usa"), which is
             # what the aggregate lookups key on, but it is not what a reader
             # wants to see. coco turns it into a name for display only; the
             # code itself is still what gets passed to get_es_aggregate below.
-            cntry_full = str(coco.convert(names=names['cntry'],
-                                          to='name_short'))
-            if cntry_full in ('not found', 'None'):
-                cntry_full = str(names['cntry']).upper()
+            #
+            # 16,657 career rows have no country at all, and coco raises on
+            # None rather than returning 'not found'. For those the country is
+            # left empty, which card_header and share_payload both leave out.
+            if names['cntry'] is None:
+                cntry_full = None
+            else:
+                cntry_full = str(coco.convert(names=names['cntry'],
+                                              to='name_short'))
+                if cntry_full in ('not found', 'None'):
+                    cntry_full = str(names['cntry']).upper()
             # A rank means little without its denominator, and the denominator
             # has to be the right one.
             #
@@ -1395,7 +1236,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             # reader notices. The subfield pair is a real one: rank_subfield
             # is at most subfield_count in 100.00% of rows.
             span = 'career-long up to' if prefix1 == 'career' else 'in'
-            subfield = names.get('subfield') or data1.get('sm-subfield-1')
+            subfield = data1.get('sm-subfield-1')
             sub_rank = data1.get('rank sm-subfield-1')
             sub_total = data1.get('sm-subfield-1 count')
             if sub_rank is not None and sub_total:
@@ -1416,30 +1257,41 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 # promising a different one.
                 standing = 'Not recorded in this edition'
                 standing_text = ''
-            # Which group the gauges are scaled against, and the name of it,
+            # Which group the reference marks describe, and the name of it,
             # which the legend has to print: "the median in Stanford
             # University" means something, "the median" does not.
             group_name = {'cntry': names['cntry'],
                           'sm-field': names['field'],
                           'inst_name': names['inst']}.get(uplim or 'cntry',
                                                           names['cntry'])
-            kek = get_es_aggregate(uplim or 'cntry', group_name, prefix1)
-            group_label = {'cntry': cntry_full,
-                           'sm-field': names['field'],
-                           'inst_name': names['inst']}.get(uplim or 'cntry',
-                                                           cntry_full)
+            #
+            # The author's row can lack the very thing it is to be compared
+            # by: a missing country or institution names no group at all.
+            # get_es_aggregate raises on a missing country and returns {} for
+            # a missing institution, so it is not asked. The comparison is
+            # then shown as unavailable: no band, no median tick, no legend,
+            # and the bars still drawn against the edition maximum.
+            if group_name is None:
+                kek = {}
+            else:
+                kek = get_es_aggregate(uplim or 'cntry', group_name, prefix1)
+            group_stats = kek.get(f'{prefix1}_{yr1}')
+            if group_stats is None:
+                group_label = None
+            else:
+                group_label = {'cntry': cntry_full,
+                               'sm-field': names['field'],
+                               'inst_name': names['inst']}.get(uplim or 'cntry',
+                                                               cntry_full)
 
-            max_metrics = {mt:[kek[f'{prefix1}_{yr1}'][mt][2],kek[f'{prefix1}_{yr1}'][mt][4]] for mt in metrics_list}
-            # get_es_aggregate returns [min, q1, median, q3, max, n]. The
-            # gauges only ever read the median and the max; the bullet rows
-            # draw the group's middle half, so they need the quartiles too.
-            group_stats = kek[f'{prefix1}_{yr1}']
-            # Which set of columns this reader is looking at. Defined here
-            # because the quartiles below need it, and again where the store
-            # is built; both must agree.
+            # Which set of columns this reader is looking at.
             suffix_ns = ' (ns)' if ns else ''
 
+            # get_es_aggregate returns [min, q1, median, q3, max, n]. The
+            # bullet rows draw the group's median and middle half.
             def _quartiles(metric):
+                if group_stats is None:
+                    return {}
                 vector = group_stats[metric + suffix_ns]
                 return {'q1': vector[1], 'median': vector[2], 'q3': vector[3]}
 
@@ -1449,15 +1301,6 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             # a median is not additive, so summing them would not give the
             # group's median score.
             composite_quartiles = _quartiles('c')
-        # if career2 == True:
-        #     dfs = dfs_career.copy()
-        #     dfs_log = dfs_career_log.copy()
-        # else:
-        #     dfs = dfs_singleyr.copy()
-        #     dfs_log = dfs_singleyr_log.copy()
-
-            # Title
-            title = 'Ranking based on composite score C and bar plots of metrics used to compute C'
 
             # =============== The two ranks
             #
@@ -1490,11 +1333,6 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                 'actual': actual,
                 'np': _number(data1.get('np')),
                 'maxima': composite_maxima(prefix1, yr1, ns=ns),
-                'group_limits': {
-                    metric: [_number(v)
-                             for v in max_metrics[metric + suffix_ns]]
-                    for metric, _ in WHATIF_METRICS},
-                'c_limits': [_number(v) for v in max_metrics['c' + suffix_ns]],
                 'standing': rank_standing,
                 'reproducible': composite_is_reproducible(prefix1, yr1),
                 'quartiles': {m: {k: _number(v) for k, v in q.items()}
@@ -1507,18 +1345,7 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             figures = html.Div([_whatif_note(whatif_state)])
             rows = bullet_rows(actual, whatif_state['maxima'], quartiles,
                                composite_quartiles)
-            c_img = dbc.Container([dbc.Row(html.Br()), dbc.Row(dcc.Markdown(
-                r'''
-$$
-C_i \;=\; \frac{\log(NC_i)}{\mathrm{maxlog}(NC)}
-\;+\; \frac{\log(H_i)}{\mathrm{maxlog}(H)}
-\;+\; \frac{\log(Hm_i)}{\mathrm{maxlog}(Hm)}
-\;+\; \frac{\log(NCS_i)}{\mathrm{maxlog}(NCS)}
-\;+\; \frac{\log(NCSF_i)}{\mathrm{maxlog}(NCSF)}
-\;+\; \frac{\log(NCSFL_i)}{\mathrm{maxlog}(NCSFL)}
-$$
-''', mathjax=True, className='ev-formula'))])
-            return (figures, c_img, whatif_state, False,
+            return (figures, whatif_state, False,
                     card_header(group1_name, names['inst'], cntry_full,
                                 names['field'], f'{span} {yr1}'),
                     card_chips(round(data1['self%'] * 100, 2), standing),
@@ -1535,8 +1362,9 @@ $$
                                   round(data1['self%'] * 100, 2),
                                   standing_text),
                     comparison_legend(group_label),
-                    bullet_payload(rows, group_label),
-                    _bullet_inputs(whatif_state))
+                    bullet_payload(rows, group_label,
+                                   reference=group_stats is not None),
+                    bullet_inputs(whatif_state))
 
     # ==========================================================================================
     # The what-if calculator
@@ -1547,6 +1375,31 @@ $$
     # and the standing is read off the researcher that score lands beside in
     # the same edition. No model, no extrapolation, nothing that could be
     # wrong in a way the page cannot show.
+
+    @callback(
+        Output('whatIfTip' + SUFFIX, 'is_open'),
+        Output('whatIfTipTimer' + SUFFIX, 'disabled'),
+        Output('whatIfTipTimer' + SUFFIX, 'n_intervals'),
+        [Input('whatIfToggle' + SUFFIX, 'on'),
+         Input('whatIfTipTimer' + SUFFIX, 'n_intervals')]
+        + [Input('whatIf-' + metric + SUFFIX, 'value')
+           for metric, _ in WHATIF_METRICS],
+        State('whatIfStore' + SUFFIX, 'data'),
+        prevent_initial_call = True)
+    def whatif_tip(on, _ticks, *args):
+        """Say the boxes can be typed into, when what-if is switched on.
+
+        Open on the switch, and only where the calculator works for this
+        edition. Closed by the timer, by the first edit, or by switching
+        what-if off.
+        """
+        state = args[-1]
+        if not state:
+            raise PreventUpdate
+        if callback_context.triggered_id == 'whatIfToggle' + SUFFIX:
+            opening = bool(on) and bool(state.get('reproducible'))
+            return opening, not opening, 0
+        return False, True, 0
 
     @callback(
         [Output('bulletStore' + SUFFIX, 'data', allow_duplicate = True),
@@ -1578,8 +1431,11 @@ $$
             # Back to what was published, on the rows and on the rank at once.
             # Leaving one of them magenta is the failure this guards.
             published_c = composite_score(state['actual'], state['maxima'])
+            # A card with no comparison group keeps drawing none: the label
+            # is empty exactly when the Explore callback found no group.
             return [
-                bullet_payload(published_rows, state['group_label']),
+                bullet_payload(published_rows, state['group_label'],
+                               reference=bool(state['group_label'])),
                 '' if published_c is None else f'{published_c:.2f}',
                 rank_stats(standing['scopus_rank'], standing['within_list'],
                            standing['published']),
@@ -1615,7 +1471,8 @@ $$
                                        state['quartiles'],
                                        state.get('composite_quartiles')),
                            state['group_label'], whatif = True,
-                           published = published_rows),
+                           published = published_rows,
+                           reference = bool(state['group_label'])),
             '' if new_c is None else f'{new_c:.2f}',
             rank_stats(new_standing['scopus_rank'],
                        new_standing['within_list'],
@@ -1625,7 +1482,7 @@ $$
             rank_chart_payload(new_standing['within_list'],
                                new_standing['scopus_rank'],
                                new_standing['published'], whatif = True),
-            'ev-id-card ev-id-card-whatif',
+            'ev-id-card',
         ] + locked
 
     offcanvas2 = html.Div(
@@ -1633,19 +1490,15 @@ $$
             dbc.Offcanvas(
                 dcc.Markdown(
                     '''
-                * **User interactions**
-                    * `Toggle`: Choose to exclude or include author self-citations
-                    * `Dropdown`: Select a grouping by which the gauge limits will be set
-                        * Country 
-                        * Field 
-                        * Institute
-                * **Gauge indicators**
-                    * Each indicator shows author's score for the respective metric (teal)
-                    * The upper limits are determined by the MAXIMUM score of the selected group
-                    * The red line shows the MEDIAN score of the selected group
-                    * Delta under the current score indicates:
-                        * Green (up): Author's score is higher than the group MEDIAN by ##
-                        * Red (down): Author's score is lower than the group MEDIAN by ##
+                **Controls**
+                * **Exclude self-citations**: recompute every number without the researcher's citations to their own work.
+                * **What if**: edit the six indicators and see where the recomputed score would rank.
+                * **Compare against**: choose the group (country, field or institution) that the reference marks describe.
+
+                **Reading the bars**
+                * Each bar is one indicator relative to the edition maximum, the same term the composite score adds up. The six terms sum to the score.
+                * The tick marks the group median, and the shaded band covers the middle half of the group.
+                * The last bar is the composite score, divided by six so it fits the same scale.
                     '''
                 ),
                 id="offcanvas22",
@@ -1667,6 +1520,7 @@ $$
 
     row3 = html.Div([
         whatIfStore,
+        whatIfTipTimer,
         dbc.Row(html.Br()),
         dbc.Row(dbc.Col(html.Div([
             selfC, whatIf, upper,
@@ -1677,162 +1531,8 @@ $$
                                  className='ev-comparison-legend'), width = 12)),
         metricsFigAuthor_c,
         dbc.Row(html.Br()),
-        formulaRow,
-        dbc.Row(html.Br()),
         offcanvas2,
         dbc.Row(dbc.Col(dbc.Container(id = '2author_figs' + SUFFIX), width = {'offset':1,'size':10}))])
-
-    # ========================================================================================== 
-    # ========================================================================================== 
-    # Row 4: author playground
-    # ========================================================================================== 
-    # ========================================================================================== 
-
-    # =============== Metric weighting dropdown
-    # ncW = dcc.Dropdown(value = 1, options = list(range(11)), style = {'background-color':darkAccent3}, id = 'ncWDD' + SUFFIX)
-    # hW = dcc.Dropdown(value = 1, options = list(range(11)), style = {'background-color':darkAccent3}, id = 'hWDD' + SUFFIX)
-    # hmW = dcc.Dropdown(value = 1, options = list(range(11)), style = {'background-color':darkAccent3}, id = 'hmWDD' + SUFFIX)
-    # ncsW = dcc.Dropdown(value = 1, options = list(range(11)), style = {'background-color':darkAccent3}, id = 'ncsWDD' + SUFFIX)
-    # ncsfW = dcc.Dropdown(value = 1, options = list(range(11)), style = {'background-color':darkAccent3}, id = 'ncsfWDD' + SUFFIX)
-    # ncsflW = dcc.Dropdown(value = 1, options = list(range(11)), style = {'background-color':darkAccent3}, id = 'ncsflWDD' + SUFFIX)
-
-    # =============== Slider labels
-    # ncButton1 = dbc.Card(html.Center('NC', style = {'color':darkAccent1, 'font-size':18}), color = highlight1)
-    # hButton1 = dbc.Card(html.Center('H', style = {'color':darkAccent1, 'font-size':18}), color = highlight1)
-    # hmButton1 = dbc.Card(html.Center('Hm', style = {'color':darkAccent1, 'font-size':18}), color = highlight1)
-    # ncsButton1 = dbc.Card(html.Center('NCS', style = {'color':darkAccent1, 'font-size':18}), color = highlight1)
-    # ncsfButton1 = dbc.Card(html.Center('NCSF', style = {'color':darkAccent1, 'font-size':18}), color = highlight1)
-    # ncsflButton1 = dbc.Card(html.Center('NCSFL', style = {'color':darkAccent1, 'font-size':18}), color = highlight1)
-    # ncButton2 = dbc.Card(html.Center('NC', style = {'color':darkAccent1, 'font-size':18}), color = highlight2)
-    # hButton2 = dbc.Card(html.Center('H', style = {'color':darkAccent1, 'font-size':18}), color = highlight2)
-    # hmButton2 = dbc.Card(html.Center('Hm', style = {'color':darkAccent1, 'font-size':18}), color = highlight2)
-    # ncsButton2 = dbc.Card(html.Center('NCS', style = {'color':darkAccent1, 'font-size':18}), color = highlight2)
-    # ncsfButton2 = dbc.Card(html.Center('NCSF', style = {'color':darkAccent1, 'font-size':18}), color = highlight2)
-    # ncsflButton2 = dbc.Card(html.Center('NCSFL', style = {'color':darkAccent1, 'font-size':18}), color = highlight2)
-
-    # =============== Metrics sliders
-    # def update_metric_slider(career, yr, ns, metric):
-    #     f_out = 'career' if career == True else 'singleyr'
-    #     fns_out = ' (ns)' if ns == True else ''
-    #     max = int(dropdown_opts[f_out + ' ' + str(yr)][metric + fns_out + ' max'])
-    #     step = math.floor(max/math.floor(vert_slider_length/20))
-    #     return [max, step]
-    # def update_metric_slider_val(career, yr, ns, author, metric):
-    #     dfs = dfs_career.copy() if career == True else dfs_singleyr.copy()
-    #     fns_out = ' (ns)' if ns == True else ''
-    #     return(float(dfs[yr][dfs[yr]['authfull'] == author][metric + fns_out]))
-
-    # nc1 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncSlider1' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # h1 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'hSlider1' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # hm1 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'hmSlider1' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # ncs1 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncsSlider1' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # ncsf1 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncsfSlider1' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # ncsfl1 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncsflSlider1' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # nc2 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncSlider2' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # h2 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'hSlider2' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # hm2 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'hmSlider2' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # ncs2 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncsSlider2' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # ncsf2 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncsfSlider2' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # ncsfl2 = dcc.Slider(min = 0, max = 0, step = 0, value = 0, tooltip = {"placement": "bottom", "always_visible": True}, id = 'ncsflSlider2' + SUFFIX, vertical = True, verticalHeight = vert_slider_length)
-    # @callback(
-    #     Output('ncSlider1' + SUFFIX, 'max'), Output('ncSlider1' + SUFFIX, 'step'), 
-    #     Output('hSlider1' + SUFFIX, 'max'), Output('hSlider1' + SUFFIX, 'step'), 
-    #     Output('hmSlider1' + SUFFIX, 'max'), Output('hmSlider1' + SUFFIX, 'step'), 
-    #     Output('ncsSlider1' + SUFFIX, 'max'), Output('ncsSlider1' + SUFFIX, 'step'), 
-    #     Output('ncsfSlider1' + SUFFIX, 'max'), Output('ncsfSlider1' + SUFFIX, 'step'), 
-    #     Output('ncsflSlider1' + SUFFIX, 'max'), Output('ncsflSlider1' + SUFFIX, 'step'), 
-    #     Output('ncSlider2' + SUFFIX, 'max'), Output('ncSlider2' + SUFFIX, 'step'), 
-    #     Output('hSlider2' + SUFFIX, 'max'), Output('hSlider2' + SUFFIX, 'step'), 
-    #     Output('hmSlider2' + SUFFIX, 'max'), Output('hmSlider2' + SUFFIX, 'step'), 
-    #     Output('ncsSlider2' + SUFFIX, 'max'), Output('ncsSlider2' + SUFFIX, 'step'), 
-    #     Output('ncsfSlider2' + SUFFIX, 'max'), Output('ncsfSlider2' + SUFFIX, 'step'), 
-    #     Output('ncsflSlider2' + SUFFIX, 'max'), Output('ncsflSlider2' + SUFFIX, 'step'), 
-    #     Input('careerORSingleYrRadio' + SUFFIX, 'value'), 
-    #     Input('selectYrRadio' + SUFFIX, 'value'), 
-    #     Input('selfCToggle' + SUFFIX, 'on'))
-    # def update_slider(career, yr, ns):
-    #     if career == None or yr == None: return(list(np.zeros(24)))
-    #     else:
-    #         return update_metric_slider(career, yr, ns, 'nc') + update_metric_slider(career, yr, ns, 'h') + update_metric_slider(
-    #             career, yr, ns, 'hm') + update_metric_slider(career, yr, ns, 'ncs') + update_metric_slider(
-    #             career, yr, ns, 'ncsf') + update_metric_slider(career, yr, ns, 'ncsfl') + update_metric_slider(
-    #             career, yr, ns, 'nc') + update_metric_slider(career, yr, ns, 'h') + update_metric_slider(
-    #             career, yr, ns, 'hm') + update_metric_slider(career, yr, ns, 'ncs') + update_metric_slider(
-    #             career, yr, ns, 'ncsf') + update_metric_slider(career, yr, ns, 'ncsfl')
-    # @callback(
-    #     Output('ncSlider1' + SUFFIX, 'value'), 
-    #     Output('hSlider1' + SUFFIX, 'value'), 
-    #     Output('hmSlider1' + SUFFIX, 'value'), 
-    #     Output('ncsSlider1' + SUFFIX, 'value'), 
-    #     Output('ncsfSlider1' + SUFFIX, 'value'), 
-    #     Output('ncsflSlider1' + SUFFIX, 'value'), 
-    #     Input('careerORSingleYrRadio' + SUFFIX, 'value'), 
-    #     Input('selectYrRadio' + SUFFIX, 'value'), 
-    #     Input('selfCToggle' + SUFFIX, 'on'), 
-    #     Input('author1OptionsDropdown' + SUFFIX, 'value'), 
-    #     Input('sliderResetButton' + SUFFIX, 'n_clicks'))
-    # def update_slider_val(career, yr, ns, group1_name, sliderResetButton):
-    #     if career == None or yr == None or group1_name == None: return(list(np.zeros(6)))
-    #     else: return [update_metric_slider_val(career, yr, ns, group1_name, metric = 'nc'), update_metric_slider_val(career, yr, ns, group1_name, metric = 'h'), 
-    #         update_metric_slider_val(career, yr, ns, group1_name, metric = 'hm'), update_metric_slider_val(career, yr, ns, group1_name, metric = 'ncs'), 
-    #         update_metric_slider_val(career, yr, ns, group1_name, metric = 'ncsf'), update_metric_slider_val(career, yr, ns, group1_name, metric = 'ncsfl')]
-    # @callback(
-    #     Output('ncSlider2' + SUFFIX, 'value'), 
-    #     Output('hSlider2' + SUFFIX, 'value'), 
-    #     Output('hmSlider2' + SUFFIX, 'value'), 
-    #     Output('ncsSlider2' + SUFFIX, 'value'), 
-    #     Output('ncsfSlider2' + SUFFIX, 'value'), 
-    #     Output('ncsflSlider2' + SUFFIX, 'value'), 
-    #     Input('careerORSingleYrRadio' + SUFFIX, 'value'), 
-    #     Input('selectYrRadio' + SUFFIX, 'value'), 
-    #     Input('selfCToggle' + SUFFIX, 'on'), 
-    #     Input('author2OptionsDropdown' + SUFFIX, 'value'), 
-    #     Input('sliderResetButton' + SUFFIX, 'n_clicks'))
-    # def update_slider_val(career, yr, ns, group2_name, sliderResetButton):
-    #     if career == None or yr == None or group2_name == None: return(list(np.zeros(6)))
-    #     else: return [update_metric_slider_val(career, yr, ns, group2_name, metric = 'nc'), update_metric_slider_val(career, yr, ns, group2_name, metric = 'h'), 
-    #         update_metric_slider_val(career, yr, ns, group2_name, metric = 'hm'), update_metric_slider_val(career, yr, ns, group2_name, metric = 'ncs'), 
-    #         update_metric_slider_val(career, yr, ns, group2_name, metric = 'ncsf'), update_metric_slider_val(career, yr, ns, group2_name, metric = 'ncsfl')]
-
-    # row4 = dbc.Row([html.Div([
-    #     html.Br(),
-    #     dbc.Button("Author playground", 
-    #         id = "collapse-button4" + SUFFIX, className = "mb-3", color = "primary", n_clicks = 0), 
-    #     # dbc.Collapse(
-    #     #     dbc.Container(fluid = True, children = [
-    #     #         #dbc.Row([dbc.Col(html.Center(['Use dropdowns to modify the extent to which each metric impacts the composite score C'], style = {'color':lightAccent1, 'size':20}))]), 
-    #     #         dbc.Row([dbc.Col(html.Center(['Use the sliders to modify author metric values! You can always ', html.Button('Reset', id = 'sliderResetButton' + SUFFIX, n_clicks = 0), ' these values!'], style = {'color':lightAccent1, 'size':20}))]), 
-    #     #         # dbc.Row(html.Br()), 
-    #     #         # dbc.Row(dbc.Col(dbc.Container([dbc.Row([
-    #     #         #     dbc.Col([html.Center(['NC weighting'], style = {'font-weight': 'bold'}), html.Center(ncW)], width = 2), 
-    #     #         #     dbc.Col([html.Center(['H weighting'], style = {'font-weight': 'bold', "text-align": "center"}), html.Center(hW)], width = 2), 
-    #     #         #     dbc.Col([html.Center(['Hm weighting'], style = {'font-weight': 'bold', "text-align": "center"}), html.Center(hmW)], width = 2), 
-    #     #         #     dbc.Col([html.Center(['NCS weighting'], style = {'font-weight': 'bold', "text-align": "center"}), html.Center(ncsW)], width = 2), 
-    #     #         #     dbc.Col([html.Center(['NCSF weighting'], style = {'font-weight': 'bold', "text-align": "center"}), html.Center(ncsfW)], width = 2), 
-    #     #         #     dbc.Col([html.Center(['NCSFL weighting'], style = {'font-weight': 'bold', "text-align": "center"}), html.Center(ncsflW)], width = 2), 
-    #     #         # ])]),width = {'offset':1,'size':10})), 
-    #     #         dbc.Row(html.Br()), 
-    #     #         dbc.Row(dbc.Col(dbc.Container([dbc.Row([
-    #     #             dbc.Col([html.Center(ncButton1), html.Center(nc1)], width = 1), dbc.Col([html.Center(ncButton2), html.Center(nc2)], width = 1), 
-    #     #             dbc.Col([html.Center(hButton1), html.Center(h1)], width = 1), dbc.Col([html.Center(hButton2), html.Center(h2)], width = 1), 
-    #     #             dbc.Col([html.Center(hmButton1), html.Center(hm1)], width = 1), dbc.Col([html.Center(hmButton2), html.Center(hm2)], width = 1), 
-    #     #             dbc.Col([html.Center(ncsButton1), html.Center(ncs1)], width = 1), dbc.Col([html.Center(ncsButton2), html.Center(ncs2)], width = 1), 
-    #     #             dbc.Col([html.Center(ncsfButton1), html.Center(ncsf1)], width = 1), dbc.Col([html.Center(ncsfButton2), html.Center(ncsf2)], width = 1), 
-    #     #             dbc.Col([html.Center(ncsflButton1), html.Center(ncsfl1)], width = 1), dbc.Col([html.Center(ncsflButton2), html.Center(ncsfl2)], width = 1)
-    #     #         ])]),width = {'offset':1,'size':10})), 
-    #     # ], style = {'backgroundColor':darkAccent1}), 
-    #     # id = "collapse4" + SUFFIX, 
-    #     # is_open = False, 
-    #     # )
-    #     ])])
-    # @callback(
-    #     Output("collapse4" + SUFFIX, "is_open"), 
-    #     [Input("collapse-button4" + SUFFIX, "n_clicks")], 
-    #     [State("collapse4" + SUFFIX, "is_open")], )
-    # def toggle_collapse(n, is_open):
-    #     if n:
-    #         return not is_open
-    #     return is_open
 
     # ========================================================================================== 
     # ========================================================================================== 
@@ -1841,7 +1541,6 @@ $$
     # ========================================================================================== 
     return(html.Div([
         dbc.Container(fluid = True, children = [
-            #row1, 
             html.Br(),
             row2, 
             dls.GridFade(row3,color="#ECAB4C"), 

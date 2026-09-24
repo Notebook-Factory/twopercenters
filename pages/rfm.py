@@ -28,8 +28,8 @@ from dash import dcc, html
 from citations_lib.utils import (graph_table_sizes, prediction_coverage,
                                  prediction_run)
 
-dash.register_page(__name__, path='/predictions', name='RFM predictions',
-                   title='RFM predictions')
+dash.register_page(__name__, path='/predictions', name='Model predictions',
+                   title='Model predictions')
 
 # Repeated from assets/style.css as hex: plotly renders to SVG and does not
 # resolve CSS custom properties.
@@ -84,16 +84,9 @@ WHAT_EACH_TABLE_IS = {
 # Every task that was trained, with the score it got on data it never saw
 # and the trivial baseline for the same split. The two retraction tasks read
 # their numbers from the database, since those are published runs. The other
-# three were trained and then not published, so their numbers are recorded
+# two were trained and then not published, so their numbers are recorded
 # here from rdl/train.py and docs/identity-resolution-findings.md.
 UNPUBLISHED = [
-    dict(task='dropout', metric='ROC AUC', higher_is_better=True,
-         model=0.687, baseline=0.506,
-         baseline_label='the is_ambiguous flag alone',
-         note='Beats its baseline, but only after the identity repair. '
-              'Before it the model scored 0.814 and the flag scored 0.776, '
-              'so most of that number was the model detecting our own '
-              'resolver failing.'),
     dict(task='next_rank', metric='nMAE', higher_is_better=False,
          model=0.295, baseline=0.079,
          baseline_label="repeating last year's rank",
@@ -102,7 +95,8 @@ UNPUBLISHED = [
     dict(task='next_score', metric='nMAE', higher_is_better=False,
          model=0.299, baseline=0.054,
          baseline_label="repeating last year's composite score",
-         note='Same result, more starkly. Nothing here is published.'),
+         note='The same result, by a wider margin. Nothing here is '
+              'published.'),
 ]
 
 
@@ -205,20 +199,20 @@ def _scoreboard_figure():
     figure = go.Figure()
     figure.add_bar(
         y=labels, x=[r['baseline'] for r in rows], orientation='h',
-        name='trivial baseline', marker=dict(color=MUTED),
+        name='baseline', marker=dict(color=MUTED),
         offsetgroup='baseline',
-        hovertemplate='trivial baseline: %{x:.3f}<extra></extra>')
+        hovertemplate='baseline: %{x:.3f}<extra></extra>')
     figure.add_bar(
         y=labels, x=[r['model'] for r in rows], orientation='h',
         marker=dict(color=[ACCENT if b else ORANGE for b in beats]),
-        hovertemplate='the model: %{x:.3f}<extra></extra>',
+        hovertemplate='model: %{x:.3f}<extra></extra>',
         offsetgroup='model', showlegend=False)
     # The model's bars are two colours, and a legend entry can only carry
     # one. Plotly would show whichever it likes, which here was orange
     # against four cyan bars. These two never draw anything: they exist so
     # the key says which colour means what.
-    for colour, caption in ((ACCENT, 'the model, beating its baseline'),
-                            (ORANGE, 'the model, losing to its baseline')):
+    for colour, caption in ((ACCENT, 'model, beats its baseline'),
+                            (ORANGE, 'model, loses to its baseline')):
         figure.add_bar(y=[labels[0]], x=[None], orientation='h',
                        name=caption, marker=dict(color=colour),
                        offsetgroup='model', hoverinfo='skip')
@@ -228,7 +222,7 @@ def _scoreboard_figure():
         bargap=0.35, margin=dict(l=170, r=30, t=40, b=40),
         hoverlabel=HOVER, hovermode='y unified',
         legend=dict(orientation='h', y=1.12, x=0),
-        xaxis=dict(title='metric value', gridcolor='#2C3A52',
+        xaxis=dict(title='score', gridcolor='#2C3A52',
                    zeroline=False),
         yaxis=dict(title=None))
     return figure
@@ -248,12 +242,12 @@ def _coverage_panel():
                      html.Strong(f"{coverage['editions']}"),
                      f" editions ({coverage['first_year']}"
                      f"-{coverage['last_year']})."]),
-            html.Li('Every one is stored in its own table, never as a column '
-                    'on a published figure, and every one carries the run it '
-                    'came from and that run\'s score.'),
-            html.Li(['They are shown on the ',
-                     dcc.Link('retraction exposure', href='/retraction'),
-                     ' page, always labelled estimated.']),
+            html.Li('Estimates are kept in a separate table, never mixed into '
+                    'the published data. Each one records the model run that '
+                    'produced it and how well that run scored.'),
+            html.Li(['They appear on the ',
+                     dcc.Link('Retraction exposure', href='/retraction'),
+                     ' page, always labelled as estimates.']),
         ], className='ev-caveats'),
     ], className='ev-panel')
 
@@ -273,33 +267,31 @@ layout = dbc.Container(fluid=True, children=[
     dbc.Row(dbc.Col([
         html.H3('Predictions from the relational model', className='ev-title'),
         dcc.Markdown(
-            'Six editions of this list, **2017 through 2022**, carry no '
-            'retraction data at all. Those columns only arrived with '
-            'Mendeley version 7, so the rows are blank because nothing was '
-            'tracked, not because nothing was retracted.\n\n'
-            'A relational model fills that gap. It does not read a flat '
-            'table of hand-built features: it reads the database as it is, '
-            'treating every foreign key as an edge, and learns from the '
-            'neighbourhood each row sits in. That neighbourhood is the '
-            "researcher's other years, the institution, the country, the "
-            'field and the subfields, all reachable without writing a '
-            'single join.',
+            'Six editions of the list, **2017 through 2022**, have no '
+            'retraction data. Those columns first appeared in Mendeley '
+            'version 7, so the rows are blank because nothing was tracked, '
+            'not because nothing was retracted.\n\n'
+            'A relational model fills that gap. Instead of a flat table of '
+            'hand-built features, it reads the database directly: each '
+            'foreign key becomes a link, and the model learns from what each '
+            "row is linked to. That means the researcher's other years, "
+            'their institution, country, field and subfields.',
             className='ev-lede'),
     ], width=12)),
     html.Br(),
     dbc.Row([
         dbc.Col([
-            html.Div('The graph it reads', className='ev-kicker'),
+            html.Div('The database as a graph', className='ev-kicker'),
             dcc.Graph(figure=_schema_figure(),
                       config={'displayModeBar': False}),
             dcc.Markdown(
-                'Seven tables, eight foreign-key relations. Circle area is '
-                'the row count on a log scale, and `career_metrics` is the '
-                'hub because every other table hangs off it. Hover a table '
-                'for what it holds, or a line for the key that joins it. '
-                'Names are deliberately absent from the graph: they are '
-                'nearly row-unique, and embedding them would let name origin '
-                'act as a proxy on a list that ranks people.',
+                'Seven tables joined by eight foreign keys. Circle size '
+                'shows the row count on a log scale. `career_metrics` sits '
+                'in the middle because every other table links to it. Hover '
+                'a table to see what it holds, or a line to see the key that '
+                'joins it. Researcher names are left out on purpose, so the '
+                "model cannot use a name's apparent origin as a signal on a "
+                'list that ranks people.',
                 className='ev-caption'),
         ], md=7),
         dbc.Col(_coverage_panel(), md=5),
@@ -307,31 +299,31 @@ layout = dbc.Container(fluid=True, children=[
     html.Br(),
     html.Hr(),
     dbc.Row(dbc.Col([
-        html.H4('Every task that was trained', className='ev-subtitle'),
+        html.H4('Every task the model was trained on', className='ev-subtitle'),
         dcc.Markdown(
-            'A score means nothing on its own, so each bar sits beside the '
-            'dumbest thing that could have been done instead: guessing, '
-            'predicting the median, or repeating last year. Cyan beats its '
-            'baseline. Orange loses to it.',
+            'A score only means something next to a simple alternative, so '
+            'each task is shown beside one: random guessing, predicting the '
+            'median, or repeating last year. Cyan bars beat their baseline; '
+            'orange bars lose to it.',
             className='ev-caption'),
         dcc.Graph(figure=_scoreboard_figure(),
                   config={'displayModeBar': False}),
     ], width=12)),
     dbc.Row(dbc.Col([
-        html.Div('Why only two of the five are published',
+        html.Div('Why only two of the four are published',
                  className='ev-kicker'),
         _unpublished_list(),
     ], width=12)),
     html.Br(),
     html.Hr(),
     dbc.Row(dbc.Col(dcc.Markdown(
-        '**One note on the name.** KumoRFM is the relational foundation '
-        'model this work was planned around, and it is not what produced '
-        'these numbers: its hosted endpoint now redirects to NVIDIA '
-        'documentation and cannot be authenticated against, so the model '
-        'here is a graph network trained locally with RelBench on the same '
-        'schema. The database was exported for either one, so if access '
-        'opens up the comparison is a run away, not a rebuild.',
+        '**About the model.** This work was planned around KumoRFM, a '
+        'relational foundation model, but KumoRFM did not produce these '
+        'numbers. Its hosted service can no longer be signed into (the '
+        'endpoint now redirects to NVIDIA documentation), so the model here '
+        'is a graph neural network trained locally with RelBench on the same '
+        'schema. The data is exported in a form either model can use, so if '
+        'access returns, comparing the two only needs a new run.',
         className='ev-caption'), width=12)),
     html.Br(),
 ])

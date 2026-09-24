@@ -29,12 +29,10 @@ COLUMNS = (("list_position", "c", "rank"),
 def editions_needing(conn, table: str, column: str, everything: bool) -> list[str]:
     if everything:
         sql = f"select distinct edition_id from {table} order by 1"
-        params = ()
     else:
         sql = (f"select edition_id from {table} "
                f"where {column} is null group by edition_id order by 1")
-        params = ()
-    return [row[0] for row in conn.execute(sql, params).fetchall()]
+    return [row[0] for row in conn.execute(sql).fetchall()]
 
 
 def fill(conn, table: str, column: str, score: str, tiebreak: str,
@@ -53,7 +51,7 @@ def fill(conn, table: str, column: str, score: str, tiebreak: str,
     return cursor.rowcount
 
 
-def record_size(conn, table: str, edition_id: str, rows: int) -> None:
+def record_size(conn, edition_id: str, rows: int) -> None:
     """Keep editions.published_rows in step with what was just counted.
 
     Every position needs this denominator and counting it live costs well over
@@ -70,7 +68,7 @@ def run(conn, everything: bool = False) -> int:
             for edition_id in editions_needing(conn, table, column, everything):
                 started = time.time()
                 rows = fill(conn, table, column, score, tiebreak, edition_id)
-                record_size(conn, table, edition_id, rows)
+                record_size(conn, edition_id, rows)
                 conn.commit()
                 total += rows
                 logger.info("%s.%s %s: %d rows in %.1fs",

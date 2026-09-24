@@ -53,8 +53,21 @@ def test_the_shared_flag_marks_the_composite_top_ten():
             assert shared == (author_id in best)
 
 
-def test_the_layout_builds_without_touching_the_database():
-    """Built at import time on every worker, so it must not hold a query."""
+def test_the_layout_builds_without_touching_the_database(monkeypatch):
+    """Built at import time on every worker, so it must not hold a query.
+
+    The list of editions is the one exception: it is read once per process
+    and cached, and it is already loaded by the time any layout is built.
+    """
+    import citations_lib.utils as utils
+
+    utils.edition_years("career")
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("top10_layout queried the database")
+
+    monkeypatch.setattr(utils, "_fetch", refuse)
+    monkeypatch.setattr(utils, "_db", refuse)
     assert top10_layout() is not None
 
 
@@ -147,16 +160,13 @@ def test_the_rows_and_the_chart_agree_on_row_height():
     assert f'height: {row}px' in listing
 
 
-def test_every_chart_on_the_tab_has_something_drawing_it():
+def test_every_chart_on_the_tab_has_something_drawing_it(callback_map):
     """Two charts, two clientside callbacks. One of these was registered by a
     function that was imported and never called, which leaves an empty space
     where the bars belong and no error anywhere to say so."""
-    import app  # noqa: F401
-    from dash._callback import GLOBAL_CALLBACK_MAP
-
     from citations_lib.top10 import SUFFIX
     for sink in ('top10CompositeSink', 'top10GridSink'):
-        assert any(sink + SUFFIX in key for key in GLOBAL_CALLBACK_MAP), sink
+        assert any(sink + SUFFIX in key for key in callback_map), sink
 
 
 def test_a_click_opens_that_researcher_in_explore():

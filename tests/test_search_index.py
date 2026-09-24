@@ -1,9 +1,26 @@
 import os
-from elasticsearch import Elasticsearch
+from urllib.parse import urlsplit
+
 import psycopg
+import pytest
+from elasticsearch import Elasticsearch
+
 from pipeline.build_search_index import build
 
+# These tests create and delete indices. They run only against an
+# Elasticsearch on this machine, never a shared or deployed cluster.
+if urlsplit(os.environ["ELASTICSEARCH_URL"]).hostname not in ("localhost",
+                                                               "127.0.0.1"):
+    pytest.skip("ELASTICSEARCH_URL is not local", allow_module_level=True)
+
 ES = Elasticsearch([os.environ["ELASTICSEARCH_URL"]])
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _remove_test_indices():
+    yield
+    for index in ES.indices.get(index="authors_test_*"):
+        ES.indices.delete(index=index)
 
 
 def test_documents_carry_no_blob():

@@ -4,19 +4,25 @@ Dash registers a page the moment its module is imported and links to none of
 them. Two pages shipped that way, reachable only by guessing the path, which
 is the same as not shipping them.
 """
+import functools
 import subprocess
 import sys
 
 
+@functools.lru_cache(maxsize=1)
 def _nav_links():
     out = subprocess.run(
         [sys.executable, "-c",
          "import app, json;"
-         "print(json.dumps([[c.children, c.href] for c in app._nav().children]))"],
+         # The last child of each link is the Span with its name; the
+         # first, when there is one, is the icon.
+         "print(json.dumps([[c.children[-1].children, c.href]"
+         " for c in app._nav().children]))"],
         capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     import json
-    return json.loads(out.stdout.strip().splitlines()[-1])
+    return tuple(tuple(link) for link in
+                 json.loads(out.stdout.strip().splitlines()[-1]))
 
 
 def test_every_public_page_has_a_link():
@@ -29,15 +35,8 @@ def test_every_public_page_has_a_link():
     import json
     registered = set(json.loads(out.stdout.strip().splitlines()[-1]))
     linked = {href for _label, href in _nav_links()}
-    missing = registered - linked - {'/keke'}
+    missing = registered - linked
     assert not missing, f"registered but unreachable: {sorted(missing)}"
-
-
-def test_the_scratch_page_is_not_advertised():
-    """pages/test.py sits at a guessable public route and is 186 lines of
-    `import *`. It should not be in the navigation, and ideally should not
-    ship at all."""
-    assert '/keke' not in {href for _label, href in _nav_links()}
 
 
 def test_home_comes_first():
@@ -63,4 +62,4 @@ def test_the_spotlight_overlay_has_a_close_control():
 
 def test_the_close_control_is_labelled_for_a_screen_reader():
     source = open("pages/home.py").read()
-    assert 'aria-label' in source
+    assert '"aria-label": "Close search"' in source

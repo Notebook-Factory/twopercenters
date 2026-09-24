@@ -1,6 +1,6 @@
 """Reproduce the blob-era Elasticsearch indexing directly from data_clean/.
 
-elasticSearchIdx.py (unmodified, left alone per the migration plan) built its
+elasticSearchIdx.py (removed after commit 91102d5; see git history) built its
 `career` and `singleyr` indices from two pickles, composite_career.p and
 composite_singleyr.p, that do not exist in this checkout: they were produced
 by prep_for_elasticsearch.ipynb from the original qMRLab-clone pickles, in a
@@ -141,7 +141,7 @@ def build_composite(tables, singleyr):
 
 # ---------------------------------------------------------------------------
 # Indexing -- mapping and compress_and_base64_encode reproduced verbatim from
-# elasticSearchIdx.py (read, not modified, per the migration plan).
+# elasticSearchIdx.py.
 # ---------------------------------------------------------------------------
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):

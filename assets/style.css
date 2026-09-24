@@ -227,8 +227,6 @@ color: var(--ev-bg);
 .danger {
   background-color: var(--ev-accent-soft);
   color: black;
-  border-left: 6px solid var(--ev-accent);
-  border-right: 6px solid var(--ev-accent);
   border-radius: 5px;
   padding-left: 5px;
 }
@@ -567,19 +565,19 @@ color: var(--ev-bg);
    four sections now and the logo has four leaves. */
 .ev-section-explore .accordion-button:not(.collapsed) {
   color: var(--ev-accent);
-  box-shadow: inset 4px 0 0 var(--ev-accent);
+  box-shadow: none;
 }
 .ev-section-top10 .accordion-button:not(.collapsed) {
   color: var(--ev-magenta);
-  box-shadow: inset 4px 0 0 var(--ev-magenta);
+  box-shadow: none;
 }
 .ev-section-trends .accordion-button:not(.collapsed) {
   color: var(--ev-green);
-  box-shadow: inset 4px 0 0 var(--ev-green);
+  box-shadow: none;
 }
 .ev-section-compare .accordion-button:not(.collapsed) {
   color: var(--ev-orange);
-  box-shadow: inset 4px 0 0 var(--ev-orange);
+  box-shadow: none;
 }
 
 #jump-explore:hover { border-color: var(--ev-accent); color: var(--ev-accent); }
@@ -607,8 +605,6 @@ color: var(--ev-bg);
 .danger {
   background-color: var(--ev-surface);
   color: var(--ev-text);
-  border-left: 5px solid var(--ev-magenta);
-  border-right: none;
   border-radius: var(--ev-radius);
   padding: 10px 14px;
   box-shadow: var(--ev-shadow);
@@ -2098,7 +2094,6 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   background-color: var(--ev-surface);
   color: var(--ev-text);
   border: 1px solid var(--ev-surface-2);
-  border-left: 3px solid var(--ev-accent);
   border-radius: var(--ev-radius);
   padding: 0;
   box-shadow: none;
@@ -2490,7 +2485,9 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 #instnametable td.cell--selected {
   background-color: color-mix(in srgb, var(--ev-accent) 26%, transparent) !important;
   border: none !important;
-  box-shadow: inset 2px 0 0 var(--ev-accent);
+  /* Dash's own focus ring for a cell is a thin pink outline. The tint is
+     the mark; the ring would be a second one in another colour. */
+  box-shadow: none !important;
 }
 
 /* Dash draws a text-input outline on the focused cell; these are not editable
@@ -2671,8 +2668,6 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 .ev-input::placeholder { color: var(--ev-text-muted); }
 .ev-verdict {
   color: var(--ev-text);
-  border-left: 3px solid var(--ev-orange);
-  padding-left: .7rem;
   margin-top: .7rem;
   list-style: none;
 }
@@ -2831,10 +2826,7 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   font-size: .82rem;
   max-width: 78ch;
   margin: .6rem auto 0;
-  padding-left: .7rem;
-  border-left: 3px solid #D86CB4;
 }
-.ev-whatif-note-off { border-left-color: var(--ev-orange); }
 
 /* ====== The author card ======
    Identity, the two ranks, the rank strip and two small facts, in one panel.
@@ -2855,15 +2847,8 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
      text-align: -webkit-center. That value centres block children as well as
      text, so the name and the self-citation bar both arrived centred. */
   text-align: left;
-  transition: border-left-color .2s ease;
-  /* The accent edge is the card's one flourish: it marks the panel as the
-     subject of the page without adding another box inside it. */
-  border-left: 3px solid var(--ev-accent);
 }
 
-/* In what-if mode the edge changes with everything else, so the card itself
-   says whose numbers these are before a reader looks at any of them. */
-.ev-id-card-whatif { border-left-color: #D86CB4; }
 
 .ev-id-head {
   display: flex;
@@ -3223,8 +3208,8 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   width: 16px;
   height: 9px;
   border-radius: 2px;
-  background: var(--ev-surface-2);
-  opacity: .8;
+  /* The same faint text-colour wash as the band in the chart. */
+  background: color-mix(in srgb, var(--ev-text) 22%, transparent);
 }
 /* The scale note is an explanation, not a key, so it carries no swatch. */
 .ev-legend-note { opacity: .85; }
@@ -3889,3 +3874,153 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
   -webkit-mask-image: var(--ev-mask-history);
           mask-image: var(--ev-mask-history);
 }
+
+/* ==========================================================================
+   The place modal and the row card
+   ==========================================================================
+   A click on the map opens the place in a modal, once; a click on a row of
+   its list opens the card over the map. Both are drawn from the Explore
+   card's pieces (.ev-id-card, .ev-id-head, .ev-chip), plus the tiles below,
+   so a researcher looks the same wherever they are opened. */
+
+/* The modal's content is the card, with the close icon in its corner; the
+   place card drawn into it gives up its own frame. */
+.ev-place-modal {
+  background: var(--ev-surface);
+  border: 1px solid color-mix(in srgb, #ffffff 10%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+.ev-place-body { position: relative; padding: 1.4rem 1.6rem 1.1rem; }
+.ev-place-body .ev-row-card-close { top: 12px; right: 12px; }
+.ev-place-body .ev-id-head { margin-right: 2rem; }  /* clear of the icon */
+.ev-place-modal .ev-id-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  padding: 0;
+}
+.ev-place-modal .ev-id-name { font-size: 1.6rem; }
+
+/* Inside the row card the card is already a glass panel, so the inner one
+   gives up its own frame. */
+.ev-row-card .ev-id-card {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  padding: .2rem .4rem .4rem .2rem;
+  margin-right: 1.4rem;   /* clear of the close button */
+}
+
+.ev-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: .7rem;
+  margin: .9rem 0 .4rem;
+}
+.ev-tile {
+  padding: .7rem .8rem .6rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ev-bg-deep) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ev-text) 8%, transparent);
+}
+.ev-tile-value {
+  color: var(--ev-accent);
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.ev-tile-label {
+  color: var(--ev-text);
+  font-size: .8rem;
+  font-weight: 600;
+  margin-top: .3rem;
+}
+.ev-tile-detail {
+  color: var(--ev-text-muted);
+  font-size: .72rem;
+  margin-top: .1rem;
+}
+.ev-tile-detail:empty { display: none; }
+.ev-place-note {
+  color: var(--ev-text-muted);
+  margin: .6rem 0 .2rem;
+}
+
+/* The links under the row card: OpenAlex or ROR, a Scholar search, and the
+   way into Explore. */
+.ev-row-links {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .9rem;
+  margin: .5rem 0 .2rem .2rem;
+}
+.ev-row-links .ev-share-btn { margin-left: auto; }
+
+/* The pane is as tall as the list column beside it, which is taller than
+   the map, so centring the card on the pane put it over the year track and
+   past the bottom of the map. It is centred on the map instead: the map's
+   head is about 50px and the chart 560px (420px on narrow screens). */
+.ev-row-card {
+  top: 330px;
+  max-height: 520px;
+}
+@media (max-width: 900px) {
+  .ev-row-card { top: 260px; max-height: 400px; }
+}
+.ev-row-card .ev-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+}
+.ev-row-card .ev-tile-value { font-size: 1.35rem; }
+
+/* The tip that says the what-if boxes can be typed into. Magenta is the
+   what-if colour on the rest of the card. */
+.ev-whatif-tip .tooltip-inner {
+  max-width: 260px;
+  padding: .6rem .75rem;
+  text-align: left;
+  font-size: .82rem;
+  line-height: 1.45;
+  color: var(--ev-text);
+  background: var(--ev-surface);
+  border: 1px solid #D86CB4;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+.ev-whatif-tip .tooltip-inner strong { color: #D86CB4; }
+.ev-whatif-tip.bs-tooltip-start .tooltip-arrow::before,
+.ev-whatif-tip.bs-tooltip-auto[data-popper-placement^=left] .tooltip-arrow::before {
+  border-left-color: #D86CB4;
+}
+.ev-whatif-tip { opacity: 1 !important; }
+
+/* The notes beside the map. The dataset icons in the first note are drawn
+   the way the toggle above the map draws them, bigger than the text around
+   them, so a reader can match one to the other at a glance. */
+.ev-map-notes .danger { margin-bottom: .75rem; }
+.ev-kind-line { display: flex; align-items: flex-start; gap: .55rem; }
+.ev-kind-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--ev-surface-2);
+  color: var(--ev-text);
+  margin-top: -.2rem;
+}
+.ev-kind-chip .ev-ic { width: 17px; height: 17px; }
+.ev-kind-chip-on {
+  background: var(--ev-accent);
+  border-color: var(--ev-accent);
+  color: #10151D;
+}
+.ev-map-notes .ev-formula { margin: .4rem 0 .6rem; overflow-x: auto; }
+.ev-map-notes .ev-formula mjx-container { font-size: 125% !important; }

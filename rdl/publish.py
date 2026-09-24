@@ -50,15 +50,6 @@ def validate(run: dict) -> None:
             "not a result on this data")
 
 
-def attach_ids(preds: pd.DataFrame, keymap: pd.DataFrame,
-               on: str = "author_id") -> pd.DataFrame:
-    """Turn integer graph indices back into the identifiers people use."""
-    lookup = dict(zip(keymap["index"], keymap["original"]))
-    out = preds.copy()
-    out[on] = out[on].map(lookup)
-    return out
-
-
 def _run_record(task: str) -> dict:
     payload = json.loads((PREDICTIONS_DIR / f"{task}.json").read_text())
     test = payload["results"]["test"]
@@ -134,7 +125,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     with connect() as conn:
-        for task in (args.tasks or ["retraction_exposed"]):
+        for task in args.tasks:
             print(f"{task}: {publish(task, conn):,} rows")
         conn.commit()
 

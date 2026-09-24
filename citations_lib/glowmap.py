@@ -21,8 +21,7 @@ from dash import (Input, Output, State, callback, callback_context, dcc,
                   html)
 from dash.exceptions import PreventUpdate
 
-from citations_lib.utils import (city_points, country_points,
-                                 edition_years, update_yr_options2)
+from citations_lib.utils import city_points, country_points, edition_years
 
 SUFFIX = '_glowmap_'
 
@@ -95,6 +94,23 @@ def _segmented(component_id, options, value):
         )], className='radio-group')
 
 
+def nearest_edition(years, year):
+    """The edition in `years` closest to `year`, or the latest if none is asked.
+
+    The track keeps its year when the dataset toggle moves, and the two
+    series do not have the same editions: career has 2018 and single year
+    does not. Kept as it was, 2018 on the single-year track drew an empty
+    map with nothing to say why, so a year the series lacks moves to its
+    nearest neighbour, and to the later one when two are equally near.
+    """
+    if not years:
+        return 0
+    if not year:
+        return years[-1]
+    year = int(year)
+    return min(years, key=lambda y: (abs(y - year), -y))
+
+
 def year_slider(career=True, year=None):
     """The editions, as a track under the map.
 
@@ -111,7 +127,7 @@ def year_slider(career=True, year=None):
     # number: the handle fell to the left end, the year read 2017, and the
     # next arrow press found nothing to step from and left it there.
     marks = {int(y): str(y) for y in years}
-    chosen = int(year) if year else (years[-1] if years else 0)
+    chosen = nearest_edition(years, year)
     return dcc.Slider(
         id='glowYear' + SUFFIX,
         min=min(marks) if marks else 0, max=max(marks) if marks else 0,
@@ -179,7 +195,12 @@ def _points(year, career):
     two controls the selection has."""
     if year is None or career is None:
         raise PreventUpdate
-    return map_payload('career' if career else 'singleyr', int(year))
+    kind = 'career' if career else 'singleyr'
+    # The toggle arrives here with the year the track held before, which the
+    # new series may not have. The rebuilt track sends the corrected year a
+    # moment later; reading the nearest edition now means the map is never
+    # drawn empty in between.
+    return map_payload(kind, nearest_edition(edition_years(kind), year))
 
 
 @callback(

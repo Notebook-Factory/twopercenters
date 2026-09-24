@@ -10,9 +10,9 @@ that is the whole design. Two measurements forced it.
 
 A fixed-length window cannot track annual editions across leap years. The
 editions are stamped 31 December, and 2019-12-31 plus 365 days is 2020-12-30,
-one day short of the 2020 edition. With a 365-day window the dropout label
-came out as exactly 100% for the 2019 and 2023 seeds and looked entirely
-plausible for the other four.
+one day short of the 2020 edition. With a 365-day window, a label built
+from "the next edition" found no next edition for the 2019 and 2023 seeds and
+looked entirely plausible for the other four.
 
 Worse, the seed timestamps themselves drift. RelBench builds the training
 seeds by stepping back one timedelta at a time from val_timestamp, so with
@@ -28,11 +28,8 @@ timedelta free to satisfy RelBench's own constraint that it not exceed the
 gap between val_timestamp and test_timestamp.
 
 The population choice matters separately. Anchoring to the most recent
-edition rather than to every author who ever appeared takes the dropout rate
-from 43-46% to 14.5-18.6%, which agrees with the 79-85% edition-over-edition
-name overlap measured during the redesign. With the looser definition,
-someone who appeared once in 2017 and never again counts as a fresh dropout
-at every later timestamp.
+edition rather than to every author who ever appeared keeps someone who
+appeared once in 2017 from being a seed at every later timestamp.
 """
 from __future__ import annotations
 
@@ -52,25 +49,6 @@ TASKS_DIR = ROOT / "data_rdl" / "twopercenters" / "tasks"
 # the gap between val_timestamp and test_timestamp, which is 365 days.
 TIMEDELTA = "365 days"
 
-
-DROPOUT_SQL = """
-SELECT t.timestamp AS observation_date,
-       p.author_id  AS author_id,
-       CASE WHEN COUNT(m.metric_id) = 0 THEN 1 ELSE 0 END AS dropped_out
-FROM timestamps t
-JOIN career_metrics p
-  ON p.observation_date = (
-       SELECT MAX(observation_date) FROM career_metrics
-       WHERE observation_date <= t.timestamp
-     )
-LEFT JOIN career_metrics m
-  ON m.author_id = p.author_id
- AND m.observation_date = (
-       SELECT MIN(observation_date) FROM career_metrics
-       WHERE observation_date > t.timestamp
-     )
-GROUP BY t.timestamp, p.author_id
-"""
 
 NEXT_RANK_SQL = """
 SELECT t.timestamp AS observation_date,
@@ -112,17 +90,6 @@ GROUP BY t.timestamp, p.author_id
 
 
 TASKS = {
-    "dropout": {
-        "task_type": "binary_classification",
-        "target_col": "dropped_out",
-        "sql": DROPOUT_SQL,
-        "description": (
-            "Will an author on the list at this edition be absent from the "
-            "next one. Competitive: staying on is a threshold on rank within "
-            "a subfield, so an author can improve and still fall off because "
-            "others improved more. Base rate 14.5-18.6%."
-        ),
-    },
     "next_rank": {
         "task_type": "regression",
         "target_col": "next_rank",

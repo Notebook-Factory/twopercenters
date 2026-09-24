@@ -1,7 +1,7 @@
 """Build the slim, blob-free author search index.
 
 Elasticsearch stays in the design because the author typeahead needs its fuzzy
-`multi_match` (`citations_lib/utils.py:get_es_results`, lines 125-156) to feel
+`multi_match` (`citations_lib/utils.py:get_es_results`) to feel
 instant while a user is still typing a name. What it must not do any more is
 carry the per-author metrics blob: today's `career`/`singleyr` indices store
 each author's whole multi-year history zlib-compressed and base64-encoded
@@ -21,7 +21,8 @@ fields are ever displayed on their own, they exist so the typeahead can filter
 and rank.
 
 Analyzer choice: `authfull` and `name_normalized` keep the default `text`
-mapping (the standard analyzer), matching what `elasticSearchIdx.py` mapped
+mapping (the standard analyzer), matching what the old `elasticSearchIdx.py`
+(removed after commit 91102d5) mapped
 them as before. `get_es_results` runs `multi_match` with `fuzziness: "auto"`
 against `text` fields; changing the analyzer or the field type here would
 change what that fuzzy match considers "close enough" and silently degrade
@@ -219,7 +220,7 @@ def build(es, conn, alias="authors"):
 if __name__ == "__main__":
     from elasticsearch import Elasticsearch
 
-    from db.connection import connect, dsn  # noqa: F401  (dsn imported for its env check)
+    from db.connection import connect
 
     es_url = __import__("os").environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
     es = Elasticsearch([es_url])

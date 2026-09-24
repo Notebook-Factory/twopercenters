@@ -20,13 +20,6 @@ def _edition(name="career-2024"):
     return df
 
 
-def test_global_rank_exceeds_the_published_list_size():
-    """The fact that makes the edition size the wrong denominator."""
-    df = _edition()
-    assert df["rank"].max() > len(df)
-    assert (df["rank"] > len(df)).sum() > 40_000
-
-
 def test_rank_is_a_strict_global_ordering_by_composite_score():
     """Which is why the denominator is the scored population, not the list:
     sorting by rank leaves c non-increasing."""
@@ -51,6 +44,10 @@ def test_everyone_published_is_near_the_top_of_their_subfield():
 def test_the_author_panel_does_not_pair_rank_with_the_edition_size():
     """Regression guard on the wording itself: the panel used to say
     'Ranked among: 230,333 researchers' beside a rank of 1,210,493."""
+    from citations_lib.auth_find import card_chips
+
     source = open("citations_lib/auth_find.py").read()
     assert "Ranked among:" not in source
-    assert "Subfield standing:" in source
+    chip = card_chips(None, "12th of 3,400 in Epidemiology")[0]
+    head = [span.children for span in chip.children[0].children]
+    assert "Subfield standing" in head

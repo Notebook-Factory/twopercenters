@@ -1,69 +1,39 @@
-# ========================================================================================== 
-# ========================================================================================== 
-# IMPORT LIBRARIES
-# ========================================================================================== 
-# ========================================================================================== 
-
-# =============== misc libs & modules
-import numpy as np
-import math
-import pickle
-import plotly.io as pio
-# =============== Plotly libs & modules
-import plotly.graph_objects as go
-import plotly.express as px
-# =============== Plotly Dash libraries
 import dash
-from dash import html, dcc, callback, dash_table, callback_context #, Input, Output
+from dash import html, dcc, callback, dash_table, callback_context
 from dash.dependencies import Input, Output, State, ALL
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
-import dash_daq as daq
 import dash_loading_spinners as dls
+import country_converter as coco
 
-# =============== Custom lib
-from citations_lib.create_fig_helper_functions import *
-from citations_lib.utils import *
+from citations_lib.auth_find import author_find_layout
+from citations_lib.author_vs_author_layout import author_vs_author_layout
+from citations_lib.author_vs_group_layout import author_vs_group_layout
+from citations_lib.group_vs_group_layout import group_vs_group_layout
+from citations_lib.single_author_layout import single_author_layout
 from citations_lib.glowmap import glow_map
-from citations_lib.utils import city_points, city_researchers
 from citations_lib.top10 import top10_layout
 from citations_lib.controls import kind_toggle
-from citations_lib.single_author_layout import *
-from citations_lib.author_vs_group_layout import *
-from citations_lib.group_vs_group_layout import *
-from citations_lib.author_vs_author_layout import *
-from citations_lib.auth_find import *
+from citations_lib.place_cards import (
+    city_card, country_card, institution_card, institution_links,
+    notice_card, researcher_card, researcher_links)
+from citations_lib.utils import (
+    author_metrics, city_points, city_researchers, country_researcher_count,
+    country_researchers, edition_author_count, es_result_pick,
+    get_es_aggregate, get_es_results, institution_ror_for, name_is_shared,
+    openalex_author, update_yr_options2)
 
 
-# =============== Register page
 # name is what dash.page_registry and the nav label show; without it Dash
 # derives it from the module filename, which made this page "Home".
 # title is what the browser tab says.
 dash.register_page(__name__, path='/', name='Twopercenters',
                    title='Twopercenters')
 SUFFIX = "HOME"
-# FOR TESTING ONLY:
-# layout = html.Div([dbc.Container(fluid = True, children = [dbc.Row(dbc.Col(dbc.Button('Testing ground', href = '/test', target = '_blank'), width = 1))])])
 
-# ========================================================================================== 
-# ========================================================================================== 
-# Color formatting
-# ========================================================================================== 
-# ========================================================================================== 
-
+# Colours for the compare buttons below.
 darkAccent1 = '#394459' # navy ground (Evidence)
-darkAccent2 = '#4A5670' # raised surface
-darkAccent3 = '#E8ECF2' # near-white text
 lightAccent1 = '#00B4D8' # cyan leaf, primary accent
-highlight1 = '#84B460' # green leaf
-highlight2 = '#D86CB4' # magenta leaf
-theme =  {'dark': True, 'detail': lightAccent1, 'primary': darkAccent1, 'secondary': lightAccent1}
-
-g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
-g2c = [highlight2, darkAccent3] # bar plot bar 3
-# Transparent, not a colour: the page's own background shows through, so
-# a chart follows the light/dark switch without being redrawn.
-bgc = 'rgba(0,0,0,0)' # chart background: inherit the page
 
 # The United States contributes 87,859 researchers to career-2024. Sending
 # all of them made a 7.2 MB response that the browser had to parse and render,
@@ -74,11 +44,12 @@ COUNTRY_ROW_LIMIT = 500
 
 tbl  = dash_table.DataTable(
     id = 'instnametable',
-    #filter_action="native",
+    # Named, so the rows can carry who they are (AUTHOR_ID) without the id
+    # becoming a column: with no columns given, the table shows every key.
+    columns=[{'name': 'INSTITUTE', 'id': 'INSTITUTE'},
+             {'name': 'RESEARCHER', 'id': 'RESEARCHER'}],
     fixed_rows={'headers': True},
-    #filter_options={"placeholder_text": "Filter column..."},
-    #style_table={'overflowX': 'auto'},
-        # These two were still the old ocre and a hardcoded rgb(50,50,50):
+    # These two were still the old ocre and a hardcoded rgb(50,50,50):
     # literals, so the palette sweep did not reach them, and they ignored the
     # theme. Inline styles take var(), so they follow it now.
     style_header={
@@ -101,6 +72,14 @@ tbl  = dash_table.DataTable(
     page_action='native',
     page_size=20,
     sort_action='native',
+    # Dash marks the clicked cell with a pink outline, drawn as inline
+    # borders on the cells around it, which the stylesheet cannot reach. The
+    # tint in assets/style.css is the mark; the outline is turned off here.
+    style_data_conditional=[
+        {'if': {'state': state}, 'border': 'none',
+         'borderBottom': '1px solid var(--ev-surface-2)'}
+        for state in ('active', 'selected')
+    ],
     style_cell={
         'height': 'auto',
         'textAlign': 'left',
@@ -113,90 +92,179 @@ tbl  = dash_table.DataTable(
 )
 
 
+# Which slot of a summary vector each choice in the statistic dropdown reads.
+# The vectors are [min, q1, median, q3, max, n].
+STAT_INDEX = {'min': 0, '25': 1, 'median': 2, '75': 3, 'max': 4}
+
+
+def _country_name(code):
+    """A reader's name for an ISO3 code, or the code itself when
+    country_converter does not know it, or None when there is no code."""
+    if not code:
+        return None
+    name = str(coco.convert(names=str(code), to='name_short'))
+    return str(code).upper() if name in ('not found', 'None') else name
+
+
+def _no_statistic(name, is_career, yr):
+    """What a summary says when the statistic dropdown has been cleared.
+
+    The dropdown is clearable, and with nothing chosen there is no slot of
+    the summary to read, so the summary asks for one instead of raising.
+    """
+    return notice_card(name, is_career, yr,
+                       'Choose a summary statistic above the list to see '
+                       'its numbers.')
+
+
+def _no_record(name, is_career, yr):
+    """What a summary says when there is nothing to summarise.
+
+    A researcher need not have a record in every edition, an empty
+    institution cell has no aggregate at all, and a country can be asked for
+    an edition the dataset does not have while the year track catches up
+    with the toggle.
+    """
+    return notice_card(name, is_career, yr,
+                       'There is no record for this edition.')
+
+
 @callback(
     Output('row-detail', 'children'),
+    Output('row-card-subject', 'data'),
     [Input('instnametable', 'active_cell')],
     [State('glowYear_glowmap_', 'value'),
      State("careerORSingleYrRadio" + SUFFIX, 'value'),
      State("stats2", 'value'),
-     State('instnametable', 'data')],
+     State('instnametable', 'data'),
+     # The rows on screen. active_cell['row'] counts these rather than the
+     # rows in `data`, and the table pages and sorts in the browser, so on
+     # page two or after a sort data[row] is somebody else.
+     State('instnametable', 'derived_viewport_data')],
     prevent_initial_call='initial_duplicate')
-def update_graphs(val,yr, iscar, sts,dt):
+def update_graphs(val, yr, iscar, sts, dt, viewport):
+    """The card for a clicked row, and who it is about.
+
+    The subject goes to a store rather than into the card, so the links,
+    one of which is a call to OpenAlex, are filled by their own callback
+    and the card draws without waiting for them.
+    """
     if val is None:
         raise PreventUpdate
-    else:
-        if sts == 'median':
-            st_idx = 2
-        elif sts == 'min':
-            st_idx = 0
-        elif sts == 'max':
-            st_idx = 4
-        elif sts == '25':
-            st_idx = 1
-        elif sts == '75':
-            st_idx = 3
-        if iscar:
-            prefix = 'career'
-            txt = 'career-long up to'
-        else:
-            prefix = 'singleyr'
-            txt = 'single-year in '
-        
-        sel_type = val['column_id']
-        selection = dt[val['row']][sel_type]
-        
-        if sel_type == 'RESEARCHER':
-            # exact=True: `selection` is a RESEARCHER cell from the country
-            # table, which country_researchers filled from authors.authfull_display.
-            results = get_es_results(selection,prefix,'authfull',exact=True)
-            if results is not None:
-                data = es_result_pick(results, 'data', None)
-                data  = data[f'{prefix}_{yr}']
-                self_cit = f'''
-                ---
-                ##### Summary for **{selection.split(',')[0]}** {txt} {yr}
-                - `Number of citations:` **{int(data['nc'])}**
-                - `H-index:` **{int(data['h'])}**
-                - `Hm-index:` **{int(data['hm'])}**
-                - `Self citation ratio:` **{np.round(data['self%']*100,2)}%**
-                '''
-        elif sel_type == 'INSTITUTE':
-            data = get_es_aggregate('inst_name',selection,prefix)
-            data = data[f'{prefix}_{yr}']
-            self_cit = f'''
-                ---
-                ##### Summary ({sts}) for **{selection}** {txt} {yr}
-                - `Number of citations:` **{int(data['nc'][st_idx])}**
-                - `H-index:` **{int(data['h'][st_idx])}**
-                - `Hm-index:` **{int(data['hm'][st_idx])}**
-                - `Self citation ratio:` **{np.round(data['self%'][st_idx]*100,2)}%**
-                '''
-        return self_cit
+    prefix = 'career' if iscar else 'singleyr'
 
-compare_row = html.Div([
-    dbc.Row([
-        dbc.Col([html.Center(dbc.Button("🔸 Author 🆚 author", className="me-2", id = "collapse_btn_author_vs_author",
-            style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
-            n_clicks = 0, color = darkAccent1))], width = 3),
-        dbc.Col([html.Center(dbc.Button("🔸 Group 🆚 group", className="me-2", id = "collapse_btn_group_vs_group",
-            style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
-            n_clicks = 0, color = darkAccent1))], width = 3),
-        dbc.Col([html.Center(dbc.Button("🔸 Author 🆚 group", className="me-2", id = "collapse_btn_author_vs_group",
-            style={"color": lightAccent1, 'font-size':'17px', "fontWeight": "bold", "border-color": lightAccent1,"border-radius":"30px", "border-width":"2px", "background-image": "linear-gradient(to bottom, #2C2C2C, #5b5959)"},
-            n_clicks = 0, color = darkAccent1))], width = 3),
-    ], justify="center"),
-    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [author_vs_author_layout()], className = 'ev-page'), 
-        id = "collapse_author_vs_author", is_open = False))], className="mt-3"),
-    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [author_vs_group_layout()], className = 'ev-page'), 
-         id = "collapse_author_vs_group", is_open = False))], className="mt-3"),
-    dbc.Row([dbc.Col(dbc.Collapse(dbc.Container(fluid = True, children = [group_vs_group_layout(),author_find_layout()], className = 'ev-page'), 
-        id = "collapse_group_vs_group", is_open = False))], className="mt-3")
-    ])
+    # Before the table has reported what it is showing, the viewport is
+    # empty and the first page is `data` as it was sent.
+    shown = viewport if viewport else dt
+    try:
+        clicked = shown[val['row']]
+    except (TypeError, IndexError, KeyError):
+        raise PreventUpdate
+    sel_type = val.get('column_id')
+    if sel_type not in ('RESEARCHER', 'INSTITUTE'):
+        # Only the two columns have a summary behind them.
+        raise PreventUpdate
+    selection = clicked.get(sel_type)
+
+    if sel_type == 'RESEARCHER':
+        author_id = clicked.get('AUTHOR_ID')
+        subject = {'kind': 'researcher', 'name': selection,
+                   'author_id': author_id, 'career': bool(iscar),
+                   'year': str(yr)}
+        record = _researcher_record(author_id, selection, prefix, yr)
+        if not record:
+            return _no_record(selection, iscar, yr), subject
+        return researcher_card(selection, record, iscar, yr), subject
+
+    subject = {'kind': 'institution', 'name': selection}
+    if sts not in STAT_INDEX:
+        return _no_statistic(selection, iscar, yr), subject
+    data = get_es_aggregate('inst_name',selection,prefix)
+    summary = (data or {}).get(f'{prefix}_{yr}')
+    if not summary:
+        return _no_record(selection or 'This institution', iscar, yr), subject
+    return institution_card(selection, institution_ror_for(selection),
+                            summary, STAT_LABELS[sts].capitalize(),
+                            STAT_INDEX[sts], iscar, yr), subject
 
 
-"""
-World map interactions
-"""
+def _researcher_record(author_id, name, prefix, yr):
+    """The clicked researcher's row for this edition, as the card reads it.
+
+    The list knows which researcher each row is, so that id is read
+    directly: several people can share a name, and looking the name up
+    again could land on one of the others. A row without an id (a table
+    filled some other way) falls back to the name.
+    """
+    if author_id:
+        row = author_metrics(author_id, prefix, yr)
+        if not row:
+            return None
+        return {'inst_name': row['institute'] or None,
+                'cntry': _country_name(row['country_code']),
+                'sm-field': row['field'] or None,
+                'nc': row['nc'], 'h': row['h'], 'hm': row['hm'],
+                'self%': row['self_pct']}
+    results = get_es_results(name, prefix, 'authfull', exact=True)
+    data = es_result_pick(results, 'data', None) if results is not None \
+        else None
+    record = (data or {}).get(f'{prefix}_{yr}')
+    if not record:
+        return None
+    return dict(record, cntry=_country_name(record.get('cntry')))
+
+
+@callback(
+    Output('row-card-links', 'children'),
+    Input('row-card-subject', 'data'),
+    prevent_initial_call=True)
+def row_card_links(subject):
+    """Where the record lives elsewhere: OpenAlex for a researcher, and ROR
+    for an institution matched there.
+
+    OpenAlex is searched by name, so it can only be trusted when one
+    researcher on the list has that name. Five people are published as
+    "Kim, Tae-kyun"; a name match there would be a guess at which one.
+    """
+    if not subject:
+        raise PreventUpdate
+    if subject.get('kind') == 'researcher':
+        name = subject.get('name')
+        url = (openalex_author(name)
+               if name and not name_is_shared(name) else None)
+        return researcher_links(name, url)
+    return institution_links(institution_ror_for(subject.get('name')))
+
+
+@callback(
+    Output('accordion', 'active_item', allow_duplicate=True),
+    Output('spotlight-selection', 'data', allow_duplicate=True),
+    Output('explore-preset', 'data', allow_duplicate=True),
+    Input('row-card-explore', 'n_clicks'),
+    State('row-card-subject', 'data'),
+    prevent_initial_call=True)
+def open_row_in_explore(clicks, subject):
+    """The card's "Open in Explore": the same hand-off the Top 10 rows use,
+    with the edition the reader was looking at."""
+    # The button is rendered with the links, and Dash reports a newly
+    # rendered button as a trigger with no clicks.
+    if not clicks or not subject or subject.get('kind') != 'researcher':
+        raise PreventUpdate
+    return ('explore', subject['name'],
+            {'career': bool(subject.get('career')),
+             'year': str(subject.get('year') or ''), 'ns': False})
+
+
+# The compare tabs and the Explore section are built when a reader opens
+# them, and their builders declare their callbacks as they run. Dash only
+# accepts callbacks declared before the first request, so each panel is built
+# once here, at import. Later builds register nothing (citations_lib/callbacks.py).
+for _build in (author_vs_author_layout, author_vs_group_layout,
+               group_vs_group_layout, author_find_layout):
+    _build()
+
+
+# World map interactions
 
 
 def _clicked_a_city(lat, lng, is_career, yr):
@@ -204,7 +272,7 @@ def _clicked_a_city(lat, lng, is_career, yr):
 
     There is no aggregate for a city, because the summaries this dashboard
     keeps are per country, field and institution. What a city does have is
-    the people in it, so the summary says what can be counted directly and
+    the people in it, so the card says what can be counted directly and
     the table lists them, best score first.
 
     The point is identified by where it is rather than by what it is called,
@@ -214,68 +282,72 @@ def _clicked_a_city(lat, lng, is_career, yr):
     kind = 'career' if is_career else 'singleyr'
     rows, total = city_researchers(lat, lng, kind, yr,
                                    limit=COUNTRY_ROW_LIMIT)
+    when = f"Career-long, up to {yr}" if is_career else f"Single year {yr}"
     if not rows:
-        raise PreventUpdate
+        # A place on one edition's map can have nobody in another. This
+        # used to raise PreventUpdate, which after a year change left the
+        # old edition's list on screen beside a map of the new one, so the
+        # panel says the place is empty in this edition instead.
+        return (notice_card('No researchers here', is_career, yr,
+                            'Nobody on the list works at this place in this '
+                            'edition.'), [],
+                f'<div class="danger"><center><strong>{when}</strong><br/>'
+                f'No researchers on the list at this place.</center></div>',
+                {'height': '560px', 'overflowY': 'auto', 'display': 'block'},
+                [], None)
     points = [p for p in city_points(kind, int(yr))
               if abs(p['lat'] - lat) < 0.001 and abs(p['lng'] - lng) < 0.001]
     place = points[0] if points else None
     city = place['city'] if place else ''
-    country_code = place['country_code'] if place else ''
-    when = f"Career-long up to {yr}" if is_career else f"Single-year data in {yr}"
-    country_full = str(coco.convert(names=country_code, to='name_short'))
-    if country_full in ('not found', 'None'):
-        country_full = country_code
-    where = ', '.join(part for part in
-                      (city, (place or {}).get('region'), country_full)
-                      if part)
+    country_full = _country_name(place['country_code']) if place else None
+    region = (place or {}).get('region')
     if place:
-        summary = f"""
-                ---
-                ##### **{where}**
-                - `Researchers on the list:` **{place['researchers']:,}**
-                - `Citations, summed:` **{place['citations']:,}**
-                - `Papers, summed:` **{place['papers']:,}**
-                - `Best h-index here:` **{place['h']}**
-               """
+        summary = city_card(city, region, country_full, place, is_career, yr)
     else:
-        summary = f"""
-                ---
-                ##### **{where}**
-                - `Researchers on the list:` **{total:,}**
-               """
+        summary = city_card(city or 'This place', region, country_full,
+                            {'researchers': total, 'citations': None,
+                             'papers': None, 'h': None}, is_career, yr)
     shown = len(rows)
     listing = (f'<strong>{shown:,}</strong> of <strong>{total:,}</strong> '
-               f'researchers, by score' if total > shown
-               else f'<strong>{total:,}</strong> researchers')
+               f'researchers in <strong>{city}</strong>, highest score first'
+               if total > shown
+               else f'<strong>{total:,}</strong> researchers in '
+                    f'<strong>{city}</strong>, highest score first')
     message = (f'<div class="danger"><center><strong>{when}</strong><br/>'
-               f'{listing} in <strong>{city}</strong>'
-               f'<br/><u>Click a row to see that researcher</u></center></div>')
+               f'{listing}'
+               f'<br/><u>Click a name for details</u></center></div>')
     return (summary, rows, message,
             {'height': '560px', 'overflowY': 'auto', 'display': 'block'},
             [], None)
+
+
 @callback(
-    Output('worldtitle', 'children',allow_duplicate=True),
+    Output('place-summary', 'children'),
     Output('instnametable','data'),
     Output('cntrylabel','children'),
     Output('instnametable','style_table'),
     Output("instnametable", "selected_cells"),
     Output("instnametable", "active_cell"),
+    Output('place-modal', 'is_open'),
     Input('glowPicked_glowmap_', 'value'),
     Input("careerORSingleYrRadio" + SUFFIX, 'value'),
     Input('glowYear_glowmap_', 'value'),
     Input('stats2', 'value'),
     State('instnametable', 'style_table'),
-    #prevent_initial_call=True
-    prevent_initial_call='initial_duplicate' 
+    prevent_initial_call='initial_duplicate'
     )
 def click_on_map_update(val,is_career,yr,sts,table_style):
-    """What the summary and the table show when a place is clicked.
+    """What the modal and the table show when a place is clicked.
 
     The map sends 'country|USA' or 'city|London|GBR', with a counter on the
     end so that clicking the same place twice is still a change Dash can
-    see. A country reads from the Elasticsearch aggregates, which is what
-    they exist for; a city reads from institution_ror, which is where the
-    coordinates that put the point on the map came from.
+    see. A country reads its summary from the group_metrics aggregates in
+    Postgres (through get_es_aggregate, which kept its old name); a city
+    reads from institution_ror, which is where the coordinates that put the
+    point on the map came from.
+
+    The modal opens on a click and only on a click. Moving the year or the
+    dataset refreshes what it holds, and the list, without opening it again.
     """
     if not val:
         raise PreventUpdate
@@ -291,39 +363,14 @@ def click_on_map_update(val,is_career,yr,sts,table_style):
     parts = str(val).split('|')
     if len(parts) < 2:
         raise PreventUpdate
+    open_modal = True if picked else dash.no_update
     if parts[0] == 'city':
-        return _clicked_a_city(float(parts[1]), float(parts[2]), is_career, yr)
-    val = {'points': [{'location': parts[1]}]}
-    if sts == 'median':
-        st_idx = 2
-    elif sts == 'min':
-        st_idx = 0
-    elif sts == 'max':
-        st_idx = 4
-    elif sts == '25':
-        st_idx = 1
-    elif sts == '75':
-        st_idx = 3
-    if is_career:
-        cr = 'career'
-    else:
-        cr = 'singleyr'
-    cntry = val['points'][0]['location'].lower()
-    data = get_es_aggregate('cntry',cntry,cr)
-    self_cit = f'''
-                ---
-                ##### Summary statistics ({sts}) for **{cntry.upper()}**
-                - `Number of citations:` **{int(data[f'{cr}_{yr}']['nc'][st_idx])}**
-                - `H-index:` **{int(data[f'{cr}_{yr}']['h'][st_idx])}**
-                - `Hm-index:` **{int(data[f'{cr}_{yr}']['hm'][st_idx])}**
-                - `Self citation ratio:` **{np.round(data[f'{cr}_{yr}']['self%'][st_idx]*100,2)}%**
-               '''
-    if is_career: 
-        nm = 'career'
-        txt = f"Career-long up to {yr}"
-    else:
-        nm = 'singleyr'
-        txt = f"Single-year data in {yr}"
+        return _clicked_a_city(float(parts[1]), float(parts[2]), is_career,
+                               yr) + (open_modal,)
+    cr = 'career' if is_career else 'singleyr'
+    cntry = parts[1].lower()
+    # The code is what the lookups key on; the name is what a reader wants.
+    cntry_full = _country_name(cntry)
 
     # This used to scroll the legacy `career`/`singleyr` Elasticsearch
     # indices and filter each document on a `years` field. Those indices
@@ -333,107 +380,166 @@ def click_on_map_update(val,is_career,yr,sts,table_style):
     # fact rows actually live, for the same thing.
     # The table gets a page's worth, not the whole country. The count below
     # is the true total, queried separately.
-    total_in_country = country_researcher_count(cntry, nm, yr)
-    career_all_c = country_researchers(cntry, nm, yr, limit=COUNTRY_ROW_LIMIT)
-    # The code is what the lookups key on; the name is what a reader wants.
-    cntry_full = str(coco.convert(names=cntry, to='name_short'))
-    if cntry_full in ('not found', 'None'):
-        cntry_full = cntry.upper()
-    total_authors = edition_author_count(nm, yr)
+    total_in_country = country_researcher_count(cntry, cr, yr)
+    career_all_c = country_researchers(cntry, cr, yr, limit=COUNTRY_ROW_LIMIT)
+    total_authors = edition_author_count(cr, yr)
+
+    # No summary for this edition, which is what a stale year looks like
+    # (single year has no 2018), or no statistic chosen: the card says
+    # which, and the list below is still filled.
+    edition = (get_es_aggregate('cntry', cntry, cr) or {}).get(f'{cr}_{yr}')
+    if not edition:
+        summary = _no_record(cntry_full, is_career, yr)
+    elif sts not in STAT_INDEX:
+        summary = _no_statistic(cntry_full, is_career, yr)
+    else:
+        summary = country_card(cntry_full, total_in_country, total_authors,
+                               STAT_LABELS[sts].capitalize(), edition,
+                               STAT_INDEX[sts], is_career, yr)
+
+    txt = f"Career-long, up to {yr}" if is_career else f"Single year {yr}"
     shown = len(career_all_c)
     if total_in_country > shown:
         listing = (f'<strong>{shown:,}</strong> of '
-                   f'<strong>{total_in_country:,}</strong> researchers, '
-                   f'alphabetically')
+                   f'<strong>{total_in_country:,}</strong> researchers in '
+                   f'<strong>{cntry_full}</strong>, A to Z')
     else:
-        listing = f'<strong>{total_in_country:,}</strong> researchers'
+        listing = (f'<strong>{total_in_country:,}</strong> researchers in '
+                   f'<strong>{cntry_full}</strong>, A to Z')
     msg = (f'<div class="danger"><center><strong>{txt}</strong><br/>'
-           f'{listing} in <strong>{cntry_full}</strong>'
+           f'{listing}'
            f'<br/><span class="ev-of-total">{total_authors:,} worldwide '
-           f'in this selection</span>'
-           f'<br/><u>Click a row to see that researcher</u></center></div>')
-    return(self_cit,career_all_c, msg, {'height': '560px', 'overflowY': 'auto', 'display': 'block'},[],None)
+           f'in this edition</span>'
+           f'<br/><u>Click a name for details</u></center></div>')
+    return (summary, career_all_c, msg,
+            {'height': '560px', 'overflowY': 'auto', 'display': 'block'},
+            [], None, open_modal)
 
-# The map's opening frame. Was pinned to '2021'; it follows the most recent
-# career edition now, so loading a new edition moves it without an edit here.
-_MAP_YEAR_OPTIONS, _MAP_DEFAULT_YEAR = update_yr_options2(True)
 
-# The plotly choropleth that used to live here is gone: the echarts map in
-# citations_lib/glowmap.py took its place, which reads at two granularities
-# rather than one and can be clicked down to a city. What stays is the
-# toolbar above it, because the whole page reads the selection those controls
-# hold: the map, the year track under it, and the tables beside it.
+@callback(
+    Output('worldtitle', 'style'),
+    Input('instnametable', 'style_table'))
+def explanation_style(table_style):
+    """The explanation of the map fills the pane until a place is clicked;
+    after that the pane is the list of that place, in the same spot."""
+    if (table_style or {}).get('display') == 'block':
+        return {'display': 'none'}
+    return {}
 
-# The dataset toggle, as two icons rather than the words "Career" and
+
+@callback(
+    Output('place-modal', 'is_open', allow_duplicate=True),
+    Input('place-modal-close', 'n_clicks'),
+    prevent_initial_call=True)
+def close_place_modal(clicks):
+    """Close the modal; the list is already beside the map."""
+    if not clicks:
+        raise PreventUpdate
+    return False
+
+
+# The year the explanation below uses in its examples. It follows the most
+# recent career edition, so loading a new edition moves it without an edit
+# here.
+_, _MAP_DEFAULT_YEAR = update_yr_options2(True)
+
+# The map itself is the echarts map in citations_lib/glowmap.py. What this
+# page adds are the controls the tables beside it also read: the dataset
+# toggle and the summary statistic.
+#
+# The dataset toggle is two icons rather than the words "Career" and
 # "Single year". Every page's toggle is built by the same helper, so the
 # control that means the same thing in six places also reads the same in all
 # six; see citations_lib/controls.py for why it is icons.
 careerORSingleYr = kind_toggle("careerORSingleYrRadio" + SUFFIX)
 
 
-zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25% (group)','median':'Median (group)','75':'75% (group)','max':'Maximum (individual)'},value='median')
-# What the map is, in the panel beside it.
-#
-# This text described a choropleth of the median h-index by country, which is
-# what used to be here. The map reads four measures at two granularities now,
-# the year comes from the track underneath rather than from a row of buttons,
-# and a place can be clicked down to a city, so the description was of a
-# picture nobody could see any more.
-explain  =  f'''
-                    This dashboard section provides a zoomed-out look at the performance metrics that went into the ranking of [the most cited scientists in the world](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&).
-                    You can explore the researchers and institutions that made the cut in each country.
+zortt = dcc.Dropdown(id='stats2',options={'min':'Minimum (individual)','25':'25th percentile (group)','median':'Median (group)','75':'75th percentile (group)','max':'Maximum (individual)'},value='median')
+# How the chosen statistic is named in the summary it produces.
+STAT_LABELS = {'min': 'minimum', '25': '25th percentile', 'median': 'median',
+               '75': '75th percentile', 'max': 'maximum'}
+# The reference notes beside the map. What the map is and how to start is said
+# by the hint over the map itself, so it is not repeated here. The first note
+# is open from the start: which of the two records is on screen changes every
+# number on the page, and it is the thing a reader most often gets wrong.
+def _note(icon, title, body, open_=False):
+    return html.Div(html.Details([
+        html.Summary([html.I(**{'data-lucide': icon}), html.Strong(title)]),
+        *body,
+    ], open=open_), className='danger')
 
-                    #### What the map shows
 
-                    Every light is a city, and how bright it is says how much of the measure chosen above the map is there: how many of the researchers on the list work in it, how many citations they have between them, how many papers, or the best h-index among them. On **Countries** the same reading fills each country instead.
+def _kind_chip(icon, active):
+    """The dataset toggle's icon, drawn as the toggle draws it."""
+    return html.Span(html.Span(className=f'ev-ic ev-ic-{icon}'),
+                     className='ev-kind-chip'
+                               + (' ev-kind-chip-on' if active else ''))
 
-                    The year is the track under the map. The arrows either side of it step one edition at a time, and so do the arrow keys once the handle has been clicked.
 
-                    <div class="danger">
-                    <details>
-                    <summary><i data-lucide="help-circle"></i><strong>Career vs single-year</strong></summary>
-                    <p>The Elsevier database holds two records per researcher, and the pair of icons above the map chooses between them.</p>
-                    <p><span class="ev-ic ev-ic-history"></span> <strong>Career-long</strong> is everything accumulated up to the year selected, so <strong>career &amp; {_MAP_DEFAULT_YEAR}</strong> is an h-index built over a working life that reaches {_MAP_DEFAULT_YEAR}.</p>
-                    <p><span class="ev-ic ev-ic-calendar"></span> <strong>Single year</strong> is that year on its own, so <strong>single year &amp; {_MAP_DEFAULT_YEAR}</strong> is the h-index earned in {_MAP_DEFAULT_YEAR} and nothing before it. That series has no 2018, which is why the track loses a mark when you switch to it.</p>
-                    </details>
-                    </div>
-                    <br/>
-                    <div class="danger">
-                    <details>
-                    <summary><i data-lucide="lightbulb"></i><strong>How to use this map</strong></summary>
-                    <ul>
-                    <li>Click a place to list who is there, best composite score first. On <strong>Cities</strong> that is the one city clicked, and there are four Oxfords and two Clevelands on this map, so it is the point rather than the name that is read. On <strong>Countries</strong> it is the whole country.</li>
-                    <li>Click a row in that list for the numbers behind it, which open as a card over the map.</li>
-                    <li>Click a band in the key to take it out of the picture, and double-click one to see that band on its own. Double-clicking it again puts the others back.</li>
-                    <li>Drag the map to pan it, pinch or use the buttons in its corner to zoom, and the third button returns to the whole world.</li>
-                    <li>The summary statistic above the list (<strong>min</strong>, <strong>max</strong>, <strong>median</strong>, <strong>25th</strong> and <strong>75th</strong> percentiles) sets what the summary says about a country or an institution. <strong>min</strong> and <strong>max</strong> are a single researcher; the rest describe the group.</li>
-                    </ul>
-                    </details>
-                    </div>
-                    <br/>
-                    <div class="danger">
-                    <details>
-                    <summary><i data-lucide="map-pin"></i><strong>Why some researchers are not on the map as cities</strong></summary>
-                    <p>The published data gives an institution as a name and a country, with no city and no coordinates. The cities here come from matching those names against <a href='https://ror.org' target='_blank'>ROR</a>, which places about seven researchers in ten. The <strong>Countries</strong> reading has no such gap: every row carries a country, so it is the whole edition.</p>
-                    </details>
-                    </div>
-                    <br/>
-                    <div class="danger">
-                    <details>
-                    <summary><i data-lucide="list"></i><strong>What the metric abbreviations mean</strong></summary>
-                    <ul>
-                    <li><b>h:</b> <a href='https://en.wikipedia.org/wiki/H-index' target='_blank' style='color:blue;'>H-index</a></li>
-                    <li><b>nc:</b> Number of citations (#cites)</li>
-                    <li><b>hm:</b> <a href='https://ideas.repec.org/a/eee/infome/v2y2008i3p211-216.html' target='_blank' style='color:blue;'>Hm-index</a></li>
-                    <li><b>ncs:</b> Number of citations received on single-authored papers (#pprs-s)</li>
-                    <li><b>ncsf:</b> Number of citations received on single OR first authored papers (#pprs-sf)</li>
-                    <li><b>ncsfl:</b> Number of citations received on single OR first OR last authored papers (#pprs-sfl)</li>
-                    <li><b>c:</b> Composite (c) score that determines the ranking</li>
-                    </ul>
-                    </details>
-                    </div>
-                    <br/>
-                    '''
+_COMPOSITE = r"""
+$$
+C \;=\; \sum_{k=1}^{6} \frac{\ln(1 + x_k)}{\ln(1 + \max x_k)}
+$$
+"""
+
+map_notes = html.Div([
+    _note('help-circle', 'Career vs single year', [
+        html.P('The data holds two records for each researcher. The pair of '
+               'icons above the map switches between them.'),
+        html.P([_kind_chip('history', True), html.Span([
+            html.Strong('Career-long'),
+            ' counts everything up to the selected year, so ',
+            html.Strong(f'career, {_MAP_DEFAULT_YEAR}'),
+            ' is an h-index built over a whole career up to '
+            f'{_MAP_DEFAULT_YEAR}.'])], className='ev-kind-line'),
+        html.P([_kind_chip('calendar', False), html.Span([
+            html.Strong('Single year'),
+            ' counts that year alone, so ',
+            html.Strong(f'single year, {_MAP_DEFAULT_YEAR}'),
+            f' is the h-index for {_MAP_DEFAULT_YEAR} only. There is no '
+            'single-year data for 2018, so that year disappears from the '
+            'track when you switch.'])], className='ev-kind-line'),
+    ], open_=True),
+    _note('sigma', 'How the composite score works', [
+        html.P('The list is ranked by the composite score C. It adds up six '
+               'indicators: citations, the h-index, the hm-index, and '
+               'citations to single-authored, single- or first-authored, and '
+               'single-, first- or last-authored papers.'),
+        dcc.Markdown(_COMPOSITE, mathjax=True, className='ev-formula'),
+        html.P('Each term is one indicator on a log scale, divided by the '
+               'largest value in the edition on the same scale. So each term '
+               'is between 0 and 1, and C is between 0 and 6. With '
+               'self-citations excluded, the same sum runs on the counts '
+               'without them.'),
+    ]),
+    _note('map-pin', 'Why some researchers are missing from Cities', [
+        html.P(['The published data gives each institution as a name and a '
+                'country, with no city or coordinates. The cities come from '
+                'matching those names against ',
+                html.A('ROR', href='https://ror.org', target='_blank'),
+                ', which places about seven in ten researchers. ',
+                html.Strong('Countries'),
+                ' has no such gap, because every row has a country.']),
+    ]),
+    _note('list', 'Metric abbreviations', [html.Ul([
+        html.Li([html.B('nc:'), ' number of citations']),
+        html.Li([html.B('h:'), ' ', html.A(
+            'h-index', href='https://en.wikipedia.org/wiki/H-index',
+            target='_blank')]),
+        html.Li([html.B('hm:'), ' ', html.A(
+            'hm-index',
+            href='https://ideas.repec.org/a/eee/infome/v2y2008i3p211-216.html',
+            target='_blank'), ', the h-index adjusted for co-authorship']),
+        html.Li([html.B('ncs:'), ' citations to single-authored papers']),
+        html.Li([html.B('ncsf:'),
+                 ' citations to single- or first-authored papers']),
+        html.Li([html.B('ncsfl:'),
+                 ' citations to single-, first- or last-authored papers']),
+        html.Li([html.B('c:'), ' the composite score, which sets the ranking']),
+    ])]),
+], className='ev-map-notes')
+
+
 # The table, and the card that opens over it.
 #
 # The detail for a clicked row used to print under the table, which pushed
@@ -445,10 +551,7 @@ zart = dls.Ring(
         dcc.Markdown(id='cntrylabel', children="",
                      dangerously_allow_html=True),
         tbl,
-        dcc.Markdown(id='worldtitle',
-                     dangerously_allow_html=True,
-                     highlight_config=dict(theme='dark'),
-                     children=explain),
+        html.Div(id='worldtitle', children=map_notes),
     ], className="ev-list-stack"),
     color="#ECAB4C", width=270)
 
@@ -461,10 +564,33 @@ row_card = html.Div(
         html.Button(html.Span(className="ev-ic ev-ic-x"),
                     id="row-card-close", n_clicks=0,
                     className="ev-row-card-close", title="Close"),
-        dcc.Markdown(id='row-detail', dangerously_allow_html=True,
-                     highlight_config=dict(theme='dark'), children=""),
+        html.Div(id='row-detail'),
+        # Filled by row_card_links after the card is drawn, because the
+        # OpenAlex lookup is a call to somebody else's server.
+        html.Div(id='row-card-links', className='ev-id-links ev-row-links'),
+        dcc.Store(id='row-card-subject'),
     ],
     id="row-card", className="ev-row-card", style={'display': 'none'},
+)
+
+
+# The place a reader clicked on the map, once, over the page. Closing it
+# leaves the list of that place's researchers beside the map, which is what
+# the click was for; the numbers are a summary to read on the way there.
+place_modal = dbc.Modal(
+    dbc.ModalBody([
+        html.Button(html.Span(className="ev-ic ev-ic-x"),
+                    id="place-modal-close", n_clicks=0,
+                    className="ev-row-card-close", title="Close",
+                    **{"aria-label": "Close"}),
+        html.Div(id='place-summary'),
+    ], className='ev-place-body'),
+    id='place-modal',
+    is_open=False,
+    centered=True,
+    size='lg',
+    contentClassName='ev-place-modal',
+    backdrop=True,
 )
 
 
@@ -539,14 +665,14 @@ map_hint = html.Div(
                 html.I(**{"data-lucide": "mouse-pointer-click"}),
                 html.Div(
                     [
-                        html.Div("Click a place to read it",
+                        html.Div("Click a place to see who is there",
                                  className="ev-hint-title"),
                         html.Div(
-                            "On Cities, every point is a city and clicking "
-                            "one lists the researchers who work there, best "
-                            "score first. On Countries, clicking a country "
-                            "lists what it contributes. Either way it "
-                            "follows the dataset and year selected above.",
+                            "On Cities, clicking a point lists the "
+                            "researchers who work there, highest score "
+                            "first. On Countries, clicking a country lists "
+                            "all of its researchers. Both follow the dataset "
+                            "and year you have selected.",
                             className="ev-hint-body"),
                     ]
                 ),
@@ -595,24 +721,21 @@ offcanvas = html.Div(
 
                 ---
 
-                This dashboard provides an intuitive interface to explore top 2% researchers database [(Ioannidis et al. 2019)](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&), 
-                a standardized information on citations, h-index, co-authorship-adjusted hm-index, citations to papers in various authorship positions, and a composite indicator.
+                Explore the database of the top 2% most-cited researchers [(Ioannidis et al. 2019)](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000384&page=69&page=9&page=104&page=7&). For each researcher it gives standardized citation counts, the h-index, the co-authorship-adjusted hm-index, citations by authorship position, and a composite score that sets the ranking.
 
-                Citation and publication data of the top-ranking authors (based on their respective composite scores) are openly available on the [Elsevier Data Repository](https://elsevier.digitalcommonsdata.com/datasets/btchxktzyw/5).
-                
+                The data is openly available from the [Elsevier Data Repository](https://elsevier.digitalcommonsdata.com/datasets/btchxktzyw/5).
+
                 ---
-                This dashboard and the database is generously hosted by [Evidence](https://evidencepub.io). 
-                
-                Contact us at `info@evidencepub.io` if you are interested in sharing a data application to supplement your research articles. 
+                The dashboard and its database are hosted by [Evidence](https://evidencepub.io).
 
-                Powered by Plotly Dash and Elasticsearch. 
+                If you would like to share a data application alongside your research articles, contact us at `info@evidencepub.io`.
 
-                Source repository by the [NotebookFactory](https://github.com/Notebook-Factory/twopercenters)
+                Built with Plotly Dash. The data is served from Postgres, and Elasticsearch runs the name search. Source code by the [NotebookFactory](https://github.com/Notebook-Factory/twopercenters).
                 '''
             ),
             id="offcanvas",
             title="Twopercenters dashboard",
-            # Starts closed. zz/spotlight.js opens it once per browser on a
+            # Starts closed. assets/spotlight.js opens it once per browser on a
             # first visit and records that it has been seen; after that the
             # More info button is the way back to it. Opening it over the page
             # on every single load, with a backdrop dimming everything behind
@@ -818,45 +941,6 @@ dash.clientside_callback(
 )
 
 
-def _field(label, control, grow=False):
-    """One labelled control in the toolbar.
-
-    The row used to be four bare widgets centred next to each other with no
-    labels and no gaps, so it read as one undifferentiated strip and nothing
-    said what any of them did. A caption above each control costs one line and
-    removes the guessing.
-    """
-    return html.Div(
-        [html.Label(label, className="ev-field-label"), control],
-        className="ev-field" + (" ev-field-grow" if grow else ""),
-    )
-
-
-# Dataset and year are one choice made in two parts: which series, then which
-# edition of it. Presenting them as two separate labelled controls made the
-# user read them as unrelated. They share a single track now, dataset on the
-# left, years on the right, with a divider between: the shape of a picker
-# rather than of two toolbars that happen to be adjacent.
-def _picker(dataset_control, year_control):
-    return html.Div(
-        [
-            html.Div(dataset_control, className="ev-picker-left"),
-            html.Span(className="ev-picker-sep"),
-            html.Div(year_control, className="ev-picker-right"),
-        ],
-        className="ev-picker",
-    )
-
-
-# The toolbar that used to sit above the map is gone. Its dataset toggle is
-# on the map's own header now, next to the controls that read with it; its
-# year picker was a second control for what the track under the map already
-# says; and the statistic is beside the summary it describes. "More info"
-# moved to the navbar, where the other page-level things live.
-
-# Toolbar over a two-pane body: map on the left, country summary on the right.
-# They are cards now with room around them, rather than two grid columns butted
-# together against the page.
 def _map_with_kind_toggle():
     """The map, with the career/single-year toggle in its header.
 
@@ -875,6 +959,9 @@ def _map_with_kind_toggle():
     return built
 
 
+# A two-pane body: map on the left, the list and its summary on the right.
+# They are cards with room around them, rather than two grid columns butted
+# together against the page.
 navigation_row = html.Div(
     [
         dbc.Row(
@@ -900,7 +987,7 @@ navigation_row = html.Div(
 
 tabs = [
     dbc.Tabs(
-        [   
+        [
             # "comparison" on three of four labels is the word they have in
             # common, so it carries no information and only makes the row wide
             # enough to wrap.
@@ -927,14 +1014,13 @@ def switch_tab(at, picked):
         return html.Center(author_vs_group_layout(picked))
     elif at == "tab-3":
         return html.Center(group_vs_group_layout())
-    return html.P("This shouldn't ever be displayed...")
 
 
 @callback(Output("explore-content", "children"),
           Input("accordion", "active_item"),
           State("spotlight-selection", "data"))
 def build_explore(active, picked):
-    """Build "Find an author" when its section is opened.
+    """Build the Explore section when it is opened.
 
     Same on-demand rule as the tabs: the panel is built here rather than at
     import, so a name chosen in the spotlight is handed to it at build time
@@ -951,16 +1037,16 @@ def build_explore(active, picked):
 # say it, and a title that has to explain its own widget is a sign the widget
 # is not reading as one.
 ACCORDION_SECTIONS = [
-    ("explore", "One researcher, explore metrics",
+    ("explore", "Explore one researcher",
      "Every metric for one researcher, against the field they work in",
      "user"),
-    ("top10", "Top 10, by score and by metric",
+    ("top10", "Top 10 researchers",
      "Who leads the selected edition, and which indicator puts them there",
      "trophy"),
-    ("trends", "One researcher, year by year",
+    ("trends", "One researcher over time",
      "How a single researcher's metrics move across editions",
      "trending-up"),
-    ("compare", "Compare researchers, fields and countries",
+    ("compare", "Compare researchers and groups",
      "Put two researchers, or a researcher and a group, side by side",
      "users"),
 ]
@@ -1046,7 +1132,7 @@ footer = html.Footer(
                 ),
                 html.Div(
                     [
-                        _footer_link("book-open", "Preprint",
+                        _footer_link("book-open", "Paper",
                                      "https://journals.plos.org/plosbiology/"
                                      "article?id=10.1371/journal.pbio.3000384"),
                         _footer_link("database", "Elsevier data",
@@ -1086,7 +1172,7 @@ footer = html.Footer(
 # to a command-palette overlay: Cmd-K / Ctrl-K anywhere, or the Search button
 # in the navbar. It reuses get_es_results against the `authors` alias, which is
 # the same fuzzy search the in-tab dropdown uses, so a typo still finds the
-# author. Picking a result opens the trends section for that author.
+# author. Picking a result opens the Explore section on that author.
 # ============================================================================
 
 spotlight = dbc.Modal(
@@ -1113,7 +1199,7 @@ spotlight = dbc.Modal(
                          className="ev-spotlight-results"),
                 html.Div(
                     [
-                        html.Span("Fuzzy search: misspellings are fine."),
+                        html.Span("Misspellings are fine."),
                         html.Span("esc to close", className="ev-spotlight-esc"),
                     ],
                     className="ev-spotlight-hint",
@@ -1153,7 +1239,7 @@ def spotlight_results(term):
     names = es_result_pick(
         get_es_results(term, ['career', 'singleyr'], 'authfull'), 'authfull')
     if not names:
-        return html.Div("No researcher by that name.",
+        return html.Div("No researchers match that name.",
                         className="ev-spotlight-empty")
     return [
         html.Button(
@@ -1194,7 +1280,7 @@ def toggle_spotlight(_clicks, _close, hits, is_open):
     prevent_initial_call=True,
 )
 def spotlight_pick(hits, rendered):
-    """Open "Find an author" on the name that was clicked.
+    """Open the Explore section on the name that was clicked.
 
     The name is read back out of the rendered button rather than kept in a
     parallel list, so the label the user clicked and the name that is opened
@@ -1208,8 +1294,6 @@ def spotlight_pick(hits, rendered):
         chosen = rendered[index]["props"]["children"]
     except (TypeError, IndexError, KeyError):
         raise PreventUpdate
-    # "Find an author" is its own accordion section now rather than a tab, so
-    # this opens the section and no longer selects a tab that is gone.
     return ACCORDION_SECTIONS[0][0], chosen
 
 
@@ -1261,6 +1345,7 @@ dash.clientside_callback(
 layout = dbc.Container(fluid = True, children = [
         offcanvas,
         spotlight,
+        place_modal,
         dcc.Store(id="spotlight-hotkey"),
         dcc.Store(id="spotlight-selection"),
         # What the Explore tab should open on, when something else sends a
@@ -1277,14 +1362,3 @@ layout = dbc.Container(fluid = True, children = [
         jump_sink,
         footer
         ], className = 'ev-page ev-shell')
-    # dbc.Tooltip("Options selected in this row determine what dataset NC metrics are obtained from.", target = "selectStep1Card", placement = "right"), 
-    # dbc.Tooltip("Exclude or include author self citations.", target = "selfCToggle", placement = "right"), 
-    # dbc.Tooltip("Author metrics from entire career-span ('Career') or just from year of interest ('Single year').", target = "careerSingleYrRadio", placement = "right"), 
-    # dbc.Tooltip("Note: single year data not available for 2018.", target = "selectYrRadioRadio", placement = "right"), 
-    # dbc.Tooltip("Go to page on number of citations", target = "nc_button", placement = "right", id = 'nc_button_tt'), 
-    # dbc.Tooltip("Go to page on h-index", target = "h_button", placement = "right", id = 'h_button_tt'), 
-    # dbc.Tooltip("Go to page on hm-index", target = "hm_button", placement = "right", id = 'hm_button_tt'), 
-    # dbc.Tooltip("Go to page on total cites to single authored papers", target = "ncs_button", placement = "right", id = 'ncs_button_tt'), 
-    # dbc.Tooltip("Go to page on total cites to single+first authored papers", target = "ncsf_button", placement = "right", id = 'ncsf_button_tt'), 
-    # dbc.Tooltip("Go to page on total cites to single+first+last authored papers", target = "ncsfl_button", placement = "right", id = 'ncsfl_button_tt'), 
-    # dbc.Tooltip("Go to page on composite score C", target = "c_button", placement = "right", id = 'c_button_tt'), 

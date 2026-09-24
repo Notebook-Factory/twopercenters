@@ -4,10 +4,11 @@ The one thing in here that is not a default is post_fork, and it exists
 because of a real deployment hazard rather than a preference.
 
 preload_app is on, which means gunicorn imports app.py in the MASTER process
-and then forks the workers. pages/home.py does two database reads at import
-time -- update_yr_options2(True) for the year buttons and get_world_df(...)
-for the map's first frame -- so by the time the fork happens, the master
-holds an open connection in citations_lib.utils._conn. A forked child
+and then forks the workers. The pages query the database at import time:
+pages/home.py, pages/retraction.py and pages/rfm.py between them run more
+than a dozen queries to build their year options, figures and panels. So by
+the time the fork happens, the master holds an open connection in
+citations_lib.utils._conn. A forked child
 inherits the same libpq socket. Two workers sharing one connection interleave
 their requests on it, which produces protocol errors and, in the bad case,
 one request reading another request's result set. It cannot be reproduced

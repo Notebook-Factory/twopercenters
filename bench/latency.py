@@ -231,7 +231,7 @@ def _current_fns():
     """
     try:
         from citations_lib.utils import (get_es_results, es_result_pick,
-                                         _author_rows)
+                                         _author_rows, one_researcher)
     except ImportError as exc:
         raise SystemExit(
             "bench/latency.py --mode current: citations_lib.utils does not "
@@ -288,13 +288,17 @@ def _current_fns():
         equivalent: it does an HTTP round trip and a base64+zlib decompress
         on every call, always.
 
-        Only the per-author memo is cleared. `_maxima`, `_editions` and
+        `one_researcher` is per author too (which of the ids under a name is
+        read), so it is cleared with it.
+
+        Only the per-author memos are cleared. `_maxima`, `_editions` and
         `_column_names` are cached once per process for the whole dataset,
         not per author, so a real user pays them once at the first fetch
         ever; clearing them before every fetch would invent a cost the
         dashboard does not have.
         """
         _author_rows.cache_clear()
+        one_researcher.cache_clear()
 
     return typeahead, fetch, reset
 

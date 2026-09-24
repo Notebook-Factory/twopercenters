@@ -1,31 +1,20 @@
-import numpy as np
-import pandas as pd
-
-import plotly.graph_objects as go
-from IPython.core.display import display, HTML
-from plotly.offline import plot
-import plotly.express as px
-import plotly.colors
-from plotly.subplots import make_subplots
-import country_converter as coco
-
-from citations_lib.controls import kind_options
-import os
 import json
+import math
+import os
 import re
 import urllib.parse
 import urllib.request
-import pickle
-import base64
-import zlib
-import math
 from functools import lru_cache
+
+import country_converter as coco
+import pandas as pd
 
 import psycopg
 from elasticsearch import Elasticsearch
 
 from dotenv import load_dotenv
 
+from citations_lib.controls import kind_options
 from db.connection import connect
 from pipeline.institution_aggregate import institution_aggregate_by_name
 
@@ -39,57 +28,18 @@ else:
     # If local
     es = Elasticsearch([os.getenv('ES_URL_LOCAL')])
 
-def write_pickle(file,filename):
-    with open(filename, 'wb') as handle:
-        pickle.dump(file, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-def write_json(in_file,filename):
-    with open(filename, "w") as file:
-        json.dump(in_file, file)
-
-def read_json(filename):
-    with open(filename, "r") as file:
-        data = json.load(file)
-        return data
-
-
-# es_scroll and get_index_cat lived here to page through the old
-# `career`/`singleyr` Elasticsearch indices. Nothing calls them any more:
-# the last live caller was pages/home.py's country click, which now reads
-# Postgres, and every other reference in citations_lib/ is inside
-# commented-out code. They are removed rather than kept, because keeping a
-# working helper that targets indices a fresh deployment will not have is an
-# invitation to reach for it again. Author search goes through
-# get_es_results against the `authors` alias, which is the only
-# Elasticsearch access left.
-
-def get_all_values_by_key(data, target_key):
-    result = []
-
-    if isinstance(data, dict):
-        for key, value in data.items():
-            if key == target_key:
-                result.append(value)
-            elif isinstance(value, (dict, list)):
-                result.extend(get_all_values_by_key(value, target_key))
-    elif isinstance(data, list):
-        for item in data:
-            result.extend(get_all_values_by_key(item, target_key))
-
-    return result
 
 # ---------------------------------------------------------------------------
 # The seam between the dashboard and its data.
 #
-# The eight layout and page modules only ever reach the data through
-# get_es_results, es_result_pick, get_es_aggregate and (formerly)
-# base64_decode_and_decompress. Elasticsearch still answers the author
+# The layout and page modules reach author and group data through
+# get_es_results, es_result_pick and get_es_aggregate. Elasticsearch still answers the author
 # typeahead, because fuzzy name matching is what it is good at. Everything
 # numeric now comes out of Postgres.
 #
 # One format detail matters throughout: edition_id in Postgres is hyphenated
 # ("career-2024"), but the dashboard recovers a year with key.split('_')[-1]
-# (see get_auth_years and update_auth_yrs below). Every dict this module hands
+# (see update_auth_yrs below). Every dict this module hands
 # back therefore uses underscore keys, "career_2024" and "career_2024_log",
 # exactly as the old compressed blob did. _edition_key() is the one place that
 # conversion happens.
@@ -279,8 +229,7 @@ def _country_full_name(code):
     Soviet Union) and ant (the Netherlands Antilles). The pickles left them
     out of the country dropdown and so does this, since the label would read
     'not found' and selecting one would fail the same conversion in
-    get_es_aggregate. get_world_df excludes the same four for the same
-    reason (FINDING 5).
+    get_es_aggregate.
     """
     if code not in _COUNTRY_NAMES:
         if str(code).lower() in _DEFUNCT_CODES:
@@ -369,7 +318,7 @@ def load_dropdown_opts():
     Those pickles are one file per edition and only nine of them were ever
     generated, so they cover radio indices career 0-4 and singleyr 0-3. Once
     the year radio started offering 2022, 2023 and 2024, filling a group
-    dropdown asked for 'career 5' and raised KeyError (RULING R25). This
+    dropdown asked for 'career 5' and raised KeyError. This
     computes the same dict for every edition actually loaded.
 
     The shape is the pickles' shape: outer keys '<kind> <radio index>' in
@@ -378,8 +327,7 @@ def load_dropdown_opts():
     'inst_name' and 'sm-field' option lists.
 
     One pickle key is deliberately not reproduced: 'authfull', the full list
-    of author names in that edition. Nothing reads it (the one reference, at
-    author_vs_group_layout.py:173, is commented out), and it is by far the
+    of author names in that edition. Nothing reads it, and it is by far the
     most expensive part: about 200,000 names per edition, so 15 editions
     would be roughly three million strings built at page-construction time,
     in each of the two layouts that call this.
@@ -463,23 +411,111 @@ def _author_rows(author_ids, kind):
     return _column_names(table), rows
 
 
+def _author_ids_named(name):
+    """Every author_id whose display name is exactly `name`."""
+    return tuple(row[0] for row in _fetch(
+        'select author_id from authors where authfull_display = %s', (name,)))
+
+
+def name_is_shared(name):
+    """True when more than one researcher is published under this name."""
+    return len(_author_ids_named(name)) > 1
+
+
+@lru_cache(maxsize=2048)
+def one_researcher(author_ids):
+    """{kind: author_id} for the one researcher a shared display name means.
+
+    Most author_ids that share a display name are different people, and
+    taking each edition from whichever of them came first stitched one career
+    history together from several of them. So one researcher is chosen: one
+    with a career record if any has one, then the author_id with the most
+    editions, then the most recent one, then the higher id so the choice
+    does not depend on row order. Where the dashboard already knows the
+    author_id (a row of a list), it reads that id instead and none of this
+    applies.
+
+    Identity resolution never matches a career row to a single-year row, so
+    one person can hold a career-only id and a single-year-only id. If the
+    chosen id has no rows of one kind, another id supplies that kind only
+    when it is certain to be the same person: it is the only id under the
+    name with rows of that kind and none of the kinds the chosen id has, and
+    the two share at least one data year with the same institution in every
+    year they share. Otherwise that kind is shown as unavailable.
+    """
+    if not author_ids:
+        return {}
+    counts = {}
+    for kind, table in _TABLE_BY_KIND.items():
+        for author_id, editions, latest in _fetch(
+                f'select m.author_id, count(*), max(e.data_year) '
+                f'from {table} m join editions e using (edition_id) '
+                f'where m.author_id = any(%s) group by m.author_id',
+                (list(author_ids),)):
+            counts.setdefault(author_id, {})[kind] = (editions, latest)
+    if not counts:
+        return {}
+
+    def richness(author_id, kinds):
+        held = [counts[author_id][k] for k in kinds if k in counts[author_id]]
+        return (sum(e for e, _ in held), max(y for _, y in held), author_id)
+
+    # Career first: it is the dataset every view opens on, and a name that
+    # resolved to a single-year-only researcher left all of them empty.
+    chosen_id = max(counts, key=lambda a: ('career' in counts[a],)
+                    + richness(a, _TABLE_BY_KIND))
+    chosen = {kind: chosen_id for kind in counts[chosen_id]}
+    for kind in _TABLE_BY_KIND:
+        if kind in chosen:
+            continue
+        other_half = [a for a in counts if kind in counts[a]
+                      and not set(counts[a]) & set(counts[chosen_id])]
+        if len(other_half) == 1 and _same_institutions(
+                chosen_id, other_half[0]):
+            chosen[kind] = other_half[0]
+    return chosen
+
+
+_YEARS_AND_INSTITUTIONS = """
+    select e.data_year, m.institution_id
+    from {table} m join editions e using (edition_id)
+    where m.author_id = %s"""
+
+
+def _same_institutions(author_a, author_b):
+    """True when two author_ids share at least one data year and have the
+    same institution in every year they share.
+
+    Used for a career-only id and a single-year-only id under one name, so
+    each id has rows in one table; both are read for simplicity.
+    """
+    rows_of = ' union all '.join(_YEARS_AND_INSTITUTIONS.format(table=t)
+                                 for t in _TABLE_BY_KIND.values())
+    shared, agree = _fetch(
+        f'select count(*), bool_and(a.institution_id is not distinct from '
+        f'b.institution_id) '
+        f'from ({rows_of}) a join ({rows_of}) b using (data_year)',
+        (author_a, author_a, author_b, author_b))[0]
+    return bool(shared) and bool(agree)
+
+
 def _author_data(author_ids, kinds):
     """The nested dict the compressed blob used to hold, for one author.
 
     Keyed "<kind>_<year>" and "<kind>_<year>_log", each holding one flat dict
-    of dashboard metric names.
+    of dashboard metric names. `author_ids` may hold several ids that share a
+    display name; one_researcher decides which of them is read.
     """
     data = {}
+    chosen = one_researcher(tuple(sorted(set(author_ids))))
     for kind in kinds:
-        columns, rows = _author_rows(tuple(author_ids), kind)
+        if kind not in chosen:
+            continue
+        columns, rows = _author_rows((chosen[kind],), kind)
         position = {name: i for i, name in enumerate(columns)}
         for row in rows:
             edition_id = row[position['edition_id']]
             key = _edition_key(edition_id)
-            if key in data:
-                # Two author_ids that share a display name both claim this
-                # edition. The richer one came first; keep it.
-                continue
             maxima = _maxima().get(edition_id, {})
             plain = {
                 'inst_name': row[position['inst_name']],
@@ -562,7 +598,7 @@ def _requested_kinds(idx_name):
 #
 # These read the `predictions` and `prediction_runs` tables, written offline
 # by rdl/publish.py. Nothing here imports torch or anything under rdl/: the
-# web process must stay small, and tests/test_no_torch_in_app.py enforces it.
+# web process must stay small, and tests/test_retraction_page.py enforces it.
 #
 # Every helper distinguishes a measured value from an estimated one, because
 # the page that shows them must never present the two alike.
@@ -852,11 +888,12 @@ def es_result_pick(result, field, nohit=[''], expect_name=None):
     if result is None or len(result) == 0:
         return nohit
     if field == 'data':
-        # The old index held one document per author name covering every year
-        # that name appeared, and the layouts still look a name up and expect
-        # all of its editions back. Identity resolution can now split one
-        # display name across several author_ids, so gather every hit
-        # carrying the requested name, richest first.
+        # The layouts still look an author up by display name, and one
+        # display name can cover several author_ids. one_researcher picks
+        # which of them is read, and it is handed every author_id under the
+        # name, not only the ones in this frame: a frame restricted to one
+        # kind leaves some out, and the same name must mean the same person
+        # whichever kind the caller asked for.
         names = result['_source.authfull']
         if expect_name is None:
             expect_name = result.attrs.get('requested_name')
@@ -879,6 +916,8 @@ def es_result_pick(result, field, nohit=[''], expect_name=None):
                 )
         same_name = result[names == wanted]
         author_ids = tuple(dict.fromkeys(same_name['_source.author_id']))
+        if expect_name is not None:
+            author_ids = _author_ids_named(wanted) or author_ids
         kinds = tuple(dict.fromkeys(same_name['_index']))
         data = _author_data(author_ids, kinds)
         return data if data else nohit
@@ -888,16 +927,6 @@ def es_result_pick(result, field, nohit=[''], expect_name=None):
         return list(dict.fromkeys(result[f'_source.{field}']))
     return nohit
 
-def get_auth_years(data):
-    #data = es_result_pick(result,'data', None)
-    if data:
-        years = []
-        for dat in data.keys():
-            if dat.split('_')[-1] != 'log':
-                years.append(dat.split('_')[-1])
-        return years
-    else:
-        return None
 
 @lru_cache(maxsize=64)
 def edition_author_count(kind, year):
@@ -951,7 +980,7 @@ def country_researchers(country, kind, year, limit=None):
     table = _TABLE_BY_KIND[kind]
     code = str(coco.convert(names=country, to='ISO3')).lower()
     rows = _fetch(
-        f'select a.authfull_display, i.inst_name '
+        f'select a.authfull_display, i.inst_name, m.author_id '
         f'from {table} m '
         f'join authors a on a.author_id = m.author_id '
         f'left join institutions i on i.institution_id = m.institution_id '
@@ -959,8 +988,11 @@ def country_researchers(country, kind, year, limit=None):
         f'order by a.authfull_display'
         + (' limit %s' if limit else ''),
         (code, f'{kind}-{year}') + ((limit,) if limit else ()))
-    return [{'INSTITUTE': inst_name or '', 'RESEARCHER': authfull}
-            for authfull, inst_name in rows]
+    # AUTHOR_ID is not a column of the table; it is who the row is, so a
+    # click opens this researcher and not another of the same name.
+    return [{'INSTITUTE': inst_name or '', 'RESEARCHER': authfull,
+             'AUTHOR_ID': author_id}
+            for authfull, inst_name, author_id in rows]
 
 
 def get_es_aggregate(group,group_name,prefix):
@@ -969,8 +1001,11 @@ def get_es_aggregate(group,group_name,prefix):
     Returns {"<prefix>_<year>": {metric: [min, q1, median, q3, max, n]}} plus
     a "_log" copy of each, the same shape for all three groups, so callers
     cannot tell that institutions are computed live and the other two come
-    out of a materialized view.
+    out of a materialized view. A missing group (a row with no country or
+    no institution) has no summary, so it gets {}.
     """
+    if group_name is None:
+        return {}
     if group == 'cntry':
         # The dashboard passes either a full country name or the lowercase
         # ISO3 code it read out of an author row. group_metrics is keyed by
@@ -1038,7 +1073,7 @@ def _authors_by_exact_name(name):
     picked a name out of the dropdown, so the exact string is in hand, and
     fuzzy-matching a string you already have exactly is work with no
     purpose. That work was 79% of the fetch cost, because the fuzzy
-    multi_match scores candidates across all 818,667 documents in the
+    multi_match scores candidates across every document in the
     `authors` alias. Postgres answers the same question with one indexed
     read of `authors_authfull_display_idx`.
 
@@ -1086,24 +1121,25 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
     has no single-year data) or ['career', 'singleyr'] for both. And _source
     is filtered, so a keystroke no longer ships a hundred full documents.
 
-    Task-10 remedy (RULING R14, typeahead p50 regression): `size` dropped
-    from 100 to 30. The unified `authors` alias holds 818,667 documents
-    against the legacy `career` index's 270,910, so the same fuzzy
-    multi_match now scores three times as many candidates and, worse, a
-    caller requesting both kinds used to get at most 100 rows total (one ES
-    query across two indices); against the single alias it could get up to
-    100 hits x 2 kinds = 200 rows built and DataFrame-sorted below. Neither
-    the typeahead dropdown nor the radio-enabling callback in
-    callback_templates.py needs anywhere near 100 relevance-ranked
-    candidates; fuzziness itself is untouched.
+    `size` is 30. The `authors` alias holds more than twice as many
+    documents as the old `career` index, and one hit can produce a row per
+    kind, so 100 hits meant up to 200 rows built and sorted on every
+    keystroke. Neither
+    the typeahead nor the dataset toggle needs more than a handful of
+    candidates.
     """
     if not search_term:
         return None
     kinds = _requested_kinds(idx_name)
     if exact:
         if search_fields == 'authfull':
-            return _frame_from_hits(_authors_by_exact_name(search_term), kinds,
-                                    requested_name=search_term)
+            # An exact name stands for one researcher (see one_researcher),
+            # so the frame carries only that researcher's ids. Callers read
+            # its `_index` to decide which kinds to offer.
+            hits = _authors_by_exact_name(search_term)
+            chosen = one_researcher(tuple(sorted(h['_id'] for h in hits)))
+            return _frame_from_hits(hits, kinds, requested_name=search_term,
+                                    only=chosen)
         query = {"term": {search_fields: search_term}}
     else:
         # Two clauses, either of which can satisfy the search.
@@ -1148,7 +1184,7 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
                              # uses hits only. Left at the default,
                              # Elasticsearch counts matches up to 10,000
                              # before it can stop, which on a fuzzy query
-                             # over the 818,667-document alias means scoring
+                             # over the whole alias means scoring
                              # far more documents than the 30 that are
                              # returned. Turning the count off lets Lucene
                              # skip documents that cannot reach the top 30.
@@ -1168,7 +1204,7 @@ def get_es_results(search_term,idx_name, search_fields, exact = False):
         requested_name=search_term if search_fields == 'authfull' else None)
 
 
-def _frame_from_hits(hits, kinds, requested_name=None):
+def _frame_from_hits(hits, kinds, requested_name=None, only=None):
     """One row per (hit, kind) the hit actually has data for.
 
     Shared by the fuzzy Elasticsearch path and the exact Postgres path so
@@ -1181,6 +1217,9 @@ def _frame_from_hits(hits, kinds, requested_name=None):
     matched name, so a fuzzy search for 'Garcia, David' puts 'Garcia, David
     A.' first. es_result_pick reads it to make sure it hands back the
     requested author's record rather than that one.
+
+    `only`, when given, is {kind: author_id}: a row for a kind is kept only
+    for that author_id.
     """
     records = []
     for hit in hits:
@@ -1190,6 +1229,8 @@ def _frame_from_hits(hits, kinds, requested_name=None):
         # comes before the hyphen.
         present = {edition.partition('-')[0] for edition in years}
         matched = [kind for kind in kinds if kind in present]
+        if only is not None:
+            matched = [kind for kind in matched if only.get(kind) == hit['_id']]
         if not matched:
             continue
         # Built once per hit rather than once per (hit, kind): a two-kind
@@ -1210,9 +1251,9 @@ def _frame_from_hits(hits, kinds, requested_name=None):
             records.append(record)
     if not records:
         return None
-    # Hits arrive in relevance order. Within one name, prefer the author_id
-    # that covers the most editions, so es_result_pick(result, 'data') reads
-    # the fuller record when identity resolution split a display name.
+    # Hits arrive in relevance order, and the author_ids covering the most
+    # editions are moved to the front. Which author_id es_result_pick reads
+    # is decided by one_researcher, not by this order.
     #
     # list.sort is stable, like the sort_values(kind='stable') this replaces,
     # so relevance order still breaks ties. Sorting the records before the
@@ -1225,18 +1266,6 @@ def _frame_from_hits(hits, kinds, requested_name=None):
         frame.attrs['requested_name'] = requested_name
     return frame
 
-def base64_decode_and_decompress(encoded_data,flg=True):
-    """Dead as of the Postgres migration: nothing stores compressed blobs.
-
-    Kept rather than deleted so that a caller nobody noticed fails here with
-    a message that names its replacement, instead of failing somewhere
-    downstream with a confusing KeyError.
-    """
-    raise RuntimeError(
-        "base64_decode_and_decompress is gone: author data is no longer a "
-        "compressed blob in Elasticsearch. Use es_result_pick(result, "
-        "'data'), which assembles the same dict from Postgres."
-    )
 
 def get_metric_long_name(career, yr, metric, include_year = True):
     # This list used to be hardcoded as [2017, 2018, 2019, 2020, 2021], one
@@ -1356,78 +1385,6 @@ def get_inst_field_cntry(data, prefix, year):
     return {'cntry': cntry, 'field': field, 'inst': inst}
 
 
-def try_catch_return(names,prefix,ent1,ent2):
-    """Group summary vectors for one field or institution name.
-
-    The f'{prefix}_{ent1}' argument is vestigial: it used to name an
-    Elasticsearch index ("career_field", "career_inst"). get_es_results reads
-    it as a kind now and _requested_kinds ignores anything that is not
-    'career' or 'singleyr', so it falls through to both kinds, which is what
-    this wants. It is left as-is rather than tidied because get_metric_summary
-    passes the same shape to the cntry lookup two lines above.
-    """
-    results = get_es_results(names,f'{prefix}_{ent1}',ent2)
-    data = es_result_pick(results,'data', None)
-    if data is None:
-        results = get_es_results(names,f'{prefix}_{ent1}',ent2,True)
-        data = es_result_pick(results,'data', None)
-    return data
-
-
-def r2dec(value):
-    if isinstance(value, str):
-        return value  # If it's a string, return it as is
-    else:
-        try:
-            # Try to convert to float and round to 2 decimals
-            rounded_value = round(float(value), 2)
-            return rounded_value
-        except (ValueError, TypeError):
-            # If conversion to float fails, or if the value is not numeric, return the original value
-            return value
-
-def get_metric_summary(data, prefix, year, metric, stat):
-    if stat == 'median':
-        idx = 2
-    elif stat == 'min':
-        idx = 0
-    elif stat == 'max':
-        idx = 4
-    elif stat == 'q1':
-        idx = 1
-    elif stat == 'q3':
-        idx = 3
-    names = get_inst_field_cntry(data, prefix, year)
-    # Enforce exact match for country
-
-    results_cntry = get_es_results(names['cntry'],f'{prefix}_cntry','cntry',True)
-    data_cntry = es_result_pick(results_cntry,'data', None)
-    data_field = try_catch_return(names['field'],prefix,'field',"sm-field")
-    data_inst = try_catch_return(names['inst'],prefix,'inst',"inst_name")
-    own = data[f'{prefix}_{year}'][metric]
-    if metric == 'self%':
-           own = own*100
-    if data_cntry:
-       #print(data_cntry.keys())
-       ct = data_cntry[f'{prefix}_{year}'][metric][idx]
-       if metric == 'self%':
-           ct = ct*100
-    else:
-       ct = 'N/A'
-    if data_field:
-       fd = data_field[f'{prefix}_{year}'][metric][idx]
-       if metric == 'self%':
-           fd = fd*100
-    else:
-       fd = 'N/A'
-    if data_inst:
-       ins = data_inst[f'{prefix}_{year}'][metric][idx]
-       if metric == 'self%':
-           ins = ins*100
-    else:
-       ins = 'N/A'
-    return {'own': str(r2dec(own)),'cntry': str(r2dec(ct)), 'field': str(r2dec(fd)), 'inst': str(r2dec(ins))}
-
 def update_yr_options(career):
     """Radio options whose value is the index into yr_convention_map().
 
@@ -1512,172 +1469,6 @@ def first_available_year(options):
             return option['value']
     return None
 
-
-# Quickly search a df for an author
-def search_df(df,search_str,datatype = 'author'):
-	if datatype == 'author':
-	    tmp = df[df['authfull'].str.contains(search_str,na = False)]
-	    for i in tmp.index:
-	        print(f"Author {tmp.loc[i,'authfull']} ranks {tmp.loc[i,'rank (ns)']} (rank {tmp.loc[i,'rank']} with self-citation) out of {df.shape[0]}")
-	if datatype == 'country':
-	    tmp = df[df['cntry'].str.contains(search_str,na = False)]
-	    print(f"{tmp.shape[0]} out of {df.shape[0]} authors come from {search_str}, and rank an average of {int(tmp['rank (ns)'].mean())} ({int(tmp['rank (ns)'].mean())} with self-citation). Their average % self-citation is {int(tmp['self%'].mean()*100)}% relative to a total mean of {int(df['self%'].mean()*100)}%.")
-	if datatype == 'institution':
-	    tmp = df[df['inst_name'].str.contains(search_str)]
-	    print(f"{tmp.shape[0]} out of {df.shape[0]} authors come from {search_str}, and rank an average of {int(tmp['rank (ns)'].mean())} ({int(tmp['rank (ns)'].mean())} with self-citation). Their average % self-citation is {int(tmp['self%'].mean()*100)}% relative to a total mean of {int(df['self%'].mean()*100)}%.")
-
-# standardize columns across datasest versions (1,2,3,5) and types (single year, career)
-def standardize_col_names(df, year, v1_present = False, singleyr = False):
-    generic_cols = ['authfull', 'inst_name', 'cntry', 'np', 'firstyr', 'lastyr','rank (ns)', 'nc (ns)', 'h (ns)', 'hm (ns)', 'nps (ns)','ncs (ns)', 'cpsf (ns)', 
-                  'ncsf (ns)', 'npsfl (ns)', 'ncsfl (ns)','c (ns)', 'npciting (ns)', 'cprat (ns)', 'np cited (ns)','self%', 'rank', 'nc', 'h', 'hm', 
-                  'nps', 'ncs', 'cpsf', 'ncsf','npsfl', 'ncsfl', 'c', 'npciting', 'cprat', 'np cited','np_d', 'nc_d', 'sm-subfield-1', 'sm-subfield-1-frac',
-                  'sm-subfield-2', 'sm-subfield-2-frac', 'sm-field', 'sm-field-frac','rank sm-subfield-1', 'rank sm-subfield-1 (ns)', 'sm-subfield-1 count']
-    generic_cols_text = [f'author name',f'institution name (large institutions only)',f'country associated with most recent institution',f'number of papers from 1960 to {year})',
-                       f'year of first publication',f'year of most recent publication',f'rank based on composite score c',f'total cites from 1996 to {year}',
-                       f'h-index as of the end of {year}',f'hm-index as of end-{year}',f'number of single authored papers',f'total cites to single authored papers',
-                       f'number of single + first authored papers',f'total cites to single + first authored papers',f'number of single + first + last authored papers',
-                       f'total cites to single + first + last authored papers',f'composite score',f'number of distinct citing papers',
-                       f'ratio of total citations to distinct citing papers',f'number of papers 1960-{year} that have been cited at least once (1996-{year})',
-                       f'self-citation percentage',f'rank based on composite score c',f'total cites 1996-{year}',f'h-index as of end-{year}',
-                       f'hm-index as of end-{year}',f'number of single authored papers',f'total cites to single authored papers',
-                       f'number of single + first authored papers',f'total cites to single + first authored papers',f'number of single + first + last authored papers',
-                       f'total cites to single + first + last authored papers',f'composite score',f'number of distinct citing papers',
-                       f'ratio of total citations to distinct citing papers',f'number of papers 1960-{year} that have been cited at least once (1996-{year})',
-                       f'# papers 1960-{year} in titles that are discontinued in Scopus',f'total cites 1996-{year} from titles that are discontinued in Scopus',
-                       f'top ranked Science-Metrix category (subfield) for author',f'associated category fraction',f'second ranked Science-Metrix category (subfield) for author',
-                       f'associated category fraction',f'top ranked higher-level Science-Metrix category (field) for author',
-                       f'associated category fraction',f'rank of c within category sm-subfield-1',f'rank of c (ns) within category sm-subfield-1',
-                       f'total number of authors within category sm-subfield-1']
-    if not v1_present: 
-        df.columns = generic_cols
-        return(df,dict(zip(generic_cols, generic_cols_text))) # len(generic_cols_text) = 46
-    else:
-        remove_cols = ['np cited (ns)','np cited','np_d','nc_d','rank sm-subfield-1','rank sm-subfield-1 (ns)','sm-subfield-1 count']
-        remove_text = [f'number of papers 1960-{year} that have been cited at least once (1996-{year})',f'number of papers 1960-{year} that have been cited at least once (1996-{year})',f'# papers 1960-{year} in titles that are discontinued in Scopus',f'total cites 1996-{year} from titles that are discontinued in Scopus',f'rank of c within category sm-subfield-1',f'rank of c (ns) within category sm-subfield-1',f'total number of authors within category sm-subfield-1']
-
-        if year == 2017 or year == 2018:
-            df = df.drop(columns = ['sm-1', 'sm-2','sm22'])
-            if singleyr and year == 2017: # singleyr 2017 missing 2 columns!
-                remove_cols += 'firstyr','lastyr' 
-                remove_text += f'year of first publication',f'year of most recent publication'
-            for item in remove_cols: generic_cols.remove(item)
-            for item in remove_text: generic_cols_text.remove(item)
-            df.columns = generic_cols
-        else:
-            df.columns = generic_cols
-            for item in remove_cols: generic_cols.remove(item)
-            for item in remove_text: generic_cols_text.remove(item)
-            df = df.drop(columns = remove_cols)
-        return(df,dict(zip(generic_cols, generic_cols_text))) # len(generic_cols_text) = 39 (37 for singleyr 2017)
-
-def gen_dist_from_summary(sum_vec, N):
-    data_size = N
-    data = np.concatenate([
-        np.random.uniform(sum_vec[0], sum_vec[1], data_size // 4),
-        np.random.uniform(sum_vec[1], sum_vec[2], data_size // 4),
-        np.random.uniform(sum_vec[2], sum_vec[3], data_size // 4),
-        np.random.uniform(sum_vec[3], sum_vec[4], data_size // 4)
-    ])
-    return data
-
-
-def get_violin_compare(fig, in1,in2,color1,color2,name,group_num):
-    # The last entry is number of samples
-    N1 = in1[5]
-    N2 = in2[5]
-    data1 = gen_dist_from_summary(in1, N1)
-    data2 = gen_dist_from_summary(in2, N2)
-    if N1>N2:
-        N1 = int(10*(N1/N2))
-        if N1>50:
-            N1 = 50
-        N2 = 10
-    elif N2>N1:
-        N2 = int(10*(N2/N1))
-        if N2>50:
-            N2 = 50
-        N1 = 10
-    fig.add_trace(go.Violin(
-        y=data1,
-        box_visible=False,
-        fillcolor=color1[0],
-        #fillcolor='rgba(0, 255, 0, 0.5)',
-        side='positive',
-        hoverinfo='text+y',
-        #legendgroup='M',
-        name = name
-    ), row = 1, col = group_num)
-    fig.add_trace(go.Violin(
-        y=data2,
-        box_visible=False,
-        fillcolor=color2[0],
-        side='negative',
-        hoverinfo='text+y',
-        #legendgroup='M',
-        name = name
-    ), row = 1, col = group_num)
-    # Update layout for better visibility
-    fig.update_traces(meanline_visible=True,
-                      points= False, # show all points
-                      jitter=0.05,  # add some jitter on points for better visibility
-                      scalemode='width'
-                     )
-    fig.update_layout(violingap=0, violinmode='overlay', showlegend=False)
-    
-    # Show the plot
-    return fig
-
-def get_world_df(year,sts,prefix):
-    #print(prefix)
-    if sts == 'median':
-        st_idx = 2
-    elif sts == 'min':
-        st_idx = 0
-    elif sts == 'max':
-        st_idx = 4
-    elif sts == '25':
-        st_idx = 1
-    elif sts == '75':
-        st_idx = 3
-    # The country summaries used to come from aggregate/cntry_{prefix}.pkl,
-    # which only ever held 2017 to 2021. Reading group_metrics instead is what
-    # makes the world map work for 2022, 2023 and 2024; without it the map
-    # rendered every country as 0 for those years, because the lookup below
-    # raised KeyError and fell into the except branch.
-    metrics = ['h', 'nc', 'hm',  'ncs', 'ncsf', 'ncsfl', 'c']
-    metrics_name = ['H-index', '# citations', 'Hm-index',  '# citations to single auth papers', '# citations to single/first auth papers', '# citations to single/first/last auth papers', 'Composite (c) score']
-    rows = _fetch(
-        'select group_value, metric, min, q1, median, q3, max '
-        'from group_metrics '
-        'where group_kind = %s and edition_id = %s and metric = any(%s)',
-        ('cntry', f'{prefix}-{year}', metrics))
-    summary = {(group_value, metric): [mn, q1, median, q3, mx]
-               for group_value, metric, mn, q1, median, q3, mx in rows}
-    codes = sorted({group_value for group_value, _ in summary})
-    df = pd.DataFrame(columns=['code', 'country', sts, 'geometry', 'metric', 'metric_name'])
-    kk = 0
-    for idxx, metric in enumerate(metrics):
-        for code in codes:
-            # Four codes in the data are defunct states that
-            # country_converter cannot resolve: csk (Czechoslovakia), scg
-            # (Serbia and Montenegro), sux (the Soviet Union) and ant (the
-            # Netherlands Antilles). This function used to hand three of them
-            # a name anyway, and two of those names were simply a different
-            # country: scg was drawn as the Czech Republic and ant as the
-            # Netherlands. Labelling a country as another country is worse
-            # than leaving it off the map, and there is nothing correct to
-            # put there either, since none of the four is a country plotly
-            # can draw today. So all four are excluded, which is also what
-            # the group dropdowns do with them (_country_full_name).
-            cur_name = _country_full_name(code) if code != 'nan' else None
-            if cur_name is not None:
-                vector = summary.get((code, metric))
-                if vector is not None and vector[st_idx] is not None:
-                    df.loc[kk] = ([code.upper()]) + [cur_name] + [vector[st_idx]]  + [''] + [str(metric)] + [str(metrics_name[idxx])]
-                else:
-                    df.loc[kk] = ([code.upper()]) + [cur_name] + [0] + [''] + [str(metric)] + ['lel']
-                kk = kk +1
-    return df
 
 # The tables the model reads, in the order the graph joins them. Kept here
 # rather than imported from rdl/spec.py because the web process must never
@@ -1805,17 +1596,21 @@ def score_standing(kind, year, score, ns=False):
     edition_id = f'{kind}-{year}'
     published = edition_size(kind, year)
 
-    # The highest-scoring researcher this score does not beat. Displacing them
-    # means taking their position on the list.
+    # The highest-scoring researcher at or below this score: the first one it
+    # would move past. Displacing them means taking their position on the
+    # list.
     neighbour = _fetch(
         f"select rank{suffix}, list_position{suffix} from {table} "
         f"where edition_id = %s and c{suffix} <= %s "
         f"order by c{suffix} desc limit 1", (edition_id, score))
     if not neighbour or neighbour[0][1] is None:
-        # Either the score beats everyone published, or this edition's
+        # Either the score is below everyone published, or this edition's
         # positions were never filled (pipeline/list_position.py). Counting is
         # slower but always right, so it is the fallback rather than the
-        # answer.
+        # answer. Below everyone published, the position is one past the end
+        # of the list, and the Scopus rank is unknown: Scopus scored people
+        # who are not on the list, and nothing here says how many of them
+        # this score would beat.
         rows = _fetch(
             f"select count(*) from {table} "
             f"where edition_id = %s and c{suffix} > %s", (edition_id, score))
@@ -1826,7 +1621,7 @@ def score_standing(kind, year, score, ns=False):
             f"and rank{suffix} is not null "
             f"order by c{suffix} desc limit 1", (edition_id, score))
         return {'within_list': ahead + 1,
-                'scopus_rank': int(rank_rows[0][0]) if rank_rows else 1,
+                'scopus_rank': int(rank_rows[0][0]) if rank_rows else None,
                 'published': published}
 
     scopus_rank, position = neighbour[0]
@@ -2058,6 +1853,27 @@ def openalex_author(name, timeout=2.5):
     return None
 
 
+@lru_cache(maxsize=2048)
+def institution_ror_for(inst_name):
+    """{'ror_id', 'ror_name', 'city', 'country_code'} for an institution
+    matched to the Research Organization Registry, or None.
+
+    About a third of institution names are matched (pipeline/ror_match.py),
+    so None is the usual answer for a small one, not an error.
+    """
+    if not inst_name:
+        return None
+    rows = _fetch(
+        'select r.ror_id, r.ror_name, r.city, r.country_code '
+        'from institutions i join institution_ror r using (institution_id) '
+        'where i.inst_name = %s', (inst_name,))
+    if not rows:
+        return None
+    ror_id, ror_name, city, country_code = rows[0]
+    return {'ror_id': ror_id, 'ror_name': ror_name, 'city': city,
+            'country_code': country_code}
+
+
 # ---------------------------------------------------------------------------
 # The map
 # ---------------------------------------------------------------------------
@@ -2252,12 +2068,13 @@ def city_researchers(lat, lng, kind, year, limit=None):
         f'join institution_ror r on r.institution_id = m.institution_id '
         f'{where}', params)[0][0]
     rows = _fetch(
-        f'select a.authfull_display, i.inst_name from {table} m '
+        f'select a.authfull_display, i.inst_name, m.author_id from {table} m '
         f'join institution_ror r on r.institution_id = m.institution_id '
         f'join authors a on a.author_id = m.author_id '
         f'left join institutions i on i.institution_id = m.institution_id '
         f'{where} order by m.c desc nulls last'
         + (' limit %s' if limit else ''),
         params + ((limit,) if limit else ()))
-    return ([{'INSTITUTE': inst or '', 'RESEARCHER': name}
-             for name, inst in rows], int(total))
+    return ([{'INSTITUTE': inst or '', 'RESEARCHER': name,
+              'AUTHOR_ID': author_id}
+             for name, inst, author_id in rows], int(total))

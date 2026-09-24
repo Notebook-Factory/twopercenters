@@ -2,7 +2,7 @@
 #
 # Deliberately NOT in requirements.txt. That file is what the dokku
 # buildpack installs, and torch alone would add roughly 2 GB to the slug of
-# a web process that must never import it (tests/test_no_torch_in_app.py
+# a web process that must never import it (tests/test_retraction_page.py
 # holds that line). Training happens on a workstation; only the resulting
 # rows in the predictions table are deployed.
 #

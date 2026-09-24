@@ -32,7 +32,6 @@ import pandas as pd
 # 31 December of their data year.
 VAL_TIMESTAMP = pd.Timestamp("2022-12-31")
 TEST_TIMESTAMP = pd.Timestamp("2023-12-31")
-TIMEDELTA = "365 days"
 
 # The non-self-citation restatements. Each is the same metric recomputed with
 # self-citations removed, so it correlates almost perfectly with its bare

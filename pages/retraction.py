@@ -37,7 +37,7 @@ the truth was never recorded, and the page says so.
 
 No torch, no relbench, nothing from rdl/ is imported here. Predictions reach
 the dashboard as rows in Postgres, written offline by rdl/publish.py.
-tests/test_no_torch_in_app.py holds that line.
+tests/test_retraction_page.py holds that line.
 """
 import dash
 import dash_bootstrap_components as dbc
@@ -84,39 +84,39 @@ def _run_summary():
     baseline = (run.get('baseline') or {}).get('roc_auc')
     majority = (run.get('baseline') or {}).get('majority_accuracy')
     return html.Div([
-        html.Div('How much weight these estimates carry', className='ev-kicker'),
+        html.Div('How reliable the estimates are', className='ev-kicker'),
         html.Div([
             html.Span(f'{auc:.3f}' if auc else '--', className='ev-metric'),
-            html.Span(' ROC AUC on career-2024, an edition the model never saw',
+            html.Span(' ROC AUC on career-2024, held out from training',
                       className='ev-metric-label'),
         ]),
-        html.Div('and how much weight the counts carry, which is less',
+        html.Div('How reliable the counts are',
                  className='ev-kicker', style={'marginTop': '.9rem'}),
         html.Div([
             html.Span('+/- 4', className='ev-metric'),
-            html.Span(' citations, the average error of the count estimate',
+            html.Span(' citations, the average error of each count',
                       className='ev-metric-label'),
         ]),
         html.Ul([
-            html.Li(f'Chance is {baseline:.2f}.' if baseline else ''),
+            html.Li(f'Random guessing scores {baseline:.2f}.' if baseline else ''),
             html.Li(
-                f'Always guessing the majority answer would be right '
-                f'{majority:.1%} of the time, which is why accuracy is the '
-                f'wrong measure here and AUC is quoted instead.'
+                f'Always predicting the most common answer is right '
+                f'{majority:.1%} of the time, so accuracy says little here. '
+                f'That is why AUC is reported.'
                 if majority else ''),
-            html.Li('The AUC measures discrimination, whether researchers '
-                    'who were cited by a retracted paper are ranked above '
-                    'those who were not. It cannot validate the absolute '
-                    'level for years where nothing was recorded, because '
-                    'there is nothing to check against.'),
+            html.Li('AUC measures ranking: whether researchers cited by a '
+                    'retracted paper score above those who were not. It '
+                    'cannot validate the absolute level for years where '
+                    'nothing was recorded, because there is nothing to check '
+                    'against.'),
             html.Li('The counts come from a second, weaker model. Its mean '
                     'error is 4.1 citations against a median true value of 2, '
-                    'so a count is a band rather than a figure. It beats the '
-                    'trivial baseline of 6.4, and it pulls large values toward '
-                    'the middle: Ioannidis is estimated at about 78 for 2022 '
-                    'and was recorded at 169 the following year.'),
-            html.Li('41% of that model\'s raw outputs were negative, which a '
-                    'citation count cannot be, and are stored as zero.'),
+                    'so read a count as a band rather than a figure. It beats '
+                    'the baseline error of 6.4, but it pulls large values '
+                    'toward the middle: Ioannidis is estimated at about 78 for '
+                    '2022 and was recorded at 169 the following year.'),
+            html.Li('41% of that model\'s raw outputs were negative, which is '
+                    'impossible for a count, so they are stored as zero.'),
         ], className='ev-caveats'),
     ])
 
@@ -139,7 +139,7 @@ def _overview_figure():
                     line=dict(color=ESTIMATED, width=2),
                     pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
                                  solidity=0.25)),
-        hovertemplate='%{x}: %{y:.1f}% estimated to have been cited by a retracted paper<extra></extra>',
+        hovertemplate='%{x}: %{y:.1f}% cited by a retracted paper (estimated)<extra></extra>',
     )
     figure.add_bar(
         x=[r['data_year'] for r in measured],
@@ -148,7 +148,7 @@ def _overview_figure():
         text=[f"{100 * r['share']:.0f}%" for r in measured],
         textposition='outside',
         marker=dict(color=MEASURED),
-        hovertemplate='%{x}: %{y:.1f}% measured, cited by a retracted paper<extra></extra>',
+        hovertemplate='%{x}: %{y:.1f}% cited by a retracted paper (measured)<extra></extra>',
     )
     if measured:
         boundary = min(r['data_year'] for r in measured) - 0.5
@@ -195,8 +195,8 @@ def _counts_figure():
                     line=dict(color=ESTIMATED, width=2),
                     pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
                                  solidity=0.25)),
-        hovertemplate='%{x}: about %{y:.1f} citations per researcher, '
-                      'estimated<extra></extra>')
+        hovertemplate='%{x}: about %{y:.1f} citations per researcher '
+                      '(estimated)<extra></extra>')
     figure.add_bar(
         x=[r['data_year'] for r in measured],
         y=[r['mean'] for r in measured],
@@ -204,8 +204,8 @@ def _counts_figure():
         text=[f"{r['mean']:.1f}" for r in measured],
         textposition='outside',
         marker=dict(color=MEASURED),
-        hovertemplate='%{x}: %{y:.2f} citations per researcher, '
-                      'recorded<extra></extra>')
+        hovertemplate='%{x}: %{y:.2f} citations per researcher '
+                      '(measured)<extra></extra>')
     if measured:
         boundary = min(r['data_year'] for r in measured) - 0.5
         figure.add_vline(x=boundary, line=dict(color=ESTIMATED, dash='dot'))
@@ -228,25 +228,22 @@ layout = dbc.Container(fluid=True, children=[
     dbc.Row(dbc.Col([
         html.H3('Retraction exposure', className='ev-title'),
         dcc.Markdown(
-            'The publishers define this column as **"total cites 1996-2024 '
-            'from papers (by any author) marked as Retraction in RWDB"**. '
-            'Read that carefully: it counts citations a researcher '
-            '*received*, where the **citing** paper was later retracted.\n\n'
+            'This column counts citations a researcher *received* from '
+            'papers that were **later retracted**. The publishers define it '
+            'as **"total cites 1996-2024 from papers (by any author) marked '
+            'as Retraction in RWDB"**.\n\n'
             'It is **not** a measure of their own conduct. It does not say '
-            'they retracted anything; the database records that separately. '
-            'Someone else cited them, and that someone else\'s paper was '
-            'later withdrawn. With thousands of citations, having at least '
-            'one is close to unavoidable, which is why **71 to 76% of listed '
-            'researchers have a non-zero value**. A high count mostly tracks '
-            'being highly cited.\n\n'
-            'The published databases record this for **2023 and 2024 only**: '
-            'tracking began with the seventh release, so the six earlier '
-            'editions carry nothing at all. That is **955,512 '
-            'author-editions** with a blank where a number should be. The '
-            'blanks below are filled by a model trained on 2023 and tested '
-            'on 2024. **They are estimates, not measurements**, and are '
-            'drawn differently throughout so the two can never be mistaken '
-            'for each other.',
+            'they retracted anything; that is recorded separately. With '
+            'thousands of citations, receiving at least one from a paper '
+            'that was later retracted is hard to avoid, which is why **71 to '
+            '76% of listed researchers have a non-zero value**. A high count '
+            'mostly reflects being highly cited.\n\n'
+            'The data records this for **2023 and 2024 only**, because '
+            'tracking began with the seventh release. The six earlier '
+            'editions are blank: **955,512 author-editions** with no value. '
+            'A model trained on 2023 and tested on 2024 fills those blanks. '
+            '**They are estimates, not measurements**, and every chart draws '
+            'them differently so the two cannot be confused.',
             className='ev-lede'),
     ], width=12)),
     html.Br(),
@@ -260,8 +257,8 @@ layout = dbc.Container(fluid=True, children=[
     dbc.Row(dbc.Col(html.Div([
         html.H5('One researcher', className='ev-subtitle'),
         dcc.Markdown(
-            'Search by name. Add an institution to separate people who share '
-            'one, for example "Zhu Jianguo Sydney".',
+            'Search by name. If several people share a name, add an '
+            'institution, for example "Zhu Jianguo Sydney".',
             className='ev-caption'),
         # Options are seeded with the current value. A Dash dropdown renders
         # the label for whatever option matches its value, so with an empty
@@ -277,22 +274,22 @@ layout = dbc.Container(fluid=True, children=[
     html.Br(),
 
     dbc.Row(dbc.Col(html.Div([
-        html.Div('The three retraction columns, as the publishers define them',
+        html.Div('The three retraction columns in the data',
                  className='ev-kicker'),
         html.Ul([
-            html.Li([html.Code('np_rw'), ' - papers ',
-                     html.Strong('by this author'),
-                     ' marked as Retraction. This is the one about their own '
-                     'work, and only 3 to 4% of listed researchers have any.'
+            html.Li([html.Code('np_rw'), ': papers ',
+                     html.Strong('by the researcher'),
+                     ' that were retracted. This one is about their own work, '
+                     'and only 3 to 4% of listed researchers have any.'
                      ]),
-            html.Li([html.Code('nc_to_rw'), ' - citations ',
+            html.Li([html.Code('nc_to_rw'), ': citations ',
                      html.Strong('to'),
-                     ' those retracted papers of theirs. Also 3 to 4%.']),
-            html.Li([html.Code('nc_rw'), ' - citations they received ',
+                     ' those retracted papers. Also 3 to 4%.']),
+            html.Li([html.Code('nc_rw'), ': citations the researcher received ',
                      html.Strong('from'),
                      ' papers, by anyone, that were later retracted. This is '
-                     'the one charted here, and it is about who cited them '
-                     'rather than what they wrote.']),
+                     'the column charted on this page. It is about who cited '
+                     'them, not what they wrote.']),
         ], className='ev-caveats'),
     ], className='ev-panel'), width=12)),
     html.Hr(),
@@ -300,8 +297,8 @@ layout = dbc.Container(fluid=True, children=[
     dbc.Row(dbc.Col(
         html.H5('Everyone on the list', className='ev-subtitle'), width=12)),
     dbc.Row(dbc.Col(dcc.Markdown(
-        'The whole population, not the researcher above. Neither chart '
-        'changes when you search.', className='ev-caption'), width=12)),
+        'All listed researchers. These charts do not change when you '
+        'search above.', className='ev-caption'), width=12)),
 
     # Both population charts stack in one column with the panel beside them,
     # rather than the counts chart sitting in its own full-width row below.
@@ -314,17 +311,16 @@ layout = dbc.Container(fluid=True, children=[
                          'retracted paper.', className='ev-caption'),
             dcc.Graph(id='retraction-overview', figure=_overview_figure(),
                       config={'displayModeBar': False}),
-            dcc.Markdown('And how many citations that involves, per '
-                         'researcher.', className='ev-caption'),
+            dcc.Markdown('Average number of such citations per researcher.',
+                         className='ev-caption'),
             dcc.Graph(id='retraction-counts', figure=_counts_figure(),
                       config={'displayModeBar': False}),
             dcc.Markdown(
-                'The step at the boundary is **the model being cautious, not '
-                'retractions doubling in 2023**. The regression pulls large '
-                'values toward the middle, so the estimated years sit low: '
-                'they average about 3 citations against 5.5 recorded in '
-                '2023. Read the estimated bars as a floor rather than a '
-                'level.', className='ev-caption'),
+                'The jump at 2023 is **the model underestimating, not '
+                'retractions doubling in 2023**. The model pulls large values '
+                'toward the middle, so the estimated years average about 3 '
+                'citations against 5.5 recorded in 2023. Read the estimated '
+                'bars as a floor rather than a level.', className='ev-caption'),
         ], md=8),
         dbc.Col(html.Div(_run_summary(), className='ev-panel'), md=4),
     ]),
@@ -391,7 +387,7 @@ def _author_panel(name):
                         line=dict(color=ESTIMATED, width=2),
                         pattern=dict(shape='/', fgcolor=ESTIMATED, size=6,
                                      solidity=0.25)),
-            customdata=[('about {:,} citations, give or take about 4'
+            customdata=[('about {:,} citations, give or take 4'
                          .format(r['citations']))
                         if r['citations'] is not None else 'count not estimated'
                         for r in estimated],
@@ -415,7 +411,7 @@ def _author_panel(name):
             # the share of citations involved averages 0.058% and drawn to
             # scale here it would be an invisible sliver.
             y=[100 if r['value'] else 7 for r in measured],
-            name='Recorded, with the share of their citations',
+            name='Recorded',
             text=[_measured_text(r) for r in measured],
             textposition='outside',
             marker=dict(color=MEASURED),
@@ -433,23 +429,22 @@ def _author_panel(name):
         plot_bgcolor='rgba(0,0,0,0)', height=300,
         margin=dict(l=40, r=20, t=30, b=40),
         legend=dict(orientation='h', y=-0.2),
-        yaxis=dict(title='Likelihood of any', range=[0, 132],
+        yaxis=dict(title='Chance of at least one', range=[0, 132],
                    showticklabels=False, showgrid=False),
         xaxis=dict(title=None, dtick=1), hoverlabel=HOVER)
 
     known = ', '.join(str(r['data_year']) for r in measured)
     guessed = ', '.join(str(r['data_year']) for r in estimated)
     if estimated:
-        note = (f'Recorded in {known}. Estimated for {guessed}, where the '
-                f'published data records nothing.')
+        note = (f'Recorded for {known}. Estimated for {guessed}, which the '
+                f'published data leaves blank.')
     else:
         # Not a gap in the estimates: this researcher has no rows at all in
         # the untracked editions, so there is nothing to estimate. "Estimated
         # for none" made that read as a failure of the model.
-        note = (f'Recorded in {known}. This researcher does not appear in the '
-                f'2017-2022 editions, so there is nothing to estimate for '
-                f'them.')
+        note = (f'Recorded for {known}. This researcher is not in the '
+                f'2017-2022 editions, so there is nothing to estimate.')
     return html.Div([
         dcc.Graph(figure=figure, config={'displayModeBar': False}),
-        dcc.Markdown(f'**{name}**. {note}', className='ev-caption'),
+        dcc.Markdown(f'**{name}**: {note}', className='ev-caption'),
     ])

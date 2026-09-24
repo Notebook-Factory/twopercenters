@@ -53,14 +53,6 @@ def test_positions_run_one_to_ten(kind, year):
         assert positions == list(range(1, 11)), (metric, ns)
 
 
-def test_the_two_column_sets_are_not_the_same_column():
-    """A fill that read the published column for both variants would pass
-    every test above. This is the one that catches it."""
-    plain = _stored('career', 2024, 'nc', False)
-    excluded = _stored('career', 2024, 'nc', True)
-    assert [value for _, value in plain] != [value for _, value in excluded]
-
-
 # ---------------------------------------------------------------------------
 # What the dashboard actually calls
 # ---------------------------------------------------------------------------

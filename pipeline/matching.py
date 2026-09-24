@@ -45,7 +45,6 @@ a single-year observation are never candidates for each other.
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 # Weights validated in docs/identity-resolution-findings.md. The relative
