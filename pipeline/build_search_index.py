@@ -222,8 +222,22 @@ if __name__ == "__main__":
 
     from db.connection import connect
 
-    es_url = __import__("os").environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
-    es = Elasticsearch([es_url])
+    os = __import__("os")
+    es_url = os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
+    # The client's default read timeout is 10 seconds, which is a laptop's
+    # assumption. On the dokku host every service sits on an attached volume
+    # whose flushes take 50 to 140 ms, and Elasticsearch fsyncs its cluster
+    # state when an index is created and its translog on the way through a
+    # bulk: the create alone timed out there. The work is not lost when that
+    # happens, but the run is, and a half-built index is left behind for the
+    # next run to sweep up. Retries are on for the same reason: a timeout
+    # here means "still busy", not "broken".
+    es = Elasticsearch(
+        [es_url],
+        timeout=int(os.environ.get("ES_TIMEOUT", "120")),
+        max_retries=3,
+        retry_on_timeout=True,
+    )
     with connect() as conn:
         started = datetime.now(timezone.utc)
         index_name = build(es, conn, alias="authors")
