@@ -1,0 +1,23 @@
+{
+  "n": 12,
+  "repeats": 20,
+  "typeahead_p50_ms": 4.32,
+  "typeahead_p95_ms": 6.12,
+  "fetch_p50_ms": 13.05,
+  "fetch_p95_ms": 19.14,
+  "mode": "current",
+  "terms": [
+    "an",
+    "jo",
+    "smi",
+    "wan",
+    "smith",
+    "johnson",
+    "chen",
+    "garcia",
+    "ioannidis",
+    "m\u00fcller",
+    "smtih",
+    "ionnidis"
+  ]
+}

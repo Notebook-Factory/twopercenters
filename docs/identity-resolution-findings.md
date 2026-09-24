@@ -1,0 +1,284 @@
+# Author identity is the bottleneck
+
+Measured 2026-09-14, against `data_parquet/`.
+
+## The ambiguous branch produces no cross-edition linkage at all
+
+| | authors | mean editions each | appear exactly once |
+|---|---|---|---|
+| unambiguous | 286,105 | 4.44 | 23.6% |
+| ambiguous | 132,313 | **1.00** | **100.0%** |
+
+Not "poor linkage": none. Every author the resolver flags ambiguous is a
+fresh identity in every edition, by construction, so they can never have a
+time series. That covers 132,313 career fact rows, 9.4% of the career table,
+and inflates the author count to 818,667 when 350,908 of those rows (42.9%)
+are fragments of people rather than people.
+
+The cause is in `pipeline/identity.py`. When a `(surname, first_initial,
+firstyr)` block holds more than one person, the resolver assigns a
+deterministic **per-edition ordinal** from a content-ordered sort. That was
+added to fix a real bug, two same-edition rows merging into one author when
+both lacked an institution. It fixes that, and it also guarantees the same
+person gets a different ordinal in the next edition whenever the sort order
+shifts, which it does whenever anyone in the block changes institution or
+enters or leaves.
+
+Confirmed directly at the 2023 to 2024 boundary: 13,474 departures and
+13,517 arrivals share an **exact** display name and an **exact** firstyr, and
+every one of them is flagged ambiguous, in collision groups of 12 to 53.
+
+## What it costs
+
+**Labels.** An ambiguous author drops out every year by definition. In the
+dropout test split roughly a third of the positives are this artefact, which
+is why test ROC AUC is 0.814 against 0.936 on validation.
+
+**The graph.** These author nodes carry exactly one fact row, so there is no
+history for message passing to travel along.
+
+**The dashboard.** The same authors render as a single point with no
+trajectory. This predates the redesign.
+
+**Fairness.** Large collision blocks are predominantly East Asian names
+(`Zhu, Jianguo`, `Li, Min`, `Wang, Wei`), so the loss is concentrated on one
+population rather than spread evenly.
+
+## The 2024 boundary, separately
+
+| edition | retention | new entrants |
+|---|---|---|
+| 2021 | 85.4% | 17.1% |
+| 2022 | 84.5% | 17.3% |
+| 2023 | 85.5% | 17.2% |
+| **2024** | **81.4%** | **20.2%** |
+
+2024 shows excess departures (~10,800 over trend) and excess arrivals
+(~9,300 over trend) together, which is the signature of one person leaving
+under an old name and arriving under a new one. Of the 40,436 departures,
+86.4% have a 2024 arrival sharing surname and first initial, and 24,381 also
+agree on firstyr to within a year.
+
+That pool is not safe to merge on names alone. Among those near-twins sit
+both `Kennedy, P. G.E. -> Kennedy, Peter G.E.` (the same person) and
+`Wilson, James G. -> Wilson, John D.` (two people).
+
+## There is a strong internal signal for linkage
+
+Measured over 957,429 consecutive-edition observations of unambiguous
+authors, so these are real trajectories of real people:
+
+| signal | behaviour |
+|---|---|
+| composite score `c` | median change **0.42%**, 90th percentile 4.21% |
+| h-index | never decreases in **98.8%** of steps, median +1, 99th pct +8 |
+| paper count `np` | never decreases in 92.0%, median +3 |
+| institution | unchanged in 72.3% |
+
+`c` changing by less than half a percent a year is close to a fingerprint.
+Within a block of 53 people sharing a name and a firstyr, matching each 2023
+row to the 2024 row that continues its `c` and `h` is a well-posed
+assignment problem, not a guess.
+
+## Recommendation
+
+Fix linkage inside the block before reaching for an external source.
+It is cheaper, it needs no API budget, it targets the 132,313 rows directly,
+and it can be validated against the 957,429 unambiguous trajectories we
+already trust. OpenAlex then becomes the independent check on the result
+rather than the mechanism, which is also the honest way to report a precision
+figure.
+
+## The extra attributes, measured
+
+Over the same 957,429 consecutive-edition observations, how often each
+attribute is unchanged from one edition to the next:
+
+| attribute | unchanged | note |
+|---|---|---|
+| field | 97.9% | |
+| country | 97.3% | |
+| subfield | 96.3% | |
+| institution | 72.3% | Scopus picks one affiliation by ML from recent papers |
+
+Institution is the weak one and the published FAQ explains why. Country and
+field are nearly fixed.
+
+## Does it discriminate inside a block?
+
+Stability is not the question; discrimination is. Test: take unambiguous
+authors present in both 2023 and 2024, where the true pairing is known, form
+synthetic blocks, and solve the assignment with `scipy.optimize.
+linear_sum_assignment` over a cost of relative change in `c`, an h-index
+monotonicity penalty, and mismatch penalties on subfield, country and
+institution.
+
+Blocks drawn on shared firstyr only:
+
+| block size | random | `c`+`h` only | plus field/country/institution |
+|---|---|---|---|
+| 5 | 20.0% | 98.5% | 100.0% |
+| 10 | 10.0% | 96.1% | 100.0% |
+| 20 | 5.0% | 95.8% | 100.0% |
+| 50 | 2.0% | 88.5% | 100.0% |
+
+Harder, with field and country neutralised by construction, every block
+member sharing firstyr **and** field **and** country:
+
+| block size | random | `c`+`h` only | plus subfield/institution |
+|---|---|---|---|
+| 5 | 20.0% | 97.3% | 100.0% |
+| 10 | 10.0% | 97.4% | 100.0% |
+| 20 | 5.0% | 96.1% | 99.5% |
+| 50 | 2.0% | 89.4% | **99.4%** |
+
+99.4% against a 2% random baseline, on the hardest configuration available.
+The metrics alone carry most of it and the categorical attributes close the
+remaining gap, which answers whether affiliation and field are worth
+including: they are, and they matter most exactly where the blocks are
+largest.
+
+Two honest limits on that figure. These blocks are balanced, every 2023
+member having a 2024 counterpart, whereas real blocks gain and lose people,
+so the implementation needs a rectangular assignment and a cost threshold
+above which no match is made. And the members are drawn from authors the
+resolver already found unambiguous, who may be easier than the residual.
+
+## On a learned matcher
+
+The relational-learning approach can do this too, and there are 957,429
+known positive pairs to train on, which is an unusually comfortable position
+for an entity-resolution problem. But the hand-built cost already reaches
+99.4% on the hardest synthetic blocks, so a learned model would compete for
+the last fraction of a percent. The place it earns its keep is the reject
+threshold, deciding when a person genuinely left rather than forcing a match,
+and the residual blocks where metrics are missing. Worth doing second, on the
+cases the rules leave open, not first.
+
+## A correction on Scopus and ORCID
+
+Scopus does carry ORCID: Scopus author profiles link to ORCID and Elsevier
+runs that integration. What is missing is in the published dataset. Ioannidis
+and Elsevier strip every identifier at publication, including the Scopus
+Author ID used to compute the metrics, leaving only the profile's preferred
+name as of the calculation date. The identity exists upstream and is
+discarded on the way out. That is an editorial decision about the data
+product, not a gap in Scopus, and it should be described that way.
+
+---
+
+# What the fix actually did
+
+Rebuilt all 15 editions with career matching in place, 2,730,673 rows in
+11m36s.
+
+## The ambiguous population stops being broken
+
+| | before | after |
+|---|---|---|
+| authors total | 818,667 | 594,380 |
+| flagged ambiguous | 350,908 (42.9%) | 126,621 (21.3%) |
+| ambiguous: mean editions each | **1.00** | **4.02** |
+| ambiguous: appear exactly once | **100.0%** | **23.3%** |
+| unambiguous: mean editions each | 4.44 | 4.44 |
+| unambiguous: appear exactly once | 23.6% | 23.6% |
+| overall: appear exactly once | 47.7% | 23.5% |
+
+The row to read is the ambiguous one against the unambiguous one. 4.02
+editions against 4.44, and 23.3% appearing once against 23.6%: the
+previously broken population is now indistinguishable from the healthy one.
+224,287 author records were fragments of people and have been merged.
+
+Edition-over-edition retention rises everywhere:
+
+| edition | before | after |
+|---|---|---|
+| 2021 | 85.4% | 94.1% |
+| 2022 | 84.5% | 93.3% |
+| 2023 | 85.5% | 94.6% |
+| 2024 | 81.4% | 90.6% |
+
+The 2024 dip survives, about 3.5 points below the new trend. That is the
+residual of the name break, now visible on its own rather than buried under
+a general linkage failure.
+
+## Half the dropout labels were artifacts
+
+| split | before | after |
+|---|---|---|
+| train | 19.33% | 11.69% |
+| val | 14.46% | 5.38% |
+| test | 18.63% | 9.40% |
+
+An author in an ambiguous block dropped out every single year by
+construction, so roughly half of every dropout label was recording our own
+resolver rather than anyone's career.
+
+## The model's score went down, and that is the improvement
+
+| | GNN test ROC AUC | `is_ambiguous` alone |
+|---|---|---|
+| before | 0.814 | **0.776** |
+| after | 0.687 | **0.506** |
+
+This is the finding worth keeping. Before the fix, one binary flag, "was
+this author in an ambiguous block", scored 0.776 on the dropout test set by
+itself. The graph network's 0.814 was therefore almost all bug detection:
+the labels said an author vanished, the flag said the resolver had lost
+them, and the two agreed.
+
+After the fix that flag is worth 0.506, which is chance. The remaining 0.687
+is signal about authors actually leaving the list, on a task that is now
+both harder and real, with a 9.4% positive rate rather than 18.6%.
+
+A model scoring 0.81 on a corrupted label is worth less than one scoring
+0.69 on a clean one, and the only way to tell them apart is to check what a
+trivial feature gets. That check belongs on every task here from now on.
+
+---
+
+# Two more problems the rebuild exposed
+
+## `rank` has no denominator on this list, and the dashboard invented one
+
+`rank` is the position in a ranking of every scientist Scopus scored, not of
+the people on the published list. Verified: sort a career edition by rank and
+`c` is non-increasing in **100.00%** of steps, so it is a strict global
+ordering by composite score.
+
+In career-2024 the largest rank is **1,210,493** against **230,333**
+published rows, and **48,401 rows (21%)** carry a rank larger than the list
+itself. Those people are on the list because they are near the top of a
+*subfield*: their median subfield rank is 2,311 out of a median subfield of
+131,858, and nobody published is below the top 5.6% of their own subfield.
+
+The author panel had begun showing "Ranked among: 230,333 researchers" beside
+a rank that can be 1,210,493. That is not merely unhelpful, it is visibly
+impossible, and it is the first thing a reader notices. The subfield pair is
+a real one, `rank_subfield` being at most `subfield_count` in 100.00% of
+rows, so the panel shows subfield standing instead.
+
+## `firstyr` is absent from the whole of singleyr-2017
+
+| edition | rows | `firstyr` NULL |
+|---|---|---|
+| singleyr-2017 | 106,368 | **106,368 (100%)** |
+| every other edition | | 0 |
+
+The version-1 single-year file does not carry the column at all. `firstyr` is
+the third component of the blocking key, so every author in that edition is
+blocked as `(surname, initial, NULL)` and cannot join their own career
+record. John Ioannidis is two authors in this data for exactly that reason:
+one carrying all eight career editions and six single-year ones, and one
+carrying singleyr-2017 alone.
+
+It is partly recoverable. Of 104,656 distinct names in singleyr-2017, 69,517
+also appear in career-2017 and 68,315 of those have an unambiguous `firstyr`
+there, so about 65% could be filled in from the publisher's own data for the
+same person in the same year. The remaining 35% appear only in the
+single-year table, having had one strong year without a career-long standing,
+and have nothing to borrow from.
+
+Whether to do it is a judgement call rather than a bug fix. It does not alter
+a published metric, it fills a blocking key we derive, but it is still a
+repair to source data and belongs in the open rather than in a quiet commit.

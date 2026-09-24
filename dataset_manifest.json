@@ -1,0 +1,354 @@
+{
+  "doi": "10.17632/btchxktzyw",
+  "landing": "https://data.mendeley.com/datasets/btchxktzyw",
+  "versions": [
+    {
+      "version": 1,
+      "publish_date": "2019-07-06",
+      "files": [
+        {
+          "filename": "Table-S1-career-2017.xlsx",
+          "size_bytes": 35852658,
+          "sha256": "8ac560955b1fe1f04d884c9aa25c800f76a4d3dd6aaa3ff1ee347855270bc6fa",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/6a88276f-2461-430f-8ce2-9b5e948cb709/file_downloaded"
+        },
+        {
+          "filename": "Table-S2-singleyr-2017.xlsx",
+          "size_bytes": 33793945,
+          "sha256": "530dd6560237f5794ee0ce783f2a824e8f26b26781c791aaec6367d416792ea2",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/ea67b825-40c4-4851-8488-2476b4b2dcc5/file_downloaded"
+        },
+        {
+          "filename": "Table-S3.xlsx",
+          "size_bytes": 43635,
+          "sha256": "1cafa2e168d3087a0b770ad5033c0d7ed6c69c0df1c0245ca1d99d1f3725bf50",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/f0c60ea9-75ea-4af2-af79-5566216efa78/file_downloaded"
+        },
+        {
+          "filename": "Table-S4-career-2018.xlsx",
+          "size_bytes": 40286616,
+          "sha256": "73fefc9603c794c0de83a4b8c89024f852c93e94c02f5325b8ba488bf07b5198",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/51ba39a5-4de9-4c79-b180-f0ca4d5747ed/file_downloaded"
+        },
+        {
+          "filename": "Table-S5-compare100.xlsx",
+          "size_bytes": 15045,
+          "sha256": "002e2d35a27f137bc6346e3e08ca04385ddc152d48d2e71b8d04dbd0fe3e8210",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/d4da8e28-1ab5-465b-855a-3367bda149e2/file_downloaded"
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "publish_date": "2020-10-08",
+      "files": [
+        {
+          "filename": "Table-S10-maxlog-2019-career.csv",
+          "size_bytes": 314,
+          "sha256": "d5f5b2b42b6176079595041f37030693205e7584dede83bc82bf315313288bef",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/508bcbd9-20fb-48a5-b215-cd8ba31955e9/file_downloaded"
+        },
+        {
+          "filename": "Table-S11-maxlog-2019-singlyr.csv",
+          "size_bytes": 313,
+          "sha256": "05a98aaef66e6c939247b84835bfc7cc1162ca3584f76fecb79ab782b29158a3",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/fe44cc70-1877-424e-bc0a-f92636059faf/file_downloaded"
+        },
+        {
+          "filename": "Table-S6-career-2019.xlsx",
+          "size_bytes": 63863619,
+          "sha256": "d960f133cfdcc4e59a79aefeb92015bf600c5cb8ff08241382087370da90cf70",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/9cb11466-b3a6-4f20-92e6-02f5d9b81d1d/file_downloaded"
+        },
+        {
+          "filename": "Table-S7-singleyr-2019.xlsx",
+          "size_bytes": 62530817,
+          "sha256": "8bf8e82275b980c67118e9af69daeb379aee84e8c0d5893b57b3a4750b0e5dd0",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/dd0904a8-0eba-4cf3-be4a-c6092261fed5/file_downloaded"
+        },
+        {
+          "filename": "Table-S8-Field-Subfield-Thresholds-career-2019.xlsx",
+          "size_bytes": 66095,
+          "sha256": "37eb8955db3706bd4485e3f12eefccd75f01c9e93f11aa3c028d66846952ac4d",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/532c3e6d-6179-4ff4-8fb9-45d50021a16d/file_downloaded"
+        },
+        {
+          "filename": "Table-S9-Field-Subfield-Thresholds-singleyr-2019.xlsx",
+          "size_bytes": 64233,
+          "sha256": "bb7fe2605a197d0276d17dcaf0c5276463e92f81f7618176e655cc0c4af9020e",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/d99a349a-38ef-40d0-8edb-5613acbb7407/file_downloaded"
+        }
+      ]
+    },
+    {
+      "version": 3,
+      "publish_date": "2021-10-19",
+      "files": [
+        {
+          "filename": "Table_1_Authors_career_2020_wopp_extracted_202108.xlsx",
+          "size_bytes": 76979228,
+          "sha256": "7f2781f383414877649e215b3cabbd75dfbd991daaa49636ce52f44c89289182",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/d1a08dbe-1a4d-4d9f-942e-5a78bc7afde5/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_singleyr_2020_wopp_extracted_202108.xlsx",
+          "size_bytes": 70199449,
+          "sha256": "516eb7eb34a7d062c8e7a3d5633a01e39aa23e3dd7dba079c0a71ef86c04e65a",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/b3e31af2-054c-4b3a-b9c5-6fd9bf10557a/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_career_2020_wopp_extracted_202108.xlsx",
+          "size_bytes": 46105,
+          "sha256": "03f8638f128db44f81595ce10daa0a746b07d1010172bfc639eec9280a4e57ea",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/3e09864c-ed71-4aae-b383-2c3ec31a6e8e/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_singleyr_2020_wopp_extracted_202108.xlsx",
+          "size_bytes": 44537,
+          "sha256": "5b3f290f38d771cfc190f9f75c735b84f87a6861ee76fd702eddffcf9e6533b4",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/36d01ddb-3a09-4c66-8591-b6b34fcba2a1/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_career_2020_wopp_extracted_202108.xlsx",
+          "size_bytes": 5223,
+          "sha256": "61bf97825d201d0f802113ea5d7c78ecb67c945162e32e05a11b5991519769fe",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/64c84c81-a3c8-461c-8f49-d13e9b81b1ba/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_singleyr_2020_wopp_extracted_202108.xlsx",
+          "size_bytes": 5225,
+          "sha256": "378818fd4b1e3765deba5f9be8c3e62f4957936b052eae51267aa7fb2965ff8c",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/4f6ec6a9-695c-48a5-8ad9-912a0fb653bc/file_downloaded"
+        }
+      ]
+    },
+    {
+      "version": 4,
+      "publish_date": "2022-10-10",
+      "files": [
+        {
+          "filename": "Table_1_Authors_career_2021_pubs_since_1788_wopp_extracted_202209.xlsx",
+          "size_bytes": 80990297,
+          "sha256": "b4d11be857f9be307d04c1f1566b672a85b8bf0805c26a5b6956bc517d89a0ef",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/dbefaa9c-0022-46dc-95bc-9e8f0ec820f7/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_singleyr_2021_pubs_since_1788_wopp_extracted_202209.xlsx",
+          "size_bytes": 73329827,
+          "sha256": "2a610af36bc4e3bf9d8b45da5ad1d3424d374d76490a3c80c9f8f1844429bd80",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/458f56f3-72b3-4a3b-a179-93d9c931a51f/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_career_2021_pubs_since_1788_wopp_extracted_202209.xlsx",
+          "size_bytes": 42979,
+          "sha256": "76195fa149417bfe74e70aed9237f865598a9f9d20a7a959af1c4d85d3be843c",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/be939dc4-2812-47c3-b16a-3e848ffe8b9d/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_singleyr_2021_pubs_since_1788_wopp_extracted_202209.xlsx",
+          "size_bytes": 41375,
+          "sha256": "337f84ed9ef6a2b9eca958b5f1f2f9acadc1fc9dd39ecedeafca1c292d99339a",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/d6ca5242-565d-45b7-904e-6e90619538a7/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_career_2021_pubs_since_1788_wopp_extracted_202209.xlsx",
+          "size_bytes": 5225,
+          "sha256": "02eb516ad540c6de2b04468ccf56834b75c425756c29e129fea2c16ed8b12c8f",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/5c065cac-1f47-4e4c-9130-6075f0aeef42/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_singleyr_2021_pubs_since_1788_wopp_extracted_202209.xlsx",
+          "size_bytes": 5219,
+          "sha256": "b10eef71abd8d126f5160c6a3f9b1442bc18dfe3ec413d4cacd1f1cd6b7d5544",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/c667a0ef-0b85-4ac2-b419-e30cc20d55b4/file_downloaded"
+        }
+      ]
+    },
+    {
+      "version": 5,
+      "publish_date": "2022-11-03",
+      "files": [
+        {
+          "filename": "28oct2022_v5_update_release_notes.txt",
+          "size_bytes": 2271,
+          "sha256": "fb329846d48b588bb5fbf182f9ab418eef2c62f27f054e09800b3aefef626aa9",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/6d807192-6c3d-4b82-ab41-174d47635577/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_career_2021_pubs_since_1788_wopp_extracted_202209b.xlsx",
+          "size_bytes": 80845114,
+          "sha256": "ddfb091fe9412041096ab29567c5c94cceefcef9dd91928898c13a6174af23c1",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/7ce622f8-7712-4f9f-8ba5-c2fe7ab39b66/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_singleyr_2021_pubs_since_1788_wopp_extracted_202209b.xlsx",
+          "size_bytes": 79795661,
+          "sha256": "b853a2410c3b27002bb44c8bc485a7cb2942ac655b69d59f0776c9220b9f1e58",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/e9e7e7a6-a02f-41ef-8164-973e9704afaa/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_career_2021_pubs_since_1788_wopp_extracted_202209b.xlsx",
+          "size_bytes": 46098,
+          "sha256": "effe0922cc022c27ae1b42f8151cf884a96ed5f26a61838bb76ae8e407d71ab4",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/6a69f452-0e10-483b-989f-c95e2b57b24d/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_singleyr_2021_pubs_since_1788_wopp_extracted_202209b.xlsx",
+          "size_bytes": 43944,
+          "sha256": "f96fa3b2310d4351f7fbca8829d3b78f7e234a78699043193c02a42147f8bda7",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/ef01a3f3-39db-4514-8e0b-ea5d4df001e5/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_career_2021_pubs_since_1788_wopp_extracted_202209b.xlsx",
+          "size_bytes": 5225,
+          "sha256": "322bad9248c2f1e18ad8dca8f1c555a85d39c3756195383fdca1ef548a30ce6a",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/feee6747-150b-48c9-b57e-e0d2957b05b5/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_singleyr_2021_pubs_since_1788_wopp_extracted_202209b.xlsx",
+          "size_bytes": 5220,
+          "sha256": "fe880ab995e1f8257c115cc14f8fa1a88c641805692aabf006c11c6b6ae09f27",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/117aa06e-853f-4fd2-9ba0-6fb162e6f47b/file_downloaded"
+        }
+      ]
+    },
+    {
+      "version": 6,
+      "publish_date": "2023-10-04",
+      "files": [
+        {
+          "filename": "Table_1_Authors_career_2022_pubs_since_1788_wopp_extracted_202310.xlsx",
+          "size_bytes": 78456721,
+          "sha256": "6bd6e81d62834f80f0cf7119a3c5662689559ae8237d9d7e1bd7bf24699e0940",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/d2537947-3d38-42e5-9c34-15c3dfe04f59/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_singleyr_2022_pubs_since_1788_wopp_extracted_202310.xlsx",
+          "size_bytes": 77501216,
+          "sha256": "8d40caa139cdd4602574d6ed04100b94ec1bc8b17b563335aeac2b92f8b23b65",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/7bad01c2-63e8-4ed2-94f2-4af4b3b0a4fe/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_career_2022_pubs_since_1788_wopp_extracted_202310.xlsx",
+          "size_bytes": 46143,
+          "sha256": "9a981169bfb00c40516e745bee848d07ef7cac5f857dcfc2f7b18039d3856359",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/a2575e0e-57ae-4910-a248-ee958012b5ae/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_singleyr_2022_pubs_since_1788_wopp_extracted_202310.xlsx",
+          "size_bytes": 43960,
+          "sha256": "d25efdb797ae95c497ce1c22b25d56cf48c16fe1f5296b8dc67b77fc107c9573",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/f8321749-aeac-401d-a602-041af0246f55/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_career_2022_pubs_since_1788_wopp_extracted_202310.xlsx",
+          "size_bytes": 5223,
+          "sha256": "c524df9127c134d8f10956182d4797fa5cbdcd510c88acd724d1b79806c9c0e4",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/de55f53b-bad0-47d9-9306-69b8d22c71ec/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_singleyr_2022_pubs_since_1788_wopp_extracted_202310.xlsx",
+          "size_bytes": 5225,
+          "sha256": "9a6eb16900be3d2705d48b86e9733ffe82cc0346cac7dada1232c688b86799e4",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/5aa7daec-c561-4d69-944d-3aae0d76918f/file_downloaded"
+        }
+      ]
+    },
+    {
+      "version": 7,
+      "publish_date": "2024-09-16",
+      "files": [
+        {
+          "filename": "FREQUENTLY ASKED QUESTIONS.docx",
+          "size_bytes": 18675,
+          "sha256": "976bb20b7fea005b44c04aca7b1315212ddec7e866f00538276995b5f696f119",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/c854d478-e1f1-447a-9b4f-7267870285af/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_career_2023_pubs_since_1788_wopp_extracted_202408.xlsx",
+          "size_bytes": 83649050,
+          "sha256": "ceeb315346dbdc6b859d47c64ef30af45f686d35fe632e554a252f568e5d42fe",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/18cf2613-948f-4c56-8304-140b07913758/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_singleyr_2023_pubs_since_1788_wopp_extracted_202408.xlsx",
+          "size_bytes": 82762679,
+          "sha256": "bc9f7348fb09af28cb47a6e4332d8d728e0a48a74119835b25f78d6f20e05834",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/5c0c334e-53d9-421b-b344-3ced6fc8d857/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_career_2023_pubs_since_1788_wopp_extracted_202408.xlsx",
+          "size_bytes": 46120,
+          "sha256": "d524f00924c4c57d3dafb23a44dd5237b7c0284c36d47e3d96e2099ef13c723d",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/f31d1dd8-09fe-4ad1-ab22-c7329fcee71c/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_singleyr_2023_pubs_since_1788_wopp_extracted_202408.xlsx",
+          "size_bytes": 44257,
+          "sha256": "89aae32468c07ff69f29705e86df2892fcfdc5780813611f612bd2b408daeb7d",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/78210528-3212-4a70-b181-b024383034fb/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_career_2023_pubs_since_1788_wopp_extracted_202408.xlsx",
+          "size_bytes": 5245,
+          "sha256": "6920e974295827b6b2a1c676fae7bb02f322595365ea4b3b701594a46dc89be0",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/6638505f-9ed1-4384-bca3-e068464cef7c/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_singleyr_2023_pubs_since_1788_wopp_extracted_202408.xlsx",
+          "size_bytes": 5246,
+          "sha256": "b276155a16e60e1fafea61424763b83c717746b9c62acb9c9cbf4a12dd13b9b9",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/db817863-bf91-4be7-8fb8-5ffae2c95c03/file_downloaded"
+        }
+      ]
+    },
+    {
+      "version": 8,
+      "publish_date": "2025-09-19",
+      "files": [
+        {
+          "filename": "FREQUENTLY ASKED QUESTIONS.docx",
+          "size_bytes": 21724,
+          "sha256": "e21ae47eb77db8a179e85b141d366b17b32312bc5eeb508267ca7cc4943e0e5f",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/7e1d15e5-b979-4721-898e-a53bf5d55639/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_career_2024_pubs_since_1788_wopp_extracted_202508.xlsx",
+          "size_bytes": 89334675,
+          "sha256": "53eb3737df6854a5c3e51814b9b122e99b8396ee45ee26c7a587f4059082062b",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/39704d33-d2f8-4983-9cd6-d13919025b8c/file_downloaded"
+        },
+        {
+          "filename": "Table_1_Authors_singleyr_2024_pubs_since_1788_wopp_extracted_202508.xlsx",
+          "size_bytes": 88180708,
+          "sha256": "f0aa0886c064a6c81487cd3ff42cc7e18665afba4842a9756373fac1b09d39d9",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/1b1cbb0c-9ec9-4482-ac6d-cc9d5586bd3f/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_career_2024_pubs_since_1788_wopp_extracted_202508.xlsx",
+          "size_bytes": 46296,
+          "sha256": "e91a486c3c61c7ce766b932314a4ac42cef5a7eaa95f406c37e428cc6a3dd035",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/f55c0258-bc93-4052-936a-ea24b2612b47/file_downloaded"
+        },
+        {
+          "filename": "Table_2_field_subfield_thresholds_singleyr_2024_pubs_since_1788_wopp_extracted_202508.xlsx",
+          "size_bytes": 44135,
+          "sha256": "09cb9d53e449554661ef6ba489a2e72643c9b0e91b902e08cdb930aaf19f69a4",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/530e3af9-2692-4ab5-827d-c46d41b3eac6/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_career_2024_pubs_since_1788_wopp_extracted_202508.xlsx",
+          "size_bytes": 5244,
+          "sha256": "0bc0d8a0869e846ce15e9cb7800976e17bf64fdfbdb0c392b8baaba022de61f4",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/0ceb08eb-5bab-47de-be2a-fa270e18b014/file_downloaded"
+        },
+        {
+          "filename": "Table_3_maxlog_singleyr_2024_pubs_since_1788_wopp_extracted_202508.xlsx",
+          "size_bytes": 5243,
+          "sha256": "7df96d117c12ce120f5edf53a5d72831e8b19d789476abdba6fb63d5ee7509fe",
+          "download_url": "https://data.mendeley.com/public-files/datasets/btchxktzyw/files/3dd6d4d1-e917-49f3-9f64-83e338311616/file_downloaded"
+        }
+      ]
+    }
+  ]
+}

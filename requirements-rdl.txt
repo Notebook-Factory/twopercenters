@@ -1,0 +1,36 @@
+# Relational deep learning: the rdl/ package only.
+#
+# Deliberately NOT in requirements.txt. That file is what the dokku
+# buildpack installs, and torch alone would add roughly 2 GB to the slug of
+# a web process that must never import it (tests/test_retraction_page.py
+# holds that line). Training happens on a workstation; only the resulting
+# rows in the predictions table are deployed.
+#
+# Locally both files install into the same .venv, so there is still one
+# environment to reason about:
+#
+#     .venv/bin/pip install -r requirements.txt -r requirements-rdl.txt
+#
+# numpy is pinned in requirements.txt at 1.26.4 rather than 1.21.5 because
+# of this file: scikit-learn arrives with relbench and pulls numpy 2.x,
+# which pandas 1.5.2's compiled extensions cannot load against.
+
+relbench==3.0.1
+# Not pytorch_frame[full]: that extra pulls catboost, lightgbm, optuna and
+# xgboost as GBDT baselines we do not use, and xgboost 1.7.6 has no Apple
+# Silicon wheel, so `pip check` fails on it.
+pytorch_frame==0.3.0
+torch_geometric==2.8.0
+torch==2.14.0
+duckdb
+pyyaml
+
+# NeighborSampler raises "requires either 'pyg-lib' or 'torch-sparse'"
+# without this. There is no PyPI wheel; it comes from PyG's own index, which
+# does carry an Apple Silicon build matching torch 2.14 and Python 3.10:
+#
+#   pip install pyg-lib -f https://data.pyg.org/whl/torch-2.14.0+cpu.html
+#
+# Pinned here for the record rather than installed by `pip install -r`,
+# because the -f index has to be passed explicitly.
+# pyg-lib==0.9.0+pt214

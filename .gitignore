@@ -159,3 +159,26 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Raw Mendeley source spreadsheets (doi:10.17632/btchxktzyw) - fetched via fetch_sources.py
+data_raw/
+data_clean/
+
+# Derived data, rebuilt by the pipeline. Never committed: the qMRLab repo
+# committed ~700MB of pickles and lost the spreadsheets that produced them.
+data_parquet/
+
+# Local environment
+.env
+
+# Working design docs and implementation plans (local only)
+docs/superpowers/
+data_rdl/
+
+
+# The ROR data dump, fetched from Zenodo rather than kept in git: it is
+# 36 MB, and ROR publishes a new release roughly monthly.
+data_ror/
+
+# Database dumps for moving the database to a host (README, "Deploying to dokku").
+*.dump

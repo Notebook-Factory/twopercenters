@@ -1,30 +1,27 @@
-
 # ==========================================================================================
 # ==========================================================================================
 # IMPORT LIBRARIES
 # ==========================================================================================
 # ==========================================================================================
 
-# =============== misc libs & modules
-import numpy as np
-import math
-import pickle
-import time
-
 # =============== Plotly libs & modules
 import plotly.graph_objects as go
-import country_converter as coco
 
 # =============== Plotly Dash libraries
-from dash import html, dcc, callback, ctx #, Input, Output
-from dash.dependencies import Input, Output, State
+from dash import html, dcc, callback
+from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import dash_daq as daq
 
 # =============== Custom lib
-from citations_lib.create_fig_helper_functions import *
-from citations_lib.utils import *
+import pandas as pd
+import plotly.express as px
+from citations_lib.create_fig_helper_functions import (
+    bgc, darkAccent2, lightAccent1)
+from citations_lib.utils import (
+    es_result_pick, get_es_results, get_metric_long_name)
+from plotly.subplots import make_subplots
 
 def process_results_data(results):
     author_df = pd.DataFrame()
@@ -65,26 +62,9 @@ def create_author_figures(author_df, author_yrs, metrics_list, author_type, auth
 
     return fig
 
-def single_author_layout():
+def single_author_layout(default_author=None):
+    """Seeded from the dashboard's current author when there is one."""
 
-    # ========================================================================================== 
-    # ========================================================================================== 
-    # Data prep, color formatting & defining variables
-    # ========================================================================================== 
-    # ========================================================================================== 
-    # This is needed no more! 
-    #dfs_career, dfs_singleyr, dfs_career_log, dfs_singleyr_log, _, _, _, _ = load_standardized_data()
-    
-    darkAccent1 = '#2C2C2C' # dark gray
-    darkAccent2 = '#5b5959' # pale gray
-    darkAccent3 = '#CFCFCF' # almost white
-    lightAccent1 = '#ECAB4C' # ocre
-    highlight1 = 'lightsteelblue'
-    highlight2 = 'cornflowerblue'
-
-    g1c = [highlight1, darkAccent2] # bar plot bars 1 & 2
-    g2c = [highlight2, darkAccent3] # bar plot bar 3
-    bgc = darkAccent1 # bar plot background
     SUFFIX = '_single_author'
 
     # =============== Empty fig
@@ -101,11 +81,11 @@ def single_author_layout():
     # =============== Toggle: % self-citations
     selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
 
-    # # =============== Author Dropdown
-    authorOptions = dcc.Dropdown(options = [], multi = False, id = "authorOptionsDropdown" + SUFFIX, placeholder = 'Start typing (surname name). Hit del to reset.', 
+    # =============== Author Dropdown
+    authorOptions = dcc.Dropdown(options = [], multi = False, id = "authorOptionsDropdown" + SUFFIX, placeholder = 'Search researchers',
          value = 'Ioannidis, John P.A.', searchable = True)
-    
-    # # =============== Author Callback
+
+    # =============== Author Callback
     @callback(
     Output('authorOptionsDropdown' + SUFFIX, 'options'),
     [Input('authorOptionsDropdown' + SUFFIX, 'search_value')]
@@ -128,11 +108,13 @@ def single_author_layout():
 
         if author == None: raise PreventUpdate
         else:
-            results_career = get_es_results(author,'career','authfull')
-            #print(results_career)
+            # exact=True: `author` is a display name the user picked out
+            # of the typeahead dropdown, so it is already the exact string
+            # and there is nothing to fuzzy-match. See get_es_results.
+            results_career = get_es_results(author,'career','authfull',exact=True)
             results_career = es_result_pick(results_career,'data', None)
 
-            results_singleyr = get_es_results(author,'singleyr','authfull')
+            results_singleyr = get_es_results(author,'singleyr','authfull',exact=True)
             results_singleyr  = es_result_pick(results_singleyr,'data', None)
             
             inst_name = ''
@@ -162,10 +144,7 @@ def single_author_layout():
             else: 
                 fig_singleyr = empty_fig
 
-            
-            
-
-            return(fig_career, fig_singleyr, inst_name, field_name, "Start typing for new search | Displaying: " + author.split(",")[0])
+            return(fig_career, fig_singleyr, inst_name, field_name, str(author))
 
     # =============== Row 1: Author select
     row1 = dbc.Row([dbc.Col(html.Center(authorOptions), width = {'offset':3,'size':4}),
@@ -179,13 +158,11 @@ def single_author_layout():
         dbc.Col([html.Code(html.Label(id='fieldLabel' + SUFFIX,children=""))], width = {'offset':0, 'size':1})
     ])
 
-
-
     return(html.Div([
         dbc.Container(fluid = True, children = [
             html.Br(),
             html.Label(id='tmpLabel',children=""),
             row1, html.Hr(), 
             row2, html.Br(), 
-        ], style = {'backgroundColor':darkAccent1}), 
+        ], className = 'ev-page'), 
     ]))
