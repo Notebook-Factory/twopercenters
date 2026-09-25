@@ -143,7 +143,7 @@ def bullet_rows(values, maxima, quartiles, composite_quartiles=None):
 
 
 def bullet_payload(rows, group_label, whatif=False, published=None,
-                   reference=True):
+                   reference=True, drag=None, suffix=''):
     """What the clientside bullet chart draws.
 
     `published` is the untouched set of rows, carried only in what-if mode so
@@ -152,10 +152,20 @@ def bullet_payload(rows, group_label, whatif=False, published=None,
     `reference` is false for a card drawn without a comparison group, which
     is how the Top 10 tab draws one: no band, no median tick, just the bars
     against the edition maximum.
+
+    `drag` is the id of the hidden input a dragged bar reports into. Only the
+    what-if card passes one, and only then does the chart grow handles.
+    `suffix` is that card's id suffix, so a drag can put its number straight
+    into the box beside the row it is moving.
     """
     return {'rows': rows, 'group': str(group_label or ''),
             'whatif': bool(whatif),
             'reference': bool(reference),
+            # The id of the hidden input a dragged bar reports into, or None
+            # on a chart nobody can edit. The Top 10 card draws these same
+            # rows and passes nothing, so it gets no handles.
+            'drag': drag if whatif else None,
+            'suffix': str(suffix),
             'published': published if whatif else None}
 
 
@@ -285,10 +295,13 @@ def bullet_inputs(state, suffix='_author_find_'):
     # boxes above keep their places beside their rows.
     cells.append(dbc.Tooltip(
         [html.Strong('You can edit these now. '),
-         'Type a new value into any box to recompute the composite score and '
-         'see where it would rank. The other numbers stay as published.'],
+         'Drag a bar, or type a value into any box, to recompute the '
+         'composite score and see where it would rank. The other numbers '
+         'stay as published.'],
+        # Above rather than to the left: to the left is the chart, and the
+        # bars there are the other half of this instruction.
         id = 'whatIfTip' + suffix, target = 'whatIf-nc' + suffix,
-        placement = 'left', is_open = False, trigger = 'hover',
+        placement = 'top', is_open = False, trigger = 'hover',
         className = 'ev-whatif-tip'))
     return cells
 
@@ -648,6 +661,127 @@ BULLET_DRAW_JS = """
                 series: series
             }, true);
             chart.resize();
+
+            // Drag a bar to change what it says.
+            //
+            // The bars are already the thing the calculator is about: each
+            // one is that indicator's term in the composite score,
+            // ln(v+1)/ln(ceiling+1), so its length IS what the row
+            // contributes and dragging it is dragging the contribution. The
+            // value that comes back out is the inverse of that,
+            // exp(share * ln(ceiling+1)) - 1.
+            //
+            // Nothing goes to the server during a drag. The bar, the
+            // composite row under it and the box beside it all move here,
+            // and only when the handle is let go does the value go into the
+            // hidden input that the card's recompute listens to. A drag is
+            // one recompute, not one per pixel.
+            //
+            // The log axis makes the right-hand end coarse: on citations,
+            // where the ceiling is in the millions, the pixels between 0.75
+            // and 0.80 are 30,000 citations against 60,000. That is why the
+            // boxes are still there, and the reason to type in them.
+            var barIndex = hasGroup ? 1 : 0;
+            var live = rows.map(function (r) { return r.share; });
+
+            function valueAt(row, share) {
+                return Math.exp(share * Math.log(row.ceiling + 1)) - 1;
+            }
+
+            // The score is the six terms added up, and its row is drawn at
+            // their mean, so it follows a drag without asking anybody.
+            function repaint() {
+                var sum = 0;
+                for (var k = 0; k < rows.length; k++) {
+                    if (!rows[k].composite) { sum += live[k]; }
+                }
+                var six = rows.length - 1;
+                var patch = [];
+                for (var s = 0; s < barIndex; s++) { patch.push({}); }
+                patch.push({data: rows.map(function (r, k) {
+                    var share = r.composite ? (six ? sum / six : 0) : live[k];
+                    return r.composite
+                        ? {value: share, itemStyle: {color: composite}}
+                        : share;
+                })});
+                chart.setOption({series: patch});
+            }
+
+            if (payload.drag && payload.rows.length) {
+                var handles = [];
+                for (var h = 0; h < rows.length; h++) {
+                    if (rows[h].composite) { continue; }
+                    handles.push(handleFor(h));
+                }
+                chart.setOption({graphic: handles});
+            } else {
+                chart.setOption({graphic: []});
+            }
+
+            function handleFor(index) {
+                var row = rows[index];
+                var at = chart.convertToPixel(
+                    {xAxisIndex: 0, yAxisIndex: 0}, [live[index], index]);
+                var left = chart.convertToPixel(
+                    {xAxisIndex: 0, yAxisIndex: 0}, [0, index])[0];
+                var right = chart.convertToPixel(
+                    {xAxisIndex: 0, yAxisIndex: 0}, [1, index])[0];
+                return {
+                    type: 'circle', z: 100,
+                    shape: {cx: 0, cy: 0, r: 7},
+                    x: at[0], y: at[1],
+                    style: {fill: accent, stroke: '#0B1020', lineWidth: 2},
+                    cursor: 'ew-resize', draggable: 'horizontal',
+                    ondrag: function () {
+                        // Keep it on its own track. Dragged past either end
+                        // the handle would leave the chart and the value
+                        // would leave the scale with it.
+                        this.x = Math.min(Math.max(this.x, left), right);
+                        live[index] = (this.x - left) / (right - left);
+                        rows[index].share = live[index];
+                        rows[index].value = valueAt(row, live[index]);
+                        repaint();
+                        // The box beside the row, so the number and the bar
+                        // never disagree while the mouse is down. Dash is
+                        // told at the end of the drag, not now.
+                        var box = document.getElementById(
+                            'whatIf-' + row.key + payload.suffix);
+                        if (box) {
+                            box.value = row.key === 'hm'
+                                ? rows[index].value.toFixed(1)
+                                : String(Math.round(rows[index].value));
+                        }
+                        // And the score, which is those six terms added up.
+                        var score = document.getElementById(
+                            'whatIf-c' + payload.suffix);
+                        if (score) {
+                            var total = 0;
+                            for (var t = 0; t < rows.length; t++) {
+                                if (!rows[t].composite) { total += live[t]; }
+                            }
+                            score.value = total.toFixed(2);
+                        }
+                    },
+                    ondragend: function () {
+                        var value = valueAt(row, live[index]);
+                        value = row.key === 'hm'
+                            ? Math.round(value * 10) / 10
+                            : Math.round(value);
+                        var input = document.getElementById(payload.drag);
+                        if (!input) { return; }
+                        var setter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype, 'value').set;
+                        // The same place twice running is a change Dash
+                        // would not see, so a counter makes each drag its
+                        // own value.
+                        window.__evDragCount = (window.__evDragCount || 0) + 1;
+                        setter.call(input, row.key + '|' + value + '|'
+                                           + window.__evDragCount);
+                        input.dispatchEvent(
+                            new Event('input', {bubbles: true}));
+                    }
+                };
+            }
             }
 
             el.__evRedraw = draw;
@@ -802,6 +936,12 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                      className = 'ev-bullet-inputs'),
         ], className = 'ev-bullets'),
         dcc.Store(id = 'bulletStore' + SUFFIX),
+        # How a dragged bar reaches the server: the chart writes
+        # '<metric>|<value>|<counter>' in here the way a person typing
+        # would, and the callback below puts the number in the box, which
+        # recomputes the score exactly as typing it would have.
+        dcc.Input(id = 'whatIfDrag' + SUFFIX, value = '', type = 'text',
+                  style = {'display': 'none'}),
         html.Div(id = 'bulletSink' + SUFFIX, style = {'display': 'none'}),
         html.Div(id = 'cardChips' + SUFFIX, className = 'ev-id-chips'),
         share_row(SUFFIX),
@@ -1486,18 +1626,33 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
             ceiling = max(float(state['np']), state['actual']['h'] or 0)
             values['h'] = min(values['h'], ceiling)
 
-        new_c = composite_score(values, state['maxima'])
-        new_standing = score_standing(state['kind'], state['year'], new_c,
-                                      ns = state['ns'])
-
         published_c = composite_score(state['actual'], state['maxima'])
+
+        # Nothing edited means the published rank, not a recomputed one.
+        #
+        # The older editions store the composite score rounded to six
+        # decimals: career-2017 has 5.193486 where the six terms add up to
+        # 5.193485526. That is a difference of 5e-07, and in a list of
+        # 105,026 people somebody is inside it, so recomputing the rank from
+        # the parts moved this researcher from 60th to 61st the moment
+        # what-if was switched on and before anything had been changed.
+        # 2024 stores the full figure and matches exactly.
+        untouched = all(values[metric] == state['actual'][metric]
+                        for metric, _ in WHATIF_METRICS)
+        if untouched:
+            new_c, new_standing = published_c, standing
+        else:
+            new_c = composite_score(values, state['maxima'])
+            new_standing = score_standing(state['kind'], state['year'], new_c,
+                                          ns = state['ns'])
         return [
             bullet_payload(bullet_rows(values, state['maxima'],
                                        state['quartiles'],
                                        state.get('composite_quartiles')),
                            state['group_label'], whatif = True,
                            published = published_rows,
-                           reference = bool(state['group_label'])),
+                           reference = bool(state['group_label']),
+                           drag = 'whatIfDrag' + SUFFIX, suffix = SUFFIX),
             '' if new_c is None else f'{new_c:.2f}',
             rank_stats(new_standing['scopus_rank'],
                        new_standing['within_list'],
@@ -1509,6 +1664,39 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                                new_standing['published'], whatif = True),
             'ev-id-card',
         ] + locked
+
+    @callback(
+        [Output('whatIf-' + metric + SUFFIX, 'value', allow_duplicate = True)
+         for metric, _ in WHATIF_METRICS],
+        Input('whatIfDrag' + SUFFIX, 'value'),
+        [State('whatIf-' + metric + SUFFIX, 'value')
+         for metric, _ in WHATIF_METRICS],
+        prevent_initial_call = True)
+    def dragged_a_bar(channel, *current):
+        """A bar that was dragged puts its number in the box beside it.
+
+        The drag itself is drawn in the browser, so the chart, the composite
+        row and the box all move with the mouse without a round trip. This
+        runs once, when the handle is let go, and it deliberately does
+        nothing but set the box: the recompute that follows is the same one
+        typing a number sets off, so there is one path to the score rather
+        than two that could disagree.
+        """
+        parts = str(channel or '').split('|')
+        if len(parts) < 2:
+            raise PreventUpdate
+        metric, value = parts[0], parts[1]
+        keys = [key for key, _ in WHATIF_METRICS]
+        if metric not in keys:
+            raise PreventUpdate
+        try:
+            number = float(value)
+        except ValueError:
+            raise PreventUpdate
+        out = list(current)
+        out[keys.index(metric)] = box_value(metric, max(number, 0.0))
+        return out
+
 
     offcanvas2 = html.Div(
         [

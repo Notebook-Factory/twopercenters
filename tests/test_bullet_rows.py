@@ -116,3 +116,50 @@ def test_the_boxes_commit_on_enter_rather_than_on_every_digit():
         source = handle.read()
     assert 'debounce = True' in source
     assert 'debounce = False' not in source
+
+
+def test_only_the_what_if_card_gets_drag_handles():
+    """The Top 10 tab draws these same rows for a researcher nobody is
+    editing, so it passes no channel and grows no handles."""
+    from citations_lib.auth_find import bullet_payload
+
+    rows = [{'key': 'nc', 'label': 'Citations', 'value': 10.0,
+             'ceiling': 100.0, 'share': 0.5}]
+    editable = bullet_payload(rows, 'France', whatif=True, published=rows,
+                              drag='whatIfDrag_author_find_',
+                              suffix='_author_find_')
+    assert editable['drag'] == 'whatIfDrag_author_find_'
+    assert editable['suffix'] == '_author_find_'
+
+    read_only = bullet_payload(rows, '', reference=False)
+    assert read_only['drag'] is None
+
+
+def test_a_drag_is_one_recompute_and_the_bar_is_the_score_term():
+    """Each bar is that indicator's term in the composite score,
+    ln(v+1)/ln(ceiling+1), so dragging it is dragging the contribution and
+    the value comes back out of the inverse. Nothing reaches the server
+    until the handle is let go: a drag is one recompute, not one per pixel."""
+    from citations_lib.auth_find import BULLET_DRAW_JS
+
+    block = BULLET_DRAW_JS[BULLET_DRAW_JS.index('function handleFor('):]
+    assert 'Math.exp(share * Math.log(row.ceiling + 1)) - 1' in BULLET_DRAW_JS
+    assert "draggable: 'horizontal'" in block
+    # The channel is written on release and nowhere else.
+    ondrag = block[block.index('ondrag:'):block.index('ondragend:')]
+    assert 'dispatchEvent' not in ondrag
+    assert 'dispatchEvent' in block[block.index('ondragend:'):]
+    # And a handle is only drawn where there is somewhere to report to.
+    assert 'if (payload.drag && payload.rows.length)' in BULLET_DRAW_JS
+
+
+def test_switching_what_if_on_keeps_the_published_rank():
+    """career-2017 stores the composite score rounded to six decimals:
+    5.193486 where the terms add up to 5.193485526. In a list of 105,026
+    people somebody sits in that 5e-07 gap, so recomputing the rank from the
+    parts moved this researcher from 60th to 61st before anything had been
+    edited."""
+    with open('citations_lib/auth_find.py') as handle:
+        source = handle.read()
+    assert 'untouched = all(values[metric] == state[\'actual\'][metric]' in source
+    assert 'new_c, new_standing = published_c, standing' in source
