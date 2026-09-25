@@ -261,9 +261,11 @@ def group_vs_group_layout():
     empty_fig.update_xaxes(visible = False)
     empty_fig.update_yaxes(visible = False)
     # =============== Toggle: log-transformed values!
-    logTransf = daq.BooleanSwitch(label = 'Log transformed', labelPosition = 'bottom', id = 'logTransfToggleMain' + SUFFIX)
+    logTransf = daq.BooleanSwitch(label = 'Log transformed', labelPosition = 'bottom', id = 'logTransfToggleMain' + SUFFIX,
+                                  className = 'ev-switch ev-switch-log')
     # =============== Toggle: % self-citations
-    selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
+    selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX,
+                              className = 'ev-switch ev-switch-selfcite')
     # =============== C score figure
     metricsFig_c = dbc.Row([dbc.Col([html.Center(dcc.Graph(id = 'metricsFigGraphAuthor_c' + SUFFIX, figure = empty_fig, config = {'displayModeBar': False}))], width = {'offset':1, 'size':2}), dbc.Col(id = 'c_score_formula' + SUFFIX, width = 7)])
     # =============== Figure callbacks

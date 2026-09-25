@@ -143,7 +143,7 @@ def bullet_rows(values, maxima, quartiles, composite_quartiles=None):
 
 
 def bullet_payload(rows, group_label, whatif=False, published=None,
-                   reference=True, drag=None, suffix=''):
+                   reference=True, drag=None, suffix='', pulse=False):
     """What the clientside bullet chart draws.
 
     `published` is the untouched set of rows, carried only in what-if mode so
@@ -156,7 +156,8 @@ def bullet_payload(rows, group_label, whatif=False, published=None,
     `drag` is the id of the hidden input a dragged bar reports into. Only the
     what-if card passes one, and only then does the chart grow handles.
     `suffix` is that card's id suffix, so a drag can put its number straight
-    into the box beside the row it is moving.
+    into the box beside the row it is moving. `pulse` rings the handles until
+    the reader has moved something.
     """
     return {'rows': rows, 'group': str(group_label or ''),
             'whatif': bool(whatif),
@@ -166,6 +167,11 @@ def bullet_payload(rows, group_label, whatif=False, published=None,
             # rows and passes nothing, so it gets no handles.
             'drag': drag if whatif else None,
             'suffix': str(suffix),
+            # Whether the handles should pulse. A handle at the end of a bar
+            # is a small thing to notice, and nothing else on the card says
+            # the bars can be pulled; the ripple stops at the first change,
+            # because by then the reader knows.
+            'pulse': bool(pulse),
             'published': published if whatif else None}
 
 
@@ -591,6 +597,28 @@ BULLET_DRAW_JS = """
                         return [r.share, i]; })});
             }
 
+            // A ring around each handle, until the reader moves one.
+            //
+            // A circle at the end of a bar is a small thing to notice and
+            // nothing else on the card says the bars can be pulled. This is
+            // echarts' own ripple rather than an animation of ours, drawn
+            // under the handles and taking no clicks, and the server stops
+            // asking for it as soon as anything has been changed.
+            var pulseIndex = -1;
+            if (payload.pulse && payload.drag) {
+                var pulses = [];
+                for (var q = 0; q < rows.length; q++) {
+                    if (!rows[q].composite) { pulses.push([rows[q].share, q]); }
+                }
+                pulseIndex = series.length;
+                series.push({type: 'effectScatter', symbolSize: 13, z: 2,
+                             silent: true, tooltip: {show: false},
+                             rippleEffect: {scale: 3.4, brushType: 'stroke',
+                                            period: 3},
+                             itemStyle: {color: accent, opacity: 0.4},
+                             data: pulses});
+            }
+
             chart.setOption({
                 animationDuration: 260,
                 // 116px on the right is the input column, which is laid
@@ -733,6 +761,16 @@ BULLET_DRAW_JS = """
                     style: {fill: accent, stroke: '#0B1020', lineWidth: 2},
                     cursor: 'ew-resize', draggable: 'horizontal',
                     ondrag: function () {
+                        // The rings have done their job now.
+                        if (pulseIndex >= 0) {
+                            var hush = [];
+                            for (var q = 0; q < pulseIndex; q++) {
+                                hush.push({});
+                            }
+                            hush.push({data: []});
+                            chart.setOption({series: hush});
+                            pulseIndex = -1;
+                        }
                         // Keep it on its own track. Dragged past either end
                         // the handle would leave the chart and the value
                         // would leave the scale with it.
@@ -894,10 +932,12 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
     # ========================================================================================== 
     # ========================================================================================== 
     # =============== Toggle: % self-citations
-    selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
+    selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX,
+                              className = 'ev-switch ev-switch-selfcite')
     # =============== Toggle: the what-if calculator
     whatIf = daq.BooleanSwitch(label = 'What if', labelPosition = 'bottom',
                                id = 'whatIfToggle' + SUFFIX,
+                               className = 'ev-switch ev-switch-whatif',
                                color = WHATIF_BAR)
     whatIfStore = dcc.Store(id = 'whatIfStore' + SUFFIX)
     # Closes the what-if tip a few seconds after it opens.
@@ -1652,7 +1692,8 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
                            state['group_label'], whatif = True,
                            published = published_rows,
                            reference = bool(state['group_label']),
-                           drag = 'whatIfDrag' + SUFFIX, suffix = SUFFIX),
+                           drag = 'whatIfDrag' + SUFFIX, suffix = SUFFIX,
+                           pulse = untouched),
             '' if new_c is None else f'{new_c:.2f}',
             rank_stats(new_standing['scopus_rank'],
                        new_standing['within_list'],

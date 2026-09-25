@@ -79,7 +79,8 @@ def single_author_layout(default_author=None):
     # ========================================================================================== 
 
     # =============== Toggle: % self-citations
-    selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX)
+    selfC = daq.BooleanSwitch(label = 'Exclude self-citations', labelPosition = 'bottom', id = 'selfCToggle' + SUFFIX,
+                              className = 'ev-switch ev-switch-selfcite')
 
     # =============== Author Dropdown
     authorOptions = dcc.Dropdown(options = [], multi = False, id = "authorOptionsDropdown" + SUFFIX, placeholder = 'Search researchers',

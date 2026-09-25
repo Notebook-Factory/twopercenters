@@ -163,3 +163,58 @@ def test_switching_what_if_on_keeps_the_published_rank():
         source = handle.read()
     assert 'untouched = all(values[metric] == state[\'actual\'][metric]' in source
     assert 'new_c, new_standing = published_c, standing' in source
+
+
+def test_every_switch_says_what_it_does_with_an_icon():
+    """The label under a switch is drawn by daq, so the icon is a mask on
+    that label: it takes the label's own colour, magenta on what-if and the
+    theme's text colour on the rest, with nothing to keep in step."""
+    import glob
+
+    labels = {'Exclude self-citations': 'ev-switch-selfcite',
+              'Log transformed': 'ev-switch-log',
+              'What if': 'ev-switch-whatif'}
+    seen = set()
+    for path in glob.glob('citations_lib/*.py'):
+        with open(path) as handle:
+            source = handle.read()
+        # One chunk per switch: the call itself, not the lines around it,
+        # which is what let this test read the next switch's label.
+        for chunk in source.split('daq.BooleanSwitch(')[1:]:
+            call = chunk[:400]
+            for label, klass in labels.items():
+                if f"'{label}'" in call or f'"{label}"' in call:
+                    assert klass in call, f'{path}: {label} has no icon'
+                    seen.add(label)
+    assert seen == set(labels), f'not every switch was checked: {seen}'
+
+    with open('assets/style.css') as handle:
+        css = handle.read()
+    for klass in labels.values():
+        assert f'.{klass} label::before' in css
+    # The icons themselves: a flask for the calculator, quote marks for
+    # citations, a rising line for a log axis.
+    for mask in ('--ev-mask-flask', '--ev-mask-quote', '--ev-mask-trend'):
+        assert mask in css
+
+
+def test_the_handles_ring_until_something_is_moved():
+    """A circle at the end of a bar is a small thing to notice, and nothing
+    else on the card says the bars can be pulled."""
+    from citations_lib.auth_find import BULLET_DRAW_JS, bullet_payload
+
+    rows = [{'key': 'nc', 'label': 'Citations', 'value': 10.0,
+             'ceiling': 100.0, 'share': 0.5}]
+    ringing = bullet_payload(rows, 'France', whatif=True, published=rows,
+                             drag='whatIfDrag_author_find_', pulse=True)
+    assert ringing['pulse'] is True
+    assert bullet_payload(rows, 'France')['pulse'] is False
+
+    # Echarts' own ripple rather than an animation of ours, under the
+    # handles and taking no clicks.
+    assert "type: 'effectScatter'" in BULLET_DRAW_JS
+    assert 'if (payload.pulse && payload.drag)' in BULLET_DRAW_JS
+    # And it stops on the first drag rather than waiting for the server.
+    ondrag = BULLET_DRAW_JS[BULLET_DRAW_JS.index('ondrag:'):]
+    ondrag = ondrag[:ondrag.index('ondragend:')]
+    assert 'pulseIndex = -1' in ondrag

@@ -3034,6 +3034,14 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
    so they are named here rather than written out at each use. */
 :root {
   --ev-mask-history: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>");
+  /* lucide "flask-conical": the what-if calculator, which is a laboratory
+     for a researcher's own numbers. */
+  --ev-mask-flask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2'/><path d='M8.5 2h7'/><path d='M7 16h10'/></svg>");
+  /* lucide "quote": citations, for the switch that takes the researcher's
+     own out of them. */
+  --ev-mask-quote: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'/><path d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'/></svg>");
+  /* lucide "trending-up": the switch that redraws an axis on a log scale. */
+  --ev-mask-trend: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 7 13.5 15.5 8.5 10.5 2 17'/><polyline points='16 7 22 7 22 13'/></svg>");
   --ev-mask-calendar: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 2v3'/><path d='M16 2v3'/><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18'/></svg>");
 }
 .ev-ic-calendar {
@@ -4024,3 +4032,37 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 }
 .ev-map-notes .ev-formula { margin: .4rem 0 .6rem; overflow-x: auto; }
 .ev-map-notes .ev-formula mjx-container { font-size: 125% !important; }
+
+
+/* ==========================================================================
+   Icons on the switches
+   ==========================================================================
+   Every switch on the dashboard says what it does in words, and the words
+   are the label daq draws under it. The icon goes in front of them as a mask
+   on that label, which means it takes the label's own colour: magenta on the
+   what-if switch, the theme's text colour on the rest, with no second rule
+   and nothing to keep in step. */
+.ev-switch label::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: .35em;
+  vertical-align: -.12em;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center;  mask-position: center;
+  -webkit-mask-size: contain;     mask-size: contain;
+}
+.ev-switch-whatif label::before {
+  -webkit-mask-image: var(--ev-mask-flask);
+          mask-image: var(--ev-mask-flask);
+}
+.ev-switch-selfcite label::before {
+  -webkit-mask-image: var(--ev-mask-quote);
+          mask-image: var(--ev-mask-quote);
+}
+.ev-switch-log label::before {
+  -webkit-mask-image: var(--ev-mask-trend);
+          mask-image: var(--ev-mask-trend);
+}

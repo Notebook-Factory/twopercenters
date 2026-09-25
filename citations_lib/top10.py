@@ -170,7 +170,8 @@ def _toolbar():
         )], className='radio-group year-picker')
     excluded = daq.BooleanSwitch(
         id='top10Ns' + SUFFIX, on=False,
-        label='Exclude self-citations', labelPosition='bottom')
+        label='Exclude self-citations', labelPosition='bottom',
+        className='ev-switch ev-switch-selfcite')
     return html.Div([
         html.Div([
             html.Div(kind, className='ev-picker-left'),
