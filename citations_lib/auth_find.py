@@ -214,6 +214,26 @@ def preset_choice(year_options, preset, career):
 
 
 # The what-if boxes, one per bullet row.
+def box_value(metric, value):
+    """What a box shows for one metric: the number, tidied for display.
+
+    Hm is a fractional h-index and the only one of the six that is not a
+    whole number. Everything else is a count, and a count in a box reading
+    284984.0 looks like a bug.
+
+    This is a display rounding and nothing else, which is why apply_whatif
+    reads it too: a box still showing this is a box nobody has edited, and
+    the score has to be recomputed from the researcher's real numbers rather
+    than from the tidied ones. It was recomputed from the tidied ones, and
+    turning what-if on with no edits moved 40 of 41 researchers around rank
+    100,000, one of them by 174 places, on the strength of an hm of
+    8.971429 being shown as 9.0.
+    """
+    if value is None:
+        return None
+    return round(float(value), 1) if metric == 'hm' else int(value)
+
+
 def bullet_inputs(state, suffix='_author_find_'):
     """The six number boxes, aligned with the rows of the chart.
 
@@ -233,11 +253,7 @@ def bullet_inputs(state, suffix='_author_find_'):
         maximum = None
         if metric == 'h' and state.get('np'):
             maximum = max(int(state['np']), int(value or 0))
-        # Hm is a fractional h-index and the only one of the six that is
-        # not a whole number. Everything else is a count, and a count in a
-        # box reading 284984.0 looks like a bug.
-        if value is not None:
-            value = round(value, 1) if metric == 'hm' else int(value)
+        value = box_value(metric, value)
         # The tooltip goes on a wrapper: dbc.Input 1.3.1 rejects `title`
         # outright rather than passing it through to the <input>.
         cells.append(html.Div(
@@ -245,7 +261,10 @@ def bullet_inputs(state, suffix='_author_find_'):
                 id = 'whatIf-' + metric + suffix, type = 'number',
                 value = value, min = 0, max = maximum,
                 step = 0.1 if metric == 'hm' else 1,
-                disabled = True, debounce = False,
+                # Commit on Enter or on leaving the box. With debounce off,
+                # typing 90000 was five round trips, each one recomputing
+                # the score and re-ranking against the whole edition.
+                disabled = True, debounce = True,
                 className = 'ev-whatif-input'),
             title = label + (f' (max {maximum:,})' if maximum else '')))
 
@@ -1451,8 +1470,14 @@ def author_find_layout(default_author='Ioannidis, John P.A.'):
         values = {}
         for index, (metric, _) in enumerate(WHATIF_METRICS):
             entered = typed[index]
-            values[metric] = (state['actual'][metric] if entered is None
-                              else max(float(entered), 0.0))
+            actual = state['actual'][metric]
+            # A box still showing what it was given is a box nobody has
+            # edited, so the exact published number is used rather than the
+            # rounded one it is displaying. See box_value.
+            untouched = (entered is None
+                         or (actual is not None
+                             and float(entered) == box_value(metric, actual)))
+            values[metric] = actual if untouched else max(float(entered), 0.0)
 
         # An h-index cannot exceed the number of papers. `max` on the input
         # is only advisory, so the cap is applied here as well rather than

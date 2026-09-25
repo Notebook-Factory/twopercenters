@@ -66,3 +66,53 @@ def test_the_middle_half_band_is_not_the_colour_of_the_track():
     assert band.group(1) != track.group(1)
     assert band.group(1) != '--ev-surface-2'
     assert 'backgroundStyle: {color: track' in BULLET_DRAW_JS
+
+
+def test_switching_what_if_on_changes_nothing_on_its_own():
+    """The boxes show hm rounded to one decimal, because a fractional
+    h-index in a box needs to be readable. The recompute read the boxes, so
+    turning what-if on quietly swapped 8.971429 for 9.0 and re-ranked
+    against everyone else's exact figure: around rank 100,000, where the
+    list is dense, 40 of 41 researchers moved, one of them by 174 places."""
+    from citations_lib.auth_find import WHATIF_METRICS, box_value
+    from citations_lib.utils import composite_score
+
+    actual = {'nc': 284984.0, 'h': 231.0, 'hm': 147.8929716577942,
+              'ncs': 12000.0, 'ncsf': 40000.0, 'ncsfl': 90000.0}
+    maxima = {'nc': 500000.0, 'h': 300.0, 'hm': 200.0,
+              'ncs': 50000.0, 'ncsf': 90000.0, 'ncsfl': 150000.0}
+
+    # What the boxes hold when the card is first drawn.
+    typed = {metric: box_value(metric, actual[metric])
+             for metric, _ in WHATIF_METRICS}
+    assert typed['hm'] == 147.9          # tidied for display
+    assert typed['nc'] == 284984         # and a count is a whole number
+
+    # What the recompute makes of them: an untouched box means the number it
+    # is displaying, not the display.
+    values = {}
+    for metric, _ in WHATIF_METRICS:
+        entered = typed[metric]
+        untouched = (entered is None
+                     or float(entered) == box_value(metric, actual[metric]))
+        values[metric] = actual[metric] if untouched else float(entered)
+    assert values == actual
+    assert composite_score(values, maxima) == composite_score(actual, maxima)
+
+
+def test_an_edited_box_is_taken_at_its_word():
+    """The guard above must not swallow a real edit."""
+    from citations_lib.auth_find import box_value
+
+    actual_hm = 147.8929716577942
+    assert float(147.9) == box_value('hm', actual_hm)   # untouched
+    assert float(150.0) != box_value('hm', actual_hm)   # edited
+
+
+def test_the_boxes_commit_on_enter_rather_than_on_every_digit():
+    """Typing 90000 was five round trips, each recomputing the score and
+    re-ranking against the whole edition."""
+    with open('citations_lib/auth_find.py') as handle:
+        source = handle.read()
+    assert 'debounce = True' in source
+    assert 'debounce = False' not in source
