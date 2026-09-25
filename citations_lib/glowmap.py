@@ -467,9 +467,15 @@ MAP_DRAW_JS = """
                         // scroll zoom off for exactly that reason, and this
                         // one repeated the mistake. Zooming is on the
                         // buttons in the corner.
-                        // Not silent: on the country reading a click has
-                        // to reach the region under the cursor.
-                        map: 'world', roam: 'move', silent: false, z: 1,
+                        // Silent on the city reading, not on the country
+                        // one. A country only has something to say when it
+                        // is the thing being read: on Cities, hovering the
+                        // land put the country's name up in a tooltip of
+                        // its own, over a map whose subject is the lights.
+                        // On Countries the land is the subject, and a click
+                        // has to reach the region under the cursor.
+                        map: 'world', roam: 'move', silent: !onCountries,
+                        z: 1,
                         // The land is a ground for the light to sit on, not
                         // a thing to read, so it carries no labels and no
                         // hover state of its own.
@@ -499,6 +505,13 @@ MAP_DRAW_JS = """
                                         'best h-index ' + commas(c.h)
                                        ].join('<br/>');
                             }
+                            // Nothing to say about anything but a point.
+                            // The land is silent on this reading, so this is
+                            // belt and braces: without it a hover that did
+                            // reach a region threw on p.value being
+                            // undefined, and echarts fell back to its own
+                            // formatter, which prints the region's name.
+                            if (!p.value || p.value.length < 5) { return ''; }
                             var i = p.value[3];
                             var lines = [
                                 '<strong>' + payload.city[i]

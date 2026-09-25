@@ -574,8 +574,8 @@ def test_a_click_can_name_a_country_or_a_city():
     assert "pick('city|'" in MAP_DRAW_JS
     assert '__evPickCount' in MAP_DRAW_JS
     # The country reading needs the click to reach the region, so the geo
-    # cannot be silent.
-    assert 'silent: false' in MAP_DRAW_JS
+    # is silent only on the city reading.
+    assert 'silent: !onCountries' in MAP_DRAW_JS
 
 
 class _Clicked:
@@ -1256,3 +1256,18 @@ def test_the_author_pickers_keep_their_icons_when_an_author_is_chosen():
     for only in ('career', 'singleyr'):
         options = update_cr_options(only, 'careerORSingleYrA1_author_find_')
         assert all(option['disabled'] for option in options)
+
+
+def test_the_land_is_silent_on_the_city_reading():
+    """Hovering the land on Cities put the country's name up in a tooltip of
+    its own, over a map whose subject is the lights. A country has something
+    to say only when it is the thing being read, and on Countries a click
+    still has to reach the region under the cursor."""
+    from citations_lib.glowmap import MAP_DRAW_JS
+    assert "roam: 'move', silent: !onCountries" in MAP_DRAW_JS
+    # And the formatter refuses anything that is not a point, because a
+    # region reaching it threw on p.value being undefined and echarts fell
+    # back to its own formatter, which prints the region's name.
+    tooltip = MAP_DRAW_JS[MAP_DRAW_JS.index('formatter: function (p)'):]
+    tooltip = tooltip[:tooltip.index('visualMap')]
+    assert "if (!p.value || p.value.length < 5) { return ''; }" in tooltip
