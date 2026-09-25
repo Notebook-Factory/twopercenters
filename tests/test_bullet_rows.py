@@ -166,9 +166,10 @@ def test_switching_what_if_on_keeps_the_published_rank():
 
 
 def test_every_switch_says_what_it_does_with_an_icon():
-    """The label under a switch is drawn by daq, so the icon is a mask on
-    that label: it takes the label's own colour, magenta on what-if and the
-    theme's text colour on the rest, with nothing to keep in step."""
+    """The icon rides in the knob, the circle that slides when the switch is
+    thrown. daq generates the class names on that button, so the stylesheet
+    matches the part of the name daq controls rather than the hash it puts
+    in front of it."""
     import glob
 
     labels = {'Exclude self-citations': 'ev-switch-selfcite',
@@ -190,8 +191,9 @@ def test_every_switch_says_what_it_does_with_an_icon():
 
     with open('assets/style.css') as handle:
         css = handle.read()
+    # In the knob, the circle that slides, rather than beside the words.
     for klass in labels.values():
-        assert f'.{klass} label::before' in css
+        assert f'.{klass} button[class*="__button"]::before' in css
     # The icons themselves: a flask for the calculator, quote marks for
     # citations, a rising line for a log axis.
     for mask in ('--ev-mask-flask', '--ev-mask-quote', '--ev-mask-trend'):

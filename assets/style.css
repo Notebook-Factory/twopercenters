@@ -4037,32 +4037,41 @@ code, .ev-page code, #worldtitle code, #cntrylabel code {
 /* ==========================================================================
    Icons on the switches
    ==========================================================================
-   Every switch on the dashboard says what it does in words, and the words
-   are the label daq draws under it. The icon goes in front of them as a mask
-   on that label, which means it takes the label's own colour: magenta on the
-   what-if switch, the theme's text colour on the rest, with no second rule
-   and nothing to keep in step. */
-.ev-switch label::before {
+   The icon rides in the knob, the circle that slides when the switch is
+   thrown, rather than sitting beside the words underneath. daq builds that
+   knob as a <button> with a generated class name, so it is matched on the
+   part of the name daq controls.
+
+   The knob is pale in both themes and in both states, so the glyph is dark
+   and stays dark: it is a mark on the knob, not a second indicator of
+   whether the switch is on. What the switch is set to is the knob's
+   position and the colour behind it, which is what a switch has always
+   said. */
+.ev-switch button[class*="booleanswitch"][class*="__button"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ev-switch button[class*="booleanswitch"][class*="__button"]::before {
   content: "";
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  margin-right: .35em;
-  vertical-align: -.12em;
-  background-color: currentColor;
+  display: block;
+  width: 62%;
+  height: 62%;
+  background-color: #1B2432;
+  opacity: .78;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
   -webkit-mask-position: center;  mask-position: center;
   -webkit-mask-size: contain;     mask-size: contain;
 }
-.ev-switch-whatif label::before {
+.ev-switch-whatif button[class*="__button"]::before {
   -webkit-mask-image: var(--ev-mask-flask);
           mask-image: var(--ev-mask-flask);
 }
-.ev-switch-selfcite label::before {
+.ev-switch-selfcite button[class*="__button"]::before {
   -webkit-mask-image: var(--ev-mask-quote);
           mask-image: var(--ev-mask-quote);
 }
-.ev-switch-log label::before {
+.ev-switch-log button[class*="__button"]::before {
   -webkit-mask-image: var(--ev-mask-trend);
           mask-image: var(--ev-mask-trend);
 }
